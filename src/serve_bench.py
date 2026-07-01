@@ -49,7 +49,13 @@ import time
 from dataclasses import dataclass, asdict
 from typing import Optional
 
-from .compressors import ClsAttnSelector, keep_count  # noqa: F401  (re-export)
+from .compressors import (  # noqa: F401  (re-export)
+    ClsAttnSelector,
+    TrueClsAttnSelector,
+    ClsAttnCapture,
+    cls_attention_scores,
+    keep_count,
+)
 
 
 # --------------------------------------------------------------------------- #
@@ -308,16 +314,20 @@ def build_engine(model: str, args):
     # placeholders, matching the k embeddings the projector hook emits.
     target_k = patch_image_token_count(args.pruning_rate, full_n=576)
 
-    # ---- CLS-attention capture from vision tower ----
+    # ---- score capture from vision tower (two paths) ----
+    # PROXY (probe path, default): hidden-state deviation norm -- a saliency
+    #   surrogate for CLS-attention, used because vLLM disables output_attentions.
+    # TRUE_CLS (v1 path): real [CLS]->patch softmax attention, captured by
+    #   monkeypatching the LAST CLIPAttention layer to expose its weights (the
+    #   parallel-manual-softmax path in ClsAttnCapture; encoder numerics unchanged).
+    selector_kind = getattr(args, "selector", "proxy")
     captured = {"scores": None, "n_vision_calls": 0}
+    cls_capture: Optional[ClsAttnCapture] = None
 
-    def _vision_hook(module, inputs, outputs):  # noqa: ANN001
+    def _vision_hook_proxy(module, inputs, outputs):  # noqa: ANN001
         import torch  # noqa
         hs = outputs.last_hidden_state if hasattr(outputs, "last_hidden_state") \
             else (outputs[0] if isinstance(outputs, tuple) else outputs)
-        # hs: (B, 1+N, D). Score = norm of deviation from mean (foreground saliency).
-        # (CLS-attention needs output_attentions=True which vLLM disables for speed;
-        #  saliency-on-hidden-states is the cheap proxy. See method-design §1a/§4.)
         if hs.dim() == 3:
             patches = hs[:, 1:, :]                       # skip CLS
             sal = (patches - patches.mean(dim=1, keepdim=True)).norm(dim=-1)
@@ -326,8 +336,31 @@ def build_engine(model: str, args):
             captured["n_vision_calls"] += 1
         return None
 
+    if selector_kind == "true_cls":
+        # locate the LAST CLIPAttention layer and install the capture
+        inner = getattr(vision_tower, "vision_model", vision_tower)
+        enc_layers = getattr(inner.encoder, "layers", None)
+        if enc_layers is None or len(enc_layers) == 0:
+            raise RuntimeError(
+                "true_cls selector: vision_tower.vision_model.encoder.layers not "
+                "found -- wrong arch (expected CLIPVisionTransformer).")
+        last_attn = enc_layers[-1].self_attn
+        cls_capture = ClsAttnCapture(last_attn, layer_names=["last"])
+        cls_capture.patch()
+        print(f"[serve_bench] TRUE_CLS selector: patched last layer self_attn "
+              f"({type(last_attn).__name__}) to expose CLS->patch softmax", flush=True)
+
+        def score_provider():
+            s = cls_capture.captured.get("scores")
+            return s
+    else:
+        # PROXY path: forward-hook on the vision tower to compute saliency
+        def score_provider():
+            return captured.get("scores")
+
     # ---- projector post-hook: prune output rows to exactly target_k ----
-    hook_state = {"n_calls": 0, "kept_counts": [], "target_k": target_k}
+    hook_state = {"n_calls": 0, "kept_counts": [], "target_k": target_k,
+                  "selector": selector_kind}
 
     def _projector_hook(module, inputs, output):  # noqa: ANN001
         import torch  # noqa
@@ -335,7 +368,7 @@ def build_engine(model: str, args):
         if args.pruning_rate == 0.0:
             hook_state["kept_counts"].append(output.shape[1])
             return None  # control: no-op, but still log full token count
-        scores = captured.get("scores")
+        scores = score_provider()
         full_n = output.shape[1]
         if scores is None or scores.shape[1] != full_n:
             # fallback: take the first target_k tokens (keeps shapes valid even
@@ -343,7 +376,15 @@ def build_engine(model: str, args):
             kept = output[:, :target_k, :].contiguous()
             keep_idx = torch.arange(target_k, device=output.device).unsqueeze(0).expand(output.shape[0], -1)
         else:
-            sel = ClsAttnSelector(pruning_rate=args.pruning_rate)
+            # build the v1 selector (true_cls uses TrueClsAttnSelector with optional
+            # diversity; proxy keeps the probe's ClsAttnSelector for reproducibility)
+            if selector_kind == "true_cls":
+                sel = TrueClsAttnSelector(
+                    pruning_rate=args.pruning_rate,
+                    diversity_lam=getattr(args, "diversity_lam", 0.0),
+                )
+            else:
+                sel = ClsAttnSelector(pruning_rate=args.pruning_rate)
             kept, keep_idx = sel.select(output, scores)
             # guard: if rounding gave k != target_k, trim/pad to target_k so the
             # count EXACTLY matches the placeholder count from patch_image_token_count
@@ -353,21 +394,25 @@ def build_engine(model: str, args):
         module._vtc_keep_idx = keep_idx         # type: ignore[attr-defined]
         module._vtc_keep_count = kept.shape[1]  # type: ignore[attr-defined]
         hook_state["kept_counts"].append(kept.shape[1])
+        # reset the capture between requests so scores don't leak across images
+        if cls_capture is not None:
+            cls_capture.reset()
         # log first few calls so the validation run visibly confirms pruning
         if hook_state["n_calls"] <= 5:
             print(f"[serve_bench] projector hook fire #{hook_state['n_calls']}: "
                   f"in={output.shape[1]} -> kept={kept.shape[1]} "
-                  f"(prune_rate={args.pruning_rate})", flush=True)
+                  f"(prune_rate={args.pruning_rate}, selector={selector_kind})", flush=True)
         return kept
 
-    if vision_tower is not None:
-        # register on the inner vision model if wrapped
+    if selector_kind != "true_cls" and vision_tower is not None:
+        # PROXY path only needs the vision-tower saliency hook
         inner = getattr(vision_tower, "vision_model", vision_tower)
-        inner.register_forward_hook(_vision_hook)
+        inner.register_forward_hook(_vision_hook_proxy)
     projector.register_forward_hook(_projector_hook)
 
-    # stash hook_state on the projector for run() to read into the metrics file
+    # stash hook_state + cls_capture on the projector for run() to read/clean up
     projector._vtc_hook_state = hook_state  # type: ignore[attr-defined]
+    projector._vtc_cls_capture = cls_capture  # type: ignore[attr-defined]
     return llm, projector
 
 
@@ -459,6 +504,8 @@ def run(args) -> dict:
 
     result = {
         "benchmark": args.benchmark, "pruning_rate": args.pruning_rate,
+        "selector": getattr(args, "selector", "proxy"),
+        "diversity_lam": getattr(args, "diversity_lam", 0.0),
         "n": len(raw), "wall_s": wall, "agg": agg,
         "prefill_speedup_vs_r0": prefill_speedup, "e2e_speedup_vs_r0": e2e_speedup,
         "hook": {
@@ -494,6 +541,13 @@ def main() -> None:
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--limit", type=int, default=0,
                     help="use only first N subset samples (0=all; for quick validation)")
+    ap.add_argument("--selector", default="proxy", choices=["proxy", "true_cls"],
+                    help="score source: 'proxy' = hidden-state-deviation (the P2 probe) "
+                         "or 'true_cls' = real [CLS]->patch softmax attention (v1 method, "
+                         "via ClsAttnCapture on the last vision-tower layer)")
+    ap.add_argument("--diversity-lam", type=float, default=0.0,
+                    help="PRUNESID-style diversity weight (only with --selector true_cls); "
+                         "0.0 = pure top-k by CLS-attn (v1 default)")
     args = ap.parse_args()
     run(args)
 

@@ -1,0 +1,38 @@
+[
+  {
+    "name": "fastv_gqa_control",
+    "cmd": "/home/dell/miniconda3/envs/fastv/bin/python -m src.fastv_bench --model-path /media/disk2/YZX/doct/FastV/llava-v1.5-7b --benchmark gqa --subset eval/subsets/gqa_200.jsonl --keep-tokens 576 --agg-layer 2 --metrics-out runs/fastv_baseline/gqa_control_metrics.json --max-tokens 32 --device cuda",
+    "priority": 1,
+    "est_min": 30,
+    "deps": [],
+    "status": "pending",
+    "note": "FastV ACCURACY-ONLY control on GQA (keep-tokens=576 => FastV OFF). The no-prune LLaVA-1.5-7B baseline via the FastV repo's llava lib (same env path as pruned runs -> identical tokenizer/preprocessing). Sanity check: this should match the vLLM r0 GQA acc (~0.585) within +/-2% (the two paths differ only in attn impl: fastv env uses eager+patched, vLLM uses SDPA; small numeric diffs expected). If it diverges >5%, flag a scorer/preprocess mismatch before trusting pruned numbers."
+  },
+  {
+    "name": "fastv_gqa_r50",
+    "cmd": "/home/dell/miniconda3/envs/fastv/bin/python -m src.fastv_bench --model-path /media/disk2/YZX/doct/FastV/llava-v1.5-7b --benchmark gqa --subset eval/subsets/gqa_200.jsonl --keep-tokens 288 --agg-layer 2 --metrics-out runs/fastv_baseline/gqa_r50_metrics.json --max-tokens 32 --device cuda",
+    "priority": 2,
+    "est_min": 28,
+    "deps": ["fastv_gqa_control"],
+    "status": "pending",
+    "note": "FastV @ r50 (keep 288/576) on GQA. THE ACCURACY ANCHOR: this is the canonical TF compressor at 50% prune. Compare to (a) proxy probe r50 (0.565, -2.0%) and (b) v1 true_cls r50 (to be run). FastV prunes INTRA-LLM at layer 2 (attention-rank on the last decode token) -- a DIFFERENT mechanism from boundary CLS-attn -- so it sets the bar our boundary method should approach/match at iso-budget. Published FastV GQA at ~50% prune is ~60% on full val (we're on a 200-subset, expect noise)."
+  },
+  {
+    "name": "fastv_gqa_r75",
+    "cmd": "/home/dell/miniconda3/envs/fastv/bin/python -m src.fastv_bench --model-path /media/disk2/YZX/doct/FastV/llava-v1.5-7b --benchmark gqa --subset eval/subsets/gqa_200.jsonl --keep-tokens 144 --agg-layer 2 --metrics-out runs/fastv_baseline/gqa_r75_metrics.json --max-tokens 32 --device cuda",
+    "priority": 3,
+    "est_min": 25,
+    "deps": ["fastv_gqa_control"],
+    "status": "pending",
+    "note": "FastV @ r75 (keep 144/576) on GQA. The high-prune anchor. Compare to proxy r75 (0.470, -11.5%) -- FastV's intra-LLM attention-rank should degrade more gracefully here than boundary CLS-attn at extreme prune (this is FastV's known strength). If our v1 true_cls r75 approaches FastV r75, that's a strong result (boundary method matching intra-LLM method at extreme budget)."
+  },
+  {
+    "name": "fastv_textvqa_r50",
+    "cmd": "/home/dell/miniconda3/envs/fastv/bin/python -m src.fastv_bench --model-path /media/disk2/YZX/doct/FastV/llava-v1.5-7b --benchmark textvqa --subset eval/subsets/textvqa_200.jsonl --keep-tokens 288 --agg-layer 2 --metrics-out runs/fastv_baseline/textvqa_r50_metrics.json --max-tokens 32 --device cuda",
+    "priority": 2,
+    "est_min": 28,
+    "deps": [],
+    "status": "pending",
+    "note": "FastV @ r50 on TextVQA. OCR-robustness anchor: proxy r50 was 0.530 (-2.5%). FastV is known to degrade on OCR at high prune -- this characterizes whether intra-LLM pruning preserves text-region tokens better than boundary CLS-attn. The OCR comparison (FastV vs v1 true_cls) is a key table row."
+  }
+]

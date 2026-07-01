@@ -118,3 +118,79 @@ Probe subsets built and verified (script: `scripts/build_subsets.py`, log `runs/
 — End. Probe jobs in `notes/p2_probe_jobs.json`. Subsets in `eval/subsets/`. —
 
 — End. Probe jobs in `notes/p2_probe_jobs.json`. —
+
+---
+
+# Part II — v1 / v2 Method Design (post-GO; Dev subagent, 2026-07-01)
+
+> Builds on Part I's probe. The GO gate passed (provisional) with a **PROXY** score; v1 swaps in the real selector, v2 adds the serving-adaptive layer. The three probe findings (eval/p2_probe_summary.md ★★) drive every design choice below.
+
+## 6. v1 — True CLS-attention selector (accuracy) + early-prune plan (prefill)
+
+**Goal of v1:** (a) tighten accuracy at iso-throughput by replacing the proxy score with REAL vision-tower CLS-attention, and (b) capture the fixed-encoder cost (finding #2) by moving selection upstream into the vision tower. Throughput numbers should match the proxy probe within noise (the serving win is selector-agnostic — same hook, same KV-cache shrink); the **accuracy** is where v1 must beat the proxy.
+
+### 6a. True CLS-attn selector (DONE — `src/compressors.py`)
+
+The probe used a hidden-state-deviation PROXY because vLLM's `CLIPAttention` delegates to `MultiHeadAttention` → `F.scaled_dot_product_attention` (fused SDPA, returns NO weights; vLLM stripped HF's `output_attentions`). v1 gets the **real** signal via `ClsAttnCapture` (`src/compressors.py`):
+
+- Monkeypatches the LAST `CLIPAttention` layer's `forward` (`vision_tower.vision_model.encoder.layers[-1].self_attn`) to run a **parallel manual softmax path** alongside the real SDPA call. The SDPA output still drives the encoder (numerics byte-identical to stock vLLM); the manual `QK^T/sqrt(d) → softmax` only stashes the (B,H,S,S) weights.
+- `cls_attention_scores(weights)` then reduces to per-patch score `s = mean_h attn[:, h, 0, 1:]` (CLS is query 0; patches are keys 1..576). Mirrors FasterVLM/VTC-CLS.
+- `TrueClsAttnSelector` ranks patches by `s`; `diversity_lam` flag (default 0.0 = OFF for v1) optionally switches to a PRUNESID-style greedy importance+diversity rule (`greedy_diverse_topk`: penalize candidates similar to already-kept, NMS-like, on L2-normalized projector features).
+- Wired into `serve_bench.py` via `--selector {proxy,true_cls}` + `--diversity-lam`. CPU self-test (determinism + shape + lam=0≡proxy) passes. Probe jobs: `notes/v1_probe_jobs.json`.
+- **Multi-layer ensemble** (VTC-CLS averages CLS-attn over last-K layers) is a free ablation — `ClsAttnCapture` accepts a list of layers and running-means their scores; leave single-layer (last) as v1 default, ensemble for the accuracy table.
+
+**Expected outcome:** proxy r50 GQA was 0.565 (−2.0%); v1 true-CLS-attn should tighten this (the proxy correlated with foreground saliency but not with the LLM-relevant CLS signal). If v1 r50 reaches ≥0.575 (≈−1%), the accuracy story is strong; if v1 r75 (proxy 0.470, −11.5%) recovers to ≥0.52, we can argue the proxy **understated** the method (a useful framing for reviewers).
+
+### 6b. Early-prune feasibility (Task 2 verdict: TRACTABLE for v1, not v2-only)
+
+**Finding #2 motivation:** the probe prunes at projector OUTPUT, so the vision tower still processes all 576 tokens — prefill is sub-linear (r75 only 1.30× despite 4× fewer tokens). Pruning INSIDE the encoder (compute CLS-attn at layer L, drop low-attention patches BEFORE layers L+1..24) would let the encoder do less work → larger prefill gains.
+
+**vLLM 0.10.2 source audit (`vllm/model_executor/models/clip.py`):**
+- `CLIPVisionTransformer.encoder = CLIPEncoder` holds `self.layers = nn.ModuleList([CLIPEncoderLayer, ...])` (24 for CLIP ViT-L/14).
+- `CLIPEncoder.forward` (clip.py:251): `for encoder_layer in self.layers: hidden_states = encoder_layer(hidden_states)` — a **plain Python loop over hookable nn.Modules**. Each `CLIPEncoderLayer` is independently monkeypatchable.
+- **CUDA graphs do NOT cover the vision tower in V0.** `worker/model_runner.py:728` `_use_captured_graph` returns True only when `decode_only=True`; the vision tower runs during prefill (encode) which is always **eager**. So a mid-encoder prune does NOT fight CUDA graph capture/replay (the fear that blocked FastV-style intra-LLM hooks in the survey §6.5.3). ★ This is the key de-risking fact.
+
+**Concrete integration plan (v1 prototype-ready, defer to v2 only if it regresses):**
+1. **Capture** CLS-attention at an EARLY layer L (e.g. layer 6 of 24): install `ClsAttnCapture` on `encoder.layers[6].self_attn` (one-line change — `ClsAttnCapture` already supports any layer).
+2. **Prune** after layer L: monkeypatch `encoder.layers[L]` with a wrapper that, post-forward, gathers the CLS-top-k patch rows of `hidden_states` (keeping CLS at index 0) and re-indexes. Subsequent layers see a shorter sequence → real encoder FLOPs/latency drop.
+3. **Consistency:** the projector-output hook (`patch_image_token_count` → k) stays identical — but now the projector receives k rows directly from a k-short encoder output, not 576→k at the projector. The placeholder reconciliation is unchanged.
+4. **Risk to mitigate:** early-layer CLS-attn is noisier than last-layer (less refined). v1 should A/B early-prune-L6 vs boundary-prune-last-layer at iso-k; if early-prune loses >1% acc at iso-k, keep boundary-prune for v1 and ship early-prune as a v1.1 ablation. The encoder-FLOPs win is only worth it if accuracy holds.
+
+**Verdict: low-risk enough to prototype as part of v1** (not deferred to v2). The hook surface is the same `ClsAttnCapture` we already built; the only new code is the per-layer prune wrapper (~30 lines). Recommend: ship v1 with boundary true-CLS-attn FIRST (lock the accuracy win), then add early-prune as a same-PR ablation if time permits.
+
+### 6c. What v1 does NOT do (deferred)
+- No load-adaptive budget (that is v2, §7).
+- No learned scoring (training-free only — the family's strength, and the 1× A40 budget rules out training a new selector).
+- No multi-image / variable-resolution (LLaVA-1.5 single-image only; Qwen2.5-VL generalization is the publishable stretch).
+
+---
+
+## 7. v2 sketch — Load-adaptive budget (the serving-specific novel lever)
+
+**This is the most novel serving-specific contribution** and the clearest differentiator from the 37-method table. The probe proved e2e>prefill at every ratio (finding #1) → the deployment win is KV-cache/concurrency, not prefill FLOPs. **v2 makes the prune rate RESPOND to engine concurrency** so the compressor captures the headroom a fixed-rate compressor leaves on the table.
+
+### 7a. The feedback mechanism (sketch — NOT implemented in v1)
+
+A fixed prune rate `r` is globally suboptimal under continuous batching:
+- **Low batch / idle GPU:** KV-cache is plentiful; pruning hard wastes accuracy for no throughput gain. Should prune LESS (lower r → higher accuracy, the GPU can afford it).
+- **High batch / KV-cache pressure:** the scheduler is the bottleneck; pruning harder (higher r) frees KV pages → more concurrent requests → higher req/s. The accuracy cost is "paid for" by throughput.
+
+**Closed-loop design (to implement in v2):**
+1. **Sensor:** read vLLM's engine state each prefill — `scheduler.running_num` (active requests), `KV cache usage %` (`gpu_prefix_cache_hit` / `num_gpu_blocks_free` / `num_gpu_blocks_total`). These are exposed on the V0 scheduler (`vllm/core/scheduler.py`) and the engine metrics — a cheap per-step read, no extra forward pass.
+2. **Controller:** a monotonic map `load ∈ [0,1] → r ∈ [r_min, r_max]` (e.g. r_min=0.25, r_max=0.75). `load` = a normalized blend of KV-occupancy and running-queue depth. Cheap closed-form (no learned policy) for v2; a tiny gating MLP is a v3 stretch.
+3. **Actuator:** the projector hook reads the controller's `r` per-image (instead of the global `args.pruning_rate`), and `patch_image_token_count` becomes per-image adaptive (this is where v2 needs the upstream RFC #45098 `--image-pruning-rate` surface, OR a per-request override we inject).
+4. **Stability:** to avoid thrash, the controller updates `r` on a sliding window of recent load samples (not per-request), and `r` is quantized to {0.25, 0.50, 0.75} so placeholder counts stay integer.
+
+**Why this is publishable on its own:** no compressor in the 37-method table reads engine state. The closest, ElasticMM (ICCV'25), does scheduling WITHOUT compression and explicitly avoids it; PRUNESID/AgilePruner do content-adaptive budgets but OFFLINE (erank-based), blind to serving load. A load-adaptive compressor is a **first** in the serving-engine-aware sense.
+
+### 7b. Other v2 levers (secondary, from Part I §2)
+- **KV-cache-page-budget targeting** (instead of token count): solve for the `k` that fits a desired page slice — directly optimizes what vLLM schedules.
+- **Decode-bandwidth guard** (finding: decode is text-bandwidth-bound, not visual): prune only down to the prefill/TTFT knee; further pruning is pure accuracy loss. Derive the knee from the probe's r-vs-ttft curve (the r50→r75 TTFT plateau on TextVQA is exactly this knee signal).
+
+---
+
+## 8. ★ Novelty vs the 37-method table (the load-bearing paragraph)
+
+**We are building the FIRST serving-engine-aware visual-token compressor.** The 37-method survey (lit-survey.md §7, re-verified 2026-07-01) is unanimous: **0/37 measure served throughput inside a production engine** (vLLM/lmdeploy/TRT-LLM/SGLang). The 13 that report any wall-clock number all measure on the authors' own research harness — raw CUDA latency, offline prefill time, or self-reported "faster" — none inside a continuous-batching serving engine. The 2026 ICLR cluster (AgilePruner, VisionTrim, PRUNESID) crowds the accuracy/FLOPs-combination space but is offline-only; ElasticMM does scheduling but explicitly avoids compression; the vLLM RFC #45098 (`--image-pruning-rate`) is unfinished infra, not a method. **This is the cleanest novelty opening in the field and it holds.** Our claim is not "yet another accurate compressor" (that space is saturated and unbeatable in 3 months on 1× A40) — it is that **visual-token compression's deployment win lives in the serving engine (KV-cache/concurrency, finding #1), is sub-linear when the encoder is fixed (finding #2), and scales with visual-token fraction (finding #3)** — three effects invisible to FLOPs/accuracy measurement and untouched by every existing method. v1 (true CLS-attn + early-prune) delivers an accurate, real-wall-clock-fast compressor inside vLLM; v2 (load-adaptive budget) makes the compressor *aware* of the engine state — a first. The combination is the contribution: a compressor co-designed with continuous-batching realities, evaluated by served throughput, with the three findings as the mechanism story. This is a method paper (not a measurement paper): the load-adaptive controller (§7) is novel machinery, and the early-prune-via-CLS-attn (§6b) is a new integration that the survey diagnosed as blocked (§6.5.3 FlashAttention hurdle) but which is in fact tractable in the vision tower (CUDA graphs don't cover it in V0).
+
+— End Part II. v1 code in `src/compressors.py` (`TrueClsAttnSelector`, `ClsAttnCapture`); v1 probe jobs in `notes/v1_probe_jobs.json`. —
