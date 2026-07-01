@@ -1,5 +1,5 @@
 {
-  "_doc": "Single-card serial job queue (1x A40). Driver: python scripts/queue {list|next|run|reset|mark}. fields: name, cmd(shell str), priority(higher=earlier), est_min, deps[], status(pending|running|done|failed), note. Commit on checkpoints.",
+  "_doc": "Single-card serial job queue (1x A40). Driver: python scripts/queue {list|next|run|reset|mark} or bash scripts/run_queue_all.sh. fields: name, cmd(shell str), priority(higher=earlier), est_min, deps[], status(pending|running|done|failed), note. Commit on checkpoints.",
   "jobs": [
     {
       "name": "smoke-dummy",
@@ -31,6 +31,81 @@
       "deps": [],
       "status": "pending",
       "note": "subagent-driven; do not run via queue"
+    },
+    {
+      "name": "probe_gqa_r0",
+      "cmd": "/home/dell/miniconda3/envs/vtc_serve/bin/python -m src.serve_bench --model runs/models/llava-1.5-7b-hf --pruning-rate 0.0 --benchmark gqa --subset eval/subsets/gqa_200.jsonl --metrics-out runs/p2_probe/gqa_r0_metrics.json --max-tokens 32 --max-model-len 4096 --gpu-memory-utilization 0.90 --seed 0",
+      "priority": 90,
+      "est_min": 25,
+      "deps": [],
+      "status": "done",
+      "note": "Go/no-go CONTROL on GQA (r=0). Denominator for all GQA speedup ratios. PIPELINE VALIDATION: confirms model loads in vLLM + subset parses + inference runs + metrics written.",
+      "rc": 0,
+      "last_run": 1782893468
+    },
+    {
+      "name": "probe_gqa_r50",
+      "cmd": "/home/dell/miniconda3/envs/vtc_serve/bin/python -m src.serve_bench --model runs/models/llava-1.5-7b-hf --pruning-rate 0.50 --benchmark gqa --subset eval/subsets/gqa_200.jsonl --metrics-out runs/p2_probe/gqa_r50_metrics.json --max-tokens 32 --max-model-len 4096 --gpu-memory-utilization 0.90 --seed 0",
+      "priority": 85,
+      "est_min": 20,
+      "deps": [
+        "probe_gqa_r0"
+      ],
+      "status": "pending",
+      "note": "GQA at 50% prune (keep 288/576). HOOK VALIDATION + THE GATE POINT: GO needs >=1.5x prefill speedup & >=1.2x e2e req/s & <=2% acc drop vs r0."
+    },
+    {
+      "name": "probe_gqa_r25",
+      "cmd": "/home/dell/miniconda3/envs/vtc_serve/bin/python -m src.serve_bench --model runs/models/llava-1.5-7b-hf --pruning-rate 0.25 --benchmark gqa --subset eval/subsets/gqa_200.jsonl --metrics-out runs/p2_probe/gqa_r25_metrics.json --max-tokens 32 --max-model-len 4096 --gpu-memory-utilization 0.90 --seed 0",
+      "priority": 80,
+      "est_min": 22,
+      "deps": [
+        "probe_gqa_r0"
+      ],
+      "status": "pending",
+      "note": "GQA at 25% prune (keep 432/576). Curve point."
+    },
+    {
+      "name": "probe_gqa_r75",
+      "cmd": "/home/dell/miniconda3/envs/vtc_serve/bin/python -m src.serve_bench --model runs/models/llava-1.5-7b-hf --pruning-rate 0.75 --benchmark gqa --subset eval/subsets/gqa_200.jsonl --metrics-out runs/p2_probe/gqa_r75_metrics.json --max-tokens 32 --max-model-len 4096 --gpu-memory-utilization 0.90 --seed 0",
+      "priority": 75,
+      "est_min": 18,
+      "deps": [
+        "probe_gqa_r0"
+      ],
+      "status": "pending",
+      "note": "GQA at 75% prune (keep 144/576). NO-GO stress: if e2e speedup <1.2x even here, premise fails -> escalate (charter §6)."
+    },
+    {
+      "name": "probe_textvqa_r0",
+      "cmd": "/home/dell/miniconda3/envs/vtc_serve/bin/python -m src.serve_bench --model runs/models/llava-1.5-7b-hf --pruning-rate 0.0 --benchmark textvqa --subset eval/subsets/textvqa_200.jsonl --metrics-out runs/p2_probe/textvqa_r0_metrics.json --max-tokens 32 --max-model-len 4096 --gpu-memory-utilization 0.90 --seed 0",
+      "priority": 90,
+      "est_min": 25,
+      "deps": [],
+      "status": "pending",
+      "note": "TextVQA CONTROL (r=0). OCR-heavy stress test. Denominator for TextVQA speedups."
+    },
+    {
+      "name": "probe_textvqa_r50",
+      "cmd": "/home/dell/miniconda3/envs/vtc_serve/bin/python -m src.serve_bench --model runs/models/llava-1.5-7b-hf --pruning-rate 0.50 --benchmark textvqa --subset eval/subsets/textvqa_200.jsonl --metrics-out runs/p2_probe/textvqa_r50_metrics.json --max-tokens 32 --max-model-len 4096 --gpu-memory-utilization 0.90 --seed 0",
+      "priority": 85,
+      "est_min": 20,
+      "deps": [
+        "probe_textvqa_r0"
+      ],
+      "status": "pending",
+      "note": "TextVQA at 50% prune. Gate robustness: GO needs <=5% acc drop here (OCR is the weak spot)."
+    },
+    {
+      "name": "probe_textvqa_r75",
+      "cmd": "/home/dell/miniconda3/envs/vtc_serve/bin/python -m src.serve_bench --model runs/models/llava-1.5-7b-hf --pruning-rate 0.75 --benchmark textvqa --subset eval/subsets/textvqa_200.jsonl --metrics-out runs/p2_probe/textvqa_r75_metrics.json --max-tokens 32 --max-model-len 4096 --gpu-memory-utilization 0.90 --seed 0",
+      "priority": 75,
+      "est_min": 18,
+      "deps": [
+        "probe_textvqa_r0"
+      ],
+      "status": "pending",
+      "note": "TextVQA at 75% prune. OCR-degradation stress point."
     }
   ]
 }
