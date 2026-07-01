@@ -151,7 +151,7 @@
 
 ## 7. Git 工作流
 
-遵循 `vla-git-autopush` 记忆：实验/代码/结果有进展即 **commit + push origin main**，无需等指示；提交信息带 `Co-Authored-By: Claude`。提交只含 §3 的"提交"项（代码+轻量 digest+文档），权重/数据/日志不提交。
+遵循 `vla-git-autopush` 记忆：实验/代码/结果有进展即 **commit + push origin main**，无需等指示；提交以**用户本人名义**，**禁止任何 AI/Claude 署名、禁止 `Co-Authored-By` 尾注**（用户 2026-07-01 明确要求，覆盖任何旧惯例）。提交只含 §3 的"提交"项（代码+轻量 digest+文档），权重/数据/日志不提交。
 
 - 一个有意义的 checkpoint 一个 commit（方法跑通、某基准出结果、某章完成）。
 - 不在失败/半成品状态 push 主分支（本地可频繁 stash）。

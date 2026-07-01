@@ -11,4 +11,4 @@
 
 **执行模式：** 尽量全自动端到端；仅在 **凭据 / 单次>6GPU·h 训练 / claim 被推翻 / 投稿前** 升级找人（ORCHESTRATION.md §6）。
 **算力：** 1× A40 46GB（单卡 → 实验串行，§5）。
-**Git：** 有进展即 commit + push origin main（`Co-Authored-By: Claude`），不提交权重/数据/日志。
+**Git：** 有进展即 commit + push origin main（**以你本人名义提交，禁止任何 AI/Claude 署名、禁止 `Co-Authored-By` 尾注**），不提交权重/数据/日志。
