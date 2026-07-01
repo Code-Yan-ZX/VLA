@@ -120,6 +120,129 @@
       "note": "TextVQA at 75% prune. OCR-degradation stress point.",
       "rc": 0,
       "last_run": 1782895679
+    },
+    {
+      "name": "v1_probe_gqa_r0",
+      "cmd": "/home/dell/miniconda3/envs/vtc_serve/bin/python -m src.serve_bench --model runs/models/llava-1.5-7b-hf --pruning-rate 0.0 --selector true_cls --benchmark gqa --subset eval/subsets/gqa_200.jsonl --metrics-out runs/p2_probe_v1/gqa_r0_metrics.json --max-tokens 32 --max-model-len 4096 --gpu-memory-utilization 0.90 --seed 0",
+      "priority": 1,
+      "est_min": 25,
+      "deps": [],
+      "status": "failed",
+      "note": "v1 TRUE-CLS-attn selector CONTROL on GQA (r=0). At r=0 the selector is a no-op (control), so this is byte-identical to the proxy r=0 baseline -- we re-run it as the speedup denominator FOR THE v1 SERIES so speedup ratios are computed within one selector family (avoids conflating selector change with prune-rate change). Note: r0 metrics SHOULD match the proxy probe's gqa_r0 within noise (sanity check).",
+      "rc": 1,
+      "last_run": 1782897394
+    },
+    {
+      "name": "v1_probe_gqa_r25",
+      "cmd": "/home/dell/miniconda3/envs/vtc_serve/bin/python -m src.serve_bench --model runs/models/llava-1.5-7b-hf --pruning-rate 0.25 --selector true_cls --benchmark gqa --subset eval/subsets/gqa_200.jsonl --metrics-out runs/p2_probe_v1/gqa_r25_metrics.json --max-tokens 32 --max-model-len 4096 --gpu-memory-utilization 0.90 --seed 0",
+      "priority": 2,
+      "est_min": 22,
+      "deps": [
+        "v1_probe_gqa_r0"
+      ],
+      "status": "pending",
+      "note": "v1 GQA @ 25% prune (keep 432/576), REAL [CLS]->patch attn selector (diversity OFF, lam=0 -- the FasterVLM/VTC-CLS setting). PRIMARY accuracy comparison point vs proxy probe r25 (acc 0.555, -3.0%): expect true CLS-attn to tighten the drop."
+    },
+    {
+      "name": "v1_probe_gqa_r50",
+      "cmd": "/home/dell/miniconda3/envs/vtc_serve/bin/python -m src.serve_bench --model runs/models/llava-1.5-7b-hf --pruning-rate 0.50 --selector true_cls --benchmark gqa --subset eval/subsets/gqa_200.jsonl --metrics-out runs/p2_probe_v1/gqa_r50_metrics.json --max-tokens 32 --max-model-len 4096 --gpu-memory-utilization 0.90 --seed 0",
+      "priority": 2,
+      "est_min": 20,
+      "deps": [
+        "v1_probe_gqa_r0"
+      ],
+      "status": "pending",
+      "note": "v1 GQA @ 50% prune (keep 288/576), REAL CLS-attn. THE GATE POINT for the v1 selector: proxy r50 was 0.565 (-2.0%); v1 should improve accuracy at iso-throughput (the throughput numbers should match the proxy r50 within noise -- same hook, same KV-cache win -- confirming the serving win is selector-agnostic, the accuracy is not)."
+    },
+    {
+      "name": "v1_probe_gqa_r75",
+      "cmd": "/home/dell/miniconda3/envs/vtc_serve/bin/python -m src.serve_bench --model runs/models/llava-1.5-7b-hf --pruning-rate 0.75 --selector true_cls --benchmark gqa --subset eval/subsets/gqa_200.jsonl --metrics-out runs/p2_probe_v1/gqa_r75_metrics.json --max-tokens 32 --max-model-len 4096 --gpu-memory-utilization 0.90 --seed 0",
+      "priority": 3,
+      "est_min": 18,
+      "deps": [
+        "v1_probe_gqa_r0"
+      ],
+      "status": "pending",
+      "note": "v1 GQA @ 75% prune (keep 144/576), REAL CLS-attn. Stress point: proxy r75 was 0.470 (-11.5%, the steep-drop region). True CLS-attn should recover meaningful accuracy here -- if it brings r75 to within ~6% of r0, the v1 method's accuracy story is strong and we can argue the proxy UNDERSTATED the method."
+    },
+    {
+      "name": "v1_probe_textvqa_r0",
+      "cmd": "/home/dell/miniconda3/envs/vtc_serve/bin/python -m src.serve_bench --model runs/models/llava-1.5-7b-hf --pruning-rate 0.0 --selector true_cls --benchmark textvqa --subset eval/subsets/textvqa_200.jsonl --metrics-out runs/p2_probe_v1/textvqa_r0_metrics.json --max-tokens 32 --max-model-len 4096 --gpu-memory-utilization 0.90 --seed 0",
+      "priority": 1,
+      "est_min": 25,
+      "deps": [],
+      "status": "pending",
+      "note": "v1 TRUE-CLS CONTROL on TextVQA (r=0). OCR-heavy denominator for the v1 TextVQA series."
+    },
+    {
+      "name": "v1_probe_textvqa_r50",
+      "cmd": "/home/dell/miniconda3/envs/vtc_serve/bin/python -m src.serve_bench --model runs/models/llava-1.5-7b-hf --pruning-rate 0.50 --selector true_cls --benchmark textvqa --subset eval/subsets/textvqa_200.jsonl --metrics-out runs/p2_probe_v1/textvqa_r50_metrics.json --max-tokens 32 --max-model-len 4096 --gpu-memory-utilization 0.90 --seed 0",
+      "priority": 2,
+      "est_min": 20,
+      "deps": [
+        "v1_probe_textvqa_r0"
+      ],
+      "status": "pending",
+      "note": "v1 TextVQA @ 50% prune, REAL CLS-attn. OCR robustness gate for v1: proxy r50 was 0.530 (-2.5%, passed the <=5% gate). Expect v1 to hold or improve. This is the key OCR-degradation-resistance data point."
+    },
+    {
+      "name": "v1_probe_textvqa_r75",
+      "cmd": "/home/dell/miniconda3/envs/vtc_serve/bin/python -m src.serve_bench --model runs/models/llava-1.5-7b-hf --pruning-rate 0.75 --selector true_cls --benchmark textvqa --subset eval/subsets/textvqa_200.jsonl --metrics-out runs/p2_probe_v1/textvqa_r75_metrics.json --max-tokens 32 --max-model-len 4096 --gpu-memory-utilization 0.90 --seed 0",
+      "priority": 3,
+      "est_min": 18,
+      "deps": [
+        "v1_probe_textvqa_r0"
+      ],
+      "status": "pending",
+      "note": "v1 TextVQA @ 75% prune, REAL CLS-attn. Proxy r75 was 0.440 (-11.5%). The OCR stress test -- if true CLS-attn (which prioritizes text-region patches) recovers accuracy here, it directly demonstrates selector quality matters for OCR-heavy workloads."
+    },
+    {
+      "name": "fastv_gqa_control",
+      "cmd": "/home/dell/miniconda3/envs/fastv/bin/python -m src.fastv_bench --model-path /media/disk2/YZX/doct/FastV/llava-v1.5-7b --benchmark gqa --subset eval/subsets/gqa_200.jsonl --keep-tokens 576 --agg-layer 2 --metrics-out runs/fastv_baseline/gqa_control_metrics.json --max-tokens 32 --device cuda",
+      "priority": 1,
+      "est_min": 30,
+      "deps": [],
+      "status": "done",
+      "note": "FastV ACCURACY-ONLY control on GQA (keep-tokens=576 => FastV OFF). The no-prune LLaVA-1.5-7B baseline via the FastV repo's llava lib (same env path as pruned runs -> identical tokenizer/preprocessing). Sanity check: this should match the vLLM r0 GQA acc (~0.585) within +/-2% (the two paths differ only in attn impl: fastv env uses eager+patched, vLLM uses SDPA; small numeric diffs expected). If it diverges >5%, flag a scorer/preprocess mismatch before trusting pruned numbers.",
+      "rc": 0,
+      "last_run": 1782898086
+    },
+    {
+      "name": "fastv_gqa_r50",
+      "cmd": "/home/dell/miniconda3/envs/fastv/bin/python -m src.fastv_bench --model-path /media/disk2/YZX/doct/FastV/llava-v1.5-7b --benchmark gqa --subset eval/subsets/gqa_200.jsonl --keep-tokens 288 --agg-layer 2 --metrics-out runs/fastv_baseline/gqa_r50_metrics.json --max-tokens 32 --device cuda",
+      "priority": 2,
+      "est_min": 28,
+      "deps": [
+        "fastv_gqa_control"
+      ],
+      "status": "failed",
+      "note": "FastV @ r50 (keep 288/576) on GQA. THE ACCURACY ANCHOR: this is the canonical TF compressor at 50% prune. Compare to (a) proxy probe r50 (0.565, -2.0%) and (b) v1 true_cls r50 (to be run). FastV prunes INTRA-LLM at layer 2 (attention-rank on the last decode token) -- a DIFFERENT mechanism from boundary CLS-attn -- so it sets the bar our boundary method should approach/match at iso-budget. Published FastV GQA at ~50% prune is ~60% on full val (we're on a 200-subset, expect noise).",
+      "rc": 1,
+      "last_run": 1782898331
+    },
+    {
+      "name": "fastv_gqa_r75",
+      "cmd": "/home/dell/miniconda3/envs/fastv/bin/python -m src.fastv_bench --model-path /media/disk2/YZX/doct/FastV/llava-v1.5-7b --benchmark gqa --subset eval/subsets/gqa_200.jsonl --keep-tokens 144 --agg-layer 2 --metrics-out runs/fastv_baseline/gqa_r75_metrics.json --max-tokens 32 --device cuda",
+      "priority": 3,
+      "est_min": 25,
+      "deps": [
+        "fastv_gqa_control"
+      ],
+      "status": "failed",
+      "note": "FastV @ r75 (keep 144/576) on GQA. The high-prune anchor. Compare to proxy r75 (0.470, -11.5%) -- FastV's intra-LLM attention-rank should degrade more gracefully here than boundary CLS-attn at extreme prune (this is FastV's known strength). If our v1 true_cls r75 approaches FastV r75, that's a strong result (boundary method matching intra-LLM method at extreme budget).",
+      "rc": 1,
+      "last_run": 1782898399
+    },
+    {
+      "name": "fastv_textvqa_r50",
+      "cmd": "/home/dell/miniconda3/envs/fastv/bin/python -m src.fastv_bench --model-path /media/disk2/YZX/doct/FastV/llava-v1.5-7b --benchmark textvqa --subset eval/subsets/textvqa_200.jsonl --keep-tokens 288 --agg-layer 2 --metrics-out runs/fastv_baseline/textvqa_r50_metrics.json --max-tokens 32 --device cuda",
+      "priority": 2,
+      "est_min": 28,
+      "deps": [],
+      "status": "failed",
+      "note": "FastV @ r50 on TextVQA. OCR-robustness anchor: proxy r50 was 0.530 (-2.5%). FastV is known to degrade on OCR at high prune -- this characterizes whether intra-LLM pruning preserves text-region tokens better than boundary CLS-attn. The OCR comparison (FastV vs v1 true_cls) is a key table row.",
+      "rc": 1,
+      "last_run": 1782898424
     }
   ]
 }

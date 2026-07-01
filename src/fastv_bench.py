@@ -90,6 +90,9 @@ def run(args) -> dict:
     if args.keep_tokens >= 576:
         cfg = model.config
         cfg.use_fast_v = False
+        # CRITICAL: leave output_attentions at default (False) for the control --
+        # enabling it forces every decoder layer to return attention weights,
+        # which is slower and unnecessary when FastV is off.
         print(f"[fastv_bench] FastV DISABLED (keep_tokens={args.keep_tokens} >= 576, control)",
               flush=True)
     else:
@@ -100,11 +103,21 @@ def run(args) -> dict:
         cfg.fast_v_attention_rank = args.keep_tokens
         cfg.fast_v_agg_layer = args.agg_layer
         cfg.fast_v_inplace = True
+        # CRITICAL FIX: the FastV-patched LlamaModel.forward reads
+        # `layer_outputs[1]` (the attention weights) at the agg_layer to rank
+        # image tokens. That index only exists if each decoder layer returns its
+        # attention output, which requires output_attentions=True. The patched
+        # modeling_llama.py:635/815-820 falls back to self.config.output_attentions
+        # when the forward arg is None -- so we set it on the config (propagates
+        # to every layer). Without this, layer_outputs = (hidden_states, ...) and
+        # layer_outputs[1] raises IndexError (the FastV-ON crash).
+        cfg.output_attentions = True
         # push into the model's decoder (the LlamaModel holds these on self)
         if hasattr(model, "model") and hasattr(model.model, "reset_fastv"):
             model.model.reset_fastv()
         print(f"[fastv_bench] FastV ON: keep {args.keep_tokens}/576 image tokens, "
-              f"agg_layer={args.agg_layer}, sys_length={args.sys_length}, inplace=True",
+              f"agg_layer={args.agg_layer}, sys_length={args.sys_length}, inplace=True, "
+              f"output_attentions=True (required for layer_outputs[1])",
               flush=True)
 
     conv_mode = "llava_v1"  # LLaVA-1.5

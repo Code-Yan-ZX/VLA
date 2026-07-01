@@ -369,6 +369,14 @@ def build_engine(model: str, args):
             hook_state["kept_counts"].append(output.shape[1])
             return None  # control: no-op, but still log full token count
         scores = score_provider()
+        # one-time validation log: confirm the capture retains ONLY the CLS row
+        # (B,H,1,S) -> head-meaned (B,N), NOT the full (B,H,S,S) [the OOM cause]
+        if hook_state["n_calls"] == 1 and selector_kind == "true_cls" and cls_capture is not None:
+            row_shape = cls_capture.captured.get("last_cls_row_shape")
+            sc_shape = tuple(scores.shape) if scores is not None else None
+            print(f"[serve_bench] TRUE_CLS capture shape check: cls_row={row_shape} "
+                  f"head_meaned_scores={sc_shape} (expect ~(B,H,1,S) and (B,N); "
+                  f"NOT (B,H,S,S))", flush=True)
         full_n = output.shape[1]
         if scores is None or scores.shape[1] != full_n:
             # fallback: take the first target_k tokens (keeps shapes valid even

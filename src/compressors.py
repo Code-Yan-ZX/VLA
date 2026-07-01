@@ -224,9 +224,16 @@ class ClsAttnCapture:
     WHY: vLLM's `CLIPAttention` delegates to `MultiHeadAttention` which uses
     `F.scaled_dot_product_attention` (fused SDPA) and returns NO weights (the
     probe therefore fell back to a hidden-state-deviation PROXY). To get the real
-    VisionZip/FasterVLM signal we recompute the target layer's softmax weights in
-    a parallel manual path and stash them; the SDPA output still drives the real
-    forward (numerics unchanged -> encoder output byte-identical to stock vLLM).
+    VisionZip/FasterVLM signal we recompute the target layer's CLS-row softmax in
+    a parallel manual path and stash ONLY the (B,N) head-meaned CLS->patch score;
+    the SDPA output still drives the real forward (numerics unchanged -> encoder
+    output byte-identical to stock vLLM).
+
+    MEMORY: the manual path slices the query to CLS (index 0) BEFORE the QK^T, so
+    the logits tensor is (B,H,1,S) -- not (B,H,S,S). For CLIP-L/14 (S=577) this
+    is ~577x less peak memory than the full-matrix path, which is what tipped the
+    A40 (44GB) into OOM when retained alongside vLLM's ~26GB KV + ~13GB weights.
+    The selector only ever needs the CLS row.
 
     Hook target: `vision_tower.vision_model.encoder.layers[L].self_attn`
     (a `CLIPAttention`). Default L = last layer (-1) per VTC-CLS/FasterVLM.
@@ -252,7 +259,14 @@ class ClsAttnCapture:
             self.targets = [clip_attn_module]
         self.layer_names = layer_names or [f"layer{i}" for i in range(len(self.targets))]
         self._orig_forwards = [m.forward for m in self.targets]
-        self._captured: dict = {"weights_per_layer": [], "scores": None, "n_calls": 0}
+        # `scores` is (B,N) head-meaned CLS->patch attention -- the ONLY thing the
+        # selector needs. We deliberately do NOT retain the full (B,H,S,S) weights
+        # (that caused the A40 OOM at full scale: 577x more memory than needed).
+        self._captured: dict = {
+            "scores": None,            # (B,N) -- the retained signal
+            "last_cls_row_shape": None,  # for OOM-fix validation logging
+            "n_calls": 0,
+        }
         self._patched = False
 
     @property
@@ -281,17 +295,24 @@ class ClsAttnCapture:
             out = mod.attn(q, k, v)               # the real SDPA call
             attn_output, _ = mod.out_proj(out)
 
-            # ---- parallel manual path ONLY to expose softmax weights ----
-            # q,k: (B, S, H*Hd). Reshape to (B, H, S, Hd) and compute QK^T/sqrt(d).
+            # ---- parallel manual path: CLS-row ONLY (memory fix) ----
+            # We only need the CLS token's attention over the S keys (one row),
+            # NOT the full (B,H,S,S) matrix. Slicing the query to index 0 BEFORE
+            # the matmul means the logits tensor is (B,H,1,S) -> softmax ->
+            # CLS->patch scores (B,H,N) [skip CLS key 0]. ~S× less peak memory
+            # vs the full QK^T (S=577 here), which is what caused the A40 OOM
+            # when retained alongside vLLM's ~26GB KV + ~13GB weights.
             b, s, _ = q.shape
-            qh = q.view(b, s, num_heads, head_dim).transpose(1, 2)   # (B,H,S,Hd)
-            kh = k.view(b, s, num_heads, head_dim).transpose(1, 2)
-            attn_logits = torch.matmul(qh, kh.transpose(-2, -1)) * scale  # (B,H,S,S)
-            attn_w = torch.softmax(attn_logits.float(), dim=-1)           # (B,H,S,S)
-            capture["weights_per_layer"].append(attn_w)
+            qh_cls = q[:, 0:1, :].view(b, 1, num_heads, head_dim).transpose(1, 2)  # (B,H,1,Hd)
+            kh = k.view(b, s, num_heads, head_dim).transpose(1, 2)                 # (B,H,S,Hd)
+            cls_logits = torch.matmul(qh_cls, kh.transpose(-2, -1)) * scale        # (B,H,1,S)
+            cls_w = torch.softmax(cls_logits.float(), dim=-1)                      # (B,H,1,S)
+            # CLS is key 0; patches are keys 1..N. Drop key 0 -> (B,H,1,N), then
+            # head-mean -> (B,1,N) -> squeeze -> (B,N).
+            cls_scores = cls_w[:, :, 0, 1:].mean(dim=1)                            # (B,N)
+            capture["last_cls_row_shape"] = tuple(cls_w.shape)  # validate (B,H,1,S)
             capture["n_calls"] += 1
             # merge multi-layer ensemble into a single per-patch score (B, N)
-            cls_scores = cls_attention_scores(attn_w)            # (B, N)
             prev = capture["scores"]
             if prev is None or prev.shape != cls_scores.shape:
                 capture["scores"] = cls_scores.clone()
@@ -312,8 +333,9 @@ class ClsAttnCapture:
         self._patched = False
 
     def reset(self) -> None:
-        """Clear stashed weights/scores (call between requests in a serving loop)."""
-        self._captured = {"weights_per_layer": [], "scores": None, "n_calls": 0}
+        """Clear stashed scores (call between requests in a serving loop)."""
+        n = self._captured.get("n_calls", 0)
+        self._captured = {"scores": None, "last_cls_row_shape": None, "n_calls": 0}
 
     def __enter__(self) -> "ClsAttnCapture":
         return self.patch()
