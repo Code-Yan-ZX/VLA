@@ -1,0 +1,60 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+.ipynb_checkpoints/
+
+# ---- Model weights / checkpoints ----
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.bin
+*.onnx
+*.h5
+*.gguf
+*.flax
+checkpoints/
+weights/
+logs/ckpt/
+
+# ---- Experiment tracking ----
+wandb/
+mlruns/
+runs/
+lightning_logs/
+
+# ---- Data / arrays (usually too large for git) ----
+data/
+datasets/
+*.tfrecord
+*.record
+*.npy
+*.npz
+*.hdf5
+*.parquet
+
+# ---- Robotics logs ----
+*.bag
+*.db3
+*.mcap
+
+# ---- Outputs / media ----
+outputs/
+results/
+logs/
+*.mp4
+*.avi
+*.mov
+
+# ---- IDE / OS ----
+.vscode/
+.idea/
+.DS_Store
+*.swp
+
+# ---- Local-only Claude settings ----
+.claude/settings.local.json
