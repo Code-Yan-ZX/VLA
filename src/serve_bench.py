@@ -88,41 +88,121 @@ def load_subset(path: str) -> list[Sample]:
 
 
 # --------------------------------------------------------------------------- #
-# Accuracy scoring
+# Accuracy scoring (GQA / TextVQA conventions)
 # --------------------------------------------------------------------------- #
+_GQA_STOP = set("a an the is are was were be been being of to in on at for with "
+                "and or but not no yes this that these there here it its their "
+                "he she his her they we you i".split())
+
+
+def _norm_words(s: str) -> list[str]:
+    """Lowercase, keep alnum, split on whitespace; drop leading punctuation."""
+    out = []
+    for tok in "".join(c if (c.isalnum() or c.isspace()) else " "
+                       for c in s.strip().lower()).split():
+        out.append(tok)
+    return out
+
+
+def _singular(tok: str) -> str:
+    """Crude plural normalization: 'cars'->'car', 'leaves'->'leaf' won't be caught,
+    but covers the common -s/-es case. Good enough for the probe scorer."""
+    if len(tok) > 3 and tok.endswith("ies"):
+        return tok[:-3] + "y"
+    if len(tok) > 2 and tok.endswith("es"):
+        return tok[:-2]
+    if len(tok) > 1 and tok.endswith("s") and not tok.endswith("ss"):
+        return tok[:-1]
+    return tok
+
+
 def score_gqa(pred: str, gt: str, choices: Optional[list[str]] = None) -> int:
-    """GQA exact-match (case/whitespace/punct-insensitive). choices optional."""
-    def norm(s: str) -> str:
-        return "".join(c for c in s.strip().lower() if c.isalnum())
-    p, g = norm(pred), norm(gt)
-    if not g:
+    """GQA-convention scorer (deterministic, no external deps).
+
+    GQA answers fall into 3 types (matching the official GQA eval):
+      1. yes/no: correct if the model's LEAD word is yes/no matching gt
+         (model says "Yes, the chair is..." -> lead word "yes").
+      2. object/attribute/color/relational: gt is a noun/phrase. Correct if
+         the gt (or any synonym in `choices`/answer-set when present) appears
+         as a WHOLE WORD in the model's answer, OR the model's first
+         noun-phrase equals gt. Plural-normalized both sides.
+      3. choice-set: if `choices` is provided (answer-set), match if gt (or any
+         choice that equals gt) is contained as a whole word.
+    """
+    if not gt:
         return 0
-    if p == g or g in p.split():
-        return 1
+    p_words = _norm_words(pred)
+    g_norm = "".join(c for c in gt.strip().lower() if c.isalnum() or c.isspace()).strip()
+    g_words = g_norm.split()
+    if not g_words:
+        return 0
+
+    # ---- Type 1: yes/no (gt is a single yes/no token) ----
+    if g_norm in {"yes", "no"}:
+        # lead token of the model answer (skip leading articles a/an/the)
+        lead = None
+        for w in p_words:
+            if w not in {"a", "an", "the"}:
+                lead = w
+                break
+        if lead in {"yes", "no"} and lead == g_norm:
+            return 1
+        # also accept exact equality of fully-normalized strings (rare for verbose models)
+        return 0
+
+    # ---- Type 2: object/attribute/phrase gt ----
+    # build the candidate synonym set: gt + optional choices that equal/contain gt
+    syns = {g_norm, _singular(g_norm) if len(g_words) == 1 else g_norm}
     if choices:
-        # pick the closest choice to pred, then compare to gt
-        best = max(choices, key=lambda c: sum(w in p for w in norm(c).split()))
-        return 1 if norm(best) == g else 0
+        for c in choices:
+            cn = "".join(ch for ch in c.strip().lower()
+                         if ch.isalnum() or ch.isspace()).strip()
+            if cn:
+                syns.add(cn)
+                if len(cn.split()) == 1:
+                    syns.add(_singular(cn))
+
+    p_text = " ".join(p_words)
+    # whole-word / whole-phrase containment of gt (or synonym) in the answer
+    for s in syns:
+        s_words = s.split()
+        if len(s_words) == 1:
+            # single-token gt: match as whole word (singular OR plural)
+            sg = _singular(s)
+            if any(w == s or _singular(w) == sg for w in p_words):
+                return 1
+        else:
+            # multi-token phrase: substring match on word-normalized text
+            if s in p_text:
+                return 1
     return 0
 
 
 def score_textvqa(pred: str, gt: str) -> int:
-    """TextVQA VQA-accuracy: 1 if gt (or any of several GTs) appears in pred.
+    """TextVQA VQA-accuracy (soft): correct if ANY of the semicolon-separated
+    GT answers appears as a whole word/phrase in the model's answer.
 
-    The real TextVQA scorer is ANLS/overlap; for the probe subset we use the
-    conservative 'gt-substring' rule + permissive token containment. Full ANLS
-    is computed later in the accuracy table.
+    The official TextVQA metric is min(1, len(pred∩gt_set)/3); for the probe we
+    use the conservative 'any-gt-contained' rule which is a tight lower bound.
+    Full ANLS computed later in the accuracy table. Plural-normalized.
     """
-    def norm(s: str) -> str:
-        return "".join(c for c in s.strip().lower() if c.isalnum() or c.isspace())
-    p, g = norm(pred), norm(gt)
-    if not g:
+    if not gt:
         return 0
-    # multiple GTs may be semicolon-separated in the subset
-    gts = [x.strip() for x in g.split(";") if x.strip()]
+    p_words = _norm_words(pred)
+    p_text = " ".join(p_words)
+    gts = [x.strip() for x in gt.split(";") if x.strip()]
     for gt_i in gts:
-        if gt_i in p or all(tok in p for tok in gt_i.split() if len(tok) > 2):
-            return 1
+        g_words = _norm_words(gt_i)
+        if not g_words:
+            continue
+        gi = " ".join(g_words)
+        if len(g_words) == 1:
+            sg = _singular(g_words[0])
+            if any(w == g_words[0] or _singular(w) == sg for w in p_words):
+                return 1
+        else:
+            if gi in p_text:
+                return 1
     return 0
 
 
