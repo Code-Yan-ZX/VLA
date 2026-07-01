@@ -1,0 +1,62 @@
+[
+  {
+    "name": "v2_query_aware_gqa_r0",
+    "cmd": "/home/dell/miniconda3/envs/vtc_serve/bin/python -m src.serve_bench --model runs/models/llava-1.5-7b-hf --pruning-rate 0.0 --selector query_aware --benchmark gqa --subset eval/subsets/gqa_200.jsonl --metrics-out runs/p2_v2/gqa_r0_metrics.json --max-tokens 32 --max-model-len 4096 --gpu-memory-utilization 0.90 --seed 0",
+    "priority": 1,
+    "est_min": 25,
+    "deps": [],
+    "status": "pending",
+    "note": "v2 query_aware CONTROL on GQA (r=0). At r=0 the selector is a no-op -> byte-identical to proxy/v1 r0. Re-run as the v2-series speedup denominator (iso-selector-family ratios). Should match probe r0 (0.585) within noise."
+  },
+  {
+    "name": "v2_query_aware_gqa_r25",
+    "cmd": "/home/dell/miniconda3/envs/vtc_serve/bin/python -m src.serve_bench --model runs/models/llava-1.5-7b-hf --pruning-rate 0.25 --selector query_aware --benchmark gqa --subset eval/subsets/gqa_200.jsonl --metrics-out runs/p2_v2/gqa_r25_metrics.json --max-tokens 32 --max-model-len 4096 --gpu-memory-utilization 0.90 --seed 0",
+    "priority": 2,
+    "deps": ["v2_query_aware_gqa_r0"],
+    "status": "pending",
+    "note": "v2 query_aware GQA @ 25% (keep 432/576), text<->patch cosine similarity (max pool, SparseVLM-style). vs proxy r25 (0.555), v1 r25 (0.570). NOTE: n=50 directional read on TextVQA showed query_aware UNDERPERFORMS proxy (0.380 vs 0.500 matched) -- the full n=200 GQA run confirms whether this holds on scene/QA too or whether GQA (less OCR-dependent) behaves differently."
+  },
+  {
+    "name": "v2_query_aware_gqa_r50",
+    "cmd": "/home/dell/miniconda3/envs/vtc_serve/bin/python -m src.serve_bench --model runs/models/llava-1.5-7b-hf --pruning-rate 0.50 --selector query_aware --benchmark gqa --subset eval/subsets/gqa_200.jsonl --metrics-out runs/p2_v2/gqa_r50_metrics.json --max-tokens 32 --max-model-len 4096 --gpu-memory-utilization 0.90 --seed 0",
+    "priority": 2,
+    "deps": ["v2_query_aware_gqa_r0"],
+    "status": "pending",
+    "note": "v2 query_aware GQA @ 50% (keep 288/576). GATE POINT: proxy r50=0.565, v1 r50=0.545, FastV r50=0.535. Mechanism check (limit=3) PASSED (kept=288, scores computed, forward OK). Throughput should match proxy/v1 within noise (same hook, same KV-cache shrink) -- this run confirms the serving win is selector-agnostic for query_aware too."
+  },
+  {
+    "name": "v2_query_aware_gqa_r75",
+    "cmd": "/home/dell/miniconda3/envs/vtc_serve/bin/python -m src.serve_bench --model runs/models/llava-1.5-7b-hf --pruning-rate 0.75 --selector query_aware --benchmark gqa --subset eval/subsets/gqa_200.jsonl --metrics-out runs/p2_v2/gqa_r75_metrics.json --max-tokens 32 --max-model-len 4096 --gpu-memory-utilization 0.90 --seed 0",
+    "priority": 3,
+    "deps": ["v2_query_aware_gqa_r0"],
+    "status": "pending",
+    "note": "v2 query_aware GQA @ 75% (keep 144/576). Extreme-prune stress: proxy r75=0.470, v1 r75=0.450, FastV r75=0.515."
+  },
+  {
+    "name": "v2_query_aware_textvqa_r0",
+    "cmd": "/home/dell/miniconda3/envs/vtc_serve/bin/python -m src.serve_bench --model runs/models/llava-1.5-7b-hf --pruning-rate 0.0 --selector query_aware --benchmark textvqa --subset eval/subsets/textvqa_200.jsonl --metrics-out runs/p2_v2/textvqa_r0_metrics.json --max-tokens 32 --max-model-len 4096 --gpu-memory-utilization 0.90 --seed 0",
+    "priority": 1,
+    "est_min": 25,
+    "deps": [],
+    "status": "pending",
+    "note": "v2 query_aware CONTROL on TextVQA (r=0). OCR-heavy denominator for the v2 series. Should match probe r0 (0.555) within noise."
+  },
+  {
+    "name": "v2_query_aware_textvqa_r50",
+    "cmd": "/home/dell/miniconda3/envs/vtc_serve/bin/python -m src.serve_bench --model runs/models/llava-1.5-7b-hf --pruning-rate 0.50 --selector query_aware --benchmark textvqa --subset eval/subsets/textvqa_200.jsonl --metrics-out runs/p2_v2/textvqa_r50_metrics.json --max-tokens 32 --max-model-len 4096 --gpu-memory-utilization 0.90 --seed 0",
+    "priority": 2,
+    "est_min": 20,
+    "deps": ["v2_query_aware_textvqa_r0"],
+    "status": "pending",
+    "note": "v2 query_aware TextVQA @ 50% (keep 288/576) -- THE KEY OCR TEST. Full n=200 confirms the n=50 directional read (query_aware=0.380 vs proxy=0.500 on the SAME first-50). vs proxy r50=0.530, v1 r50=0.445, FastV r50=0.555. DIRECTIONAL READ IS NEGATIVE (see method-design.md §10): simple cosine text<->patch similarity does NOT recover OCR -- the proxy's hidden-state saliency is a stronger text-region locator. If the full run confirms <proxy, query_aware v2-step-1 needs a better scoring function (e.g. a learned projection, or SparseVLM's full attention-weighted aggregation, not raw cosine)."
+  },
+  {
+    "name": "v2_query_aware_textvqa_r75",
+    "cmd": "/home/dell/miniconda3/envs/vtc_serve/bin/python -m src.serve_bench --model runs/models/llava-1.5-7b-hf --pruning-rate 0.75 --selector query_aware --benchmark textvqa --subset eval/subsets/textvqa_200.jsonl --metrics-out runs/p2_v2/textvqa_r75_metrics.json --max-tokens 32 --max-model-len 4096 --gpu-memory-utilization 0.90 --seed 0",
+    "priority": 3,
+    "est_min": 18,
+    "deps": ["v2_query_aware_textvqa_r0"],
+    "status": "pending",
+    "note": "v2 query_aware TextVQA @ 75% (keep 144/576). Extreme OCR stress: proxy r75=0.440, v1 r75=0.275."
+  }
+]

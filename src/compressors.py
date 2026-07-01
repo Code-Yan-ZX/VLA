@@ -12,6 +12,12 @@ Two layers:
     family), captured by monkeypatching a `CLIPAttention` layer to expose its
     softmax weights. Optional PRUNESID-style diversity penalty (off by default).
     CPU-testable on dummy tensors (the capture plumbing is vLLM-side only).
+  * `QueryAwareSelector` -- v2 method (step-1): ranks patches by SIMILARITY to the
+    QUESTION text embeddings (SparseVLM-style text-guided selection, but at the
+    projector-output boundary -> vLLM-integrable). Both question-token embeddings
+    and patch embeddings live in the LLM input embedding space (embed_tokens
+    output == projector output space), so a plain cosine / dot product scores
+    each patch by max/mean similarity over question tokens. CPU-testable.
 
 All selectors:
     input  : image_features  (B, N, D)   -- projector output (or vision-tower output)
@@ -183,6 +189,96 @@ class TrueClsAttnSelector:
 
     def __call__(self, image_features: torch.Tensor, scores: torch.Tensor) -> torch.Tensor:
         kept, _ = self.select(image_features, scores)
+        return kept
+
+
+# --------------------------------------------------------------------------- #
+# v2 selector (step-1): QUERY-AWARE text<->patch similarity (SparseVLM-style)
+# --------------------------------------------------------------------------- #
+def text_patch_scores(
+    image_features: torch.Tensor,   # (B, N, D) projector output
+    query_embeds: torch.Tensor,     # (B, T, D) LLM input-embedding of question tokens
+    pool: str = "max",              # how to reduce over the T question tokens
+    sim: str = "cosine",            # "cosine" or "dot"
+) -> torch.Tensor:
+    """Score each of the N patch embeddings by similarity to the question.
+
+    Both `image_features` (projector output) and `query_embeds` (output of the
+    LLM's `embed_tokens` on the question's input_ids) live in the SAME space --
+    the LLM's input embedding space -- so they are directly comparable. This is
+    the SparseVLM-style text-guided scoring rule, but computed at the boundary
+    (post-projector, pre-LLM-fusion) so it is vLLM-integrable (the question text
+    is known at preprocessing time, before the forward).
+
+    Returns (B, N) per-patch scores. `pool`: "max" keeps the best-matching
+    question token per patch (default, SparseVLM); "mean" averages. `sim`:
+    "cosine" L2-normalizes both sides first; "dot" uses raw dot product.
+    Memory: (B,N,T) intermediate only -- no (B,H,S,S) materialization.
+    """
+    _validate(image_features, torch.zeros(image_features.shape[:2],
+                                          device=image_features.device))
+    if query_embeds.dim() != 3 or query_embeds.shape[0] != image_features.shape[0] \
+            or query_embeds.shape[2] != image_features.shape[2]:
+        raise ValueError(
+            f"query_embeds must be (B,T,D) matching image_features (B,N,D); got "
+            f"{tuple(query_embeds.shape)} vs {tuple(image_features.shape)}")
+
+    a = image_features                      # (B, N, D)
+    q = query_embeds                        # (B, T, D)
+    if sim == "cosine":
+        a = torch.nn.functional.normalize(a, dim=-1)
+        q = torch.nn.functional.normalize(q, dim=-1)
+    # pairwise similarity per (patch, query-token): (B, N, T)
+    sim_mat = torch.bmm(a, q.transpose(1, 2))
+    if pool == "max":
+        return sim_mat.max(dim=-1).values            # (B, N)
+    elif pool == "mean":
+        return sim_mat.mean(dim=-1)                  # (B, N)
+    else:
+        raise ValueError(f"pool must be 'max' or 'mean', got {pool!r}")
+
+
+@dataclass
+class QueryAwareSelector:
+    """v2-step-1 selector: rank visual patches by relevance to the QUESTION.
+
+    SparseVLM-style text-guided selection, but at the projector-output BOUNDARY
+    (so it is vLLM-integrable: the question is known at preprocessing time, and
+    the selection runs as a cheap forward-hook on the projector -- no intra-LLM
+    attention surgery, no FlashAttention fight, no per-layer cost). v1 (vision-
+    tower CLS-attn) catastrophically degraded OCR because [CLS] attends to coarse
+    salient objects, NOT text/task regions; making selection QUERY-AWARE keeps
+    the task-relevant / text-region patches alive even at high prune.
+
+    Inputs:
+      image_features : (B, N, D) projector output (the boundary embedding).
+      query_embeds   : (B, T, D) the LLM `embed_tokens` output on the question's
+                       input_ids. Cheap (an embedding LOOKUP, not a transformer
+                       pass). Pre-computed per request in serve_bench before the
+                       forward (see text_patch_scores docstring for plumbing).
+
+    `pool="max"` (default) and `sim="cosine"` match SparseVLM's per-token-max
+    similarity. The selector then delegates to the shared `select_topk` so the
+    contiguous-compaction + placeholder-shrink integration is identical to the
+    proxy / true_cls paths (no change to that plumbing).
+
+    CPU-testable: feed dummy (B,N,D) image_features and (B,T,D) query_embeds.
+    """
+    pruning_rate: float = 0.0
+    pool: str = "max"          # "max" (SparseVLM) or "mean" over question tokens
+    sim: str = "cosine"        # "cosine" (default) or "dot"
+
+    def select(
+        self,
+        image_features: torch.Tensor,   # (B, N, D)
+        query_embeds: torch.Tensor,     # (B, T, D)
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        scores = text_patch_scores(image_features, query_embeds,
+                                   pool=self.pool, sim=self.sim)
+        return select_topk(image_features, scores, self.pruning_rate)
+
+    def __call__(self, image_features: torch.Tensor, query_embeds: torch.Tensor) -> torch.Tensor:
+        kept, _ = self.select(image_features, query_embeds)
         return kept
 
 
@@ -438,7 +534,45 @@ def _self_test() -> None:
     div_idx = greedy_diverse_topk(feats_n, sc, k=10, lam=1.0)
     assert div_idx.unique().numel() == 10, "diversity must keep k unique"
 
+    # --- 6. v2 QueryAwareSelector: shapes, determinism, query-sensitivity ----
+    # query_embeds (B,T,D): make patch 10..20 align with query token 0 (high sim)
+    t = 6
+    qe = torch.randn(b, t, d)
+    # align a SPAN of patches to query token 0 -> those patches must score highest
+    qe[:, 0, :] = feats[:, 10:20, :].mean(dim=1)
+    for r in (0.25, 0.50, 0.75):
+        for pool in ("max", "mean"):
+            sel = QueryAwareSelector(pruning_rate=r, pool=pool, sim="cosine")
+            kept1, idx1 = sel.select(feats, qe)
+            kept2, idx2 = sel.select(feats, qe)
+            k = keep_count(n, r)
+            assert kept1.shape == (b, k, d), f"qa r={r} {pool}: bad shape {kept1.shape}"
+            assert torch.equal(idx1, idx2), f"qa r={r} {pool}: not deterministic"
+            # gather integrity
+            check = torch.gather(feats, 1, idx1.unsqueeze(-1).expand(-1, -1, d))
+            assert torch.equal(kept1, check), f"qa r={r} {pool}: gather mismatch"
+            # query-sensitivity: r=0.50 keeps 288; with a 10-patch span aligned to
+            # the query, AT LEAST those 10 patches must be in the kept set for batch 0
+            kept_set = set(idx1[0].tolist())
+            aligned = set(range(10, 20))
+            kept_aligned = aligned & kept_set
+            assert len(kept_aligned) >= 8, (
+                f"qa r={r} {pool}: query-aligned patches not preferred "
+                f"(only {len(kept_aligned)}/10 kept) -- selector not query-aware")
+
+    # --- 7. text_patch_scores: shape (B,N), max >= mean, monotone in alignment ---
+    sc_max = text_patch_scores(feats, qe, pool="max", sim="cosine")
+    sc_mean = text_patch_scores(feats, qe, pool="mean", sim="cosine")
+    assert sc_max.shape == (b, n) and sc_mean.shape == (b, n), "tp_scores bad shape"
+    assert torch.all(sc_max >= sc_mean - 1e-5), "max must be >= mean"
+    # dot != cosine (different normalization)
+    sc_dot = text_patch_scores(feats, qe, pool="max", sim="dot")
+    assert not torch.allclose(sc_max, sc_dot, atol=1e-4), "cosine==dot (normalization broken)"
+    # score argmax for batch 0 must lie in the aligned span 10..20
+    assert 10 <= int(sc_max[0].argmax().item()) < 20, "tp_scores argmax not in aligned span"
+
     print("compressors self-test OK: probe=true(lam0)==identical, diversity+determinism ok, "
+          "query_aware query-sensitive + shapes ok, "
           "keep_counts=" + str([keep_count(n, r) for r in (0.0, .25, .50, .75)]) +
           " scores=" + str(tuple(s.shape)))
 

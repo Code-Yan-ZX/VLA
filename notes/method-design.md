@@ -194,3 +194,52 @@ A fixed prune rate `r` is globally suboptimal under continuous batching:
 **We are building the FIRST serving-engine-aware visual-token compressor.** The 37-method survey (lit-survey.md §7, re-verified 2026-07-01) is unanimous: **0/37 measure served throughput inside a production engine** (vLLM/lmdeploy/TRT-LLM/SGLang). The 13 that report any wall-clock number all measure on the authors' own research harness — raw CUDA latency, offline prefill time, or self-reported "faster" — none inside a continuous-batching serving engine. The 2026 ICLR cluster (AgilePruner, VisionTrim, PRUNESID) crowds the accuracy/FLOPs-combination space but is offline-only; ElasticMM does scheduling but explicitly avoids compression; the vLLM RFC #45098 (`--image-pruning-rate`) is unfinished infra, not a method. **This is the cleanest novelty opening in the field and it holds.** Our claim is not "yet another accurate compressor" (that space is saturated and unbeatable in 3 months on 1× A40) — it is that **visual-token compression's deployment win lives in the serving engine (KV-cache/concurrency, finding #1), is sub-linear when the encoder is fixed (finding #2), and scales with visual-token fraction (finding #3)** — three effects invisible to FLOPs/accuracy measurement and untouched by every existing method. v1 (true CLS-attn + early-prune) delivers an accurate, real-wall-clock-fast compressor inside vLLM; v2 (load-adaptive budget) makes the compressor *aware* of the engine state — a first. The combination is the contribution: a compressor co-designed with continuous-batching realities, evaluated by served throughput, with the three findings as the mechanism story. This is a method paper (not a measurement paper): the load-adaptive controller (§7) is novel machinery, and the early-prune-via-CLS-attn (§6b) is a new integration that the survey diagnosed as blocked (§6.5.3 FlashAttention hurdle) but which is in fact tractable in the vision tower (CUDA graphs don't cover it in V0).
 
 — End Part II. v1 code in `src/compressors.py` (`TrueClsAttnSelector`, `ClsAttnCapture`); v1 probe jobs in `notes/v1_probe_jobs.json`. —
+
+---
+
+# Part III — v2-step-1 Query-Aware Boundary Selector (Dev subagent, 2026-07-01)
+
+> v1 (vision-tower CLS-attn) FAILED OCR because [CLS] attends to coarse salient objects, not text/task regions (eval/p2_method_v1_comparison.md finding 1). v2-step-1 tests the thesis: a BOUNDARY selector that is QUERY-AWARE (selects patches by relevance to the QUESTION) keeps task/text patches alive at high prune, while staying vLLM-integrable (the question is known at preprocessing time). This section documents the plumbing, the implementation, and the directional result.
+
+## 9. Text↔patch plumbing (the integration crux — RESOLVED)
+
+**Problem:** score each of the 576 post-projector patch embeddings by similarity to the question's text embeddings, at the `LlavaMultiModalProjector.forward` output hook, inside vLLM V0.
+
+**Key facts established (vLLM 0.10.2 source audit + LLaVA-1.5-7B config):**
+1. `config.image_token_index = 32000` — the `<image>` placeholder id. The chat template renders `USER: <image>\n{question} ASSISTANT:` and vLLM expands `<image>` to 576 × 32000 placeholders (`LlavaProcessingInfo.get_num_image_tokens`, patched in `patch_image_token_count`).
+2. **LLM input-embedding layer path (verified):** `engine_model.language_model.model.embed_tokens` — a `VocabParallelEmbedding`. `engine_model = llm.llm_engine.model_executor.driver_worker.model_runner.model` (V0 in-process chain). `embed_tokens(ids)` is a pure lookup, not a transformer pass — cheap (~ms for T≤~30 tokens).
+3. **Shared embedding space:** projector output (patch embeddings) and `embed_tokens` output (question token embeddings) BOTH live in the LLM input-embedding space → directly comparable via cosine/dot. (The LLM literally replaces the `<image>` placeholder rows of `embed_tokens(prompt_ids)` with the projector output before fusion.)
+
+**Plumbing approach (option C — pre-compute stash, chosen):**
+- **Where input_ids captured:** NOT threaded through the model forward. Instead, the question text is tokenized DIRECTLY (`tokenizer(question, add_special_tokens=False)`) in the per-sample loop in `serve_bench.run()`, BEFORE `llm.chat()`. This is the cleanest path: the question is right there (`s.question`), and tokenizing just the question (not the full templated prompt) gives exactly the question tokens — no need to strip the 576 image placeholders or the USER/ASSISTANT template tokens.
+- **How embedded:** `embed_question()` helper calls `embed_tokens(ids)` → `(1, T, D)` fp16 tensor.
+- **Handoff to hook:** a FIFO queue `query_queue` (stashed on `projector._vtc_query_queue`). Each sample pushes its `(1,T,D)` embeddings before `llm.chat()`; the projector hook `pop(0)` during the forward. vLLM offline `LLM.chat()` is one request at a time → FIFO order is unambiguous.
+- **Why not option A/B (thread input_ids / threadlocal):** would require patching `LlavaForConditionalGeneration.forward` to expose `input_ids` to a sub-hook, or a request-context; both are brittle and fight vLLM's batching. Option C decouples from the engine entirely and works because we control the per-sample loop.
+
+**Code:** `QueryAwareSelector` + `text_patch_scores` in `src/compressors.py` (CPU-testable, self-test passes — query-sensitive, deterministic, shape-correct). Wired in `serve_bench.py` via `--selector query_aware` + `--query-pool {max,mean}` + `--query-sim {cosine,dot}`. r=0 is a no-op control (byte-identical numerics — selector branch skipped).
+
+## 10. ★ Directional result — query_aware v2-step-1 is NEGATIVE (n=50 matched)
+
+**Mechanism check (limit=3, GQA, r=0.5): PASSED on all four criteria** — (a) selector receives the question (query_tokens=10), (b) scores computed from text↔patch cosine similarity (score[min=0.0074, med=0.0336, max=0.0574], top5_patch_idx=[65,150,33,13,90]), (c) kept=288, (d) forward succeeds. No OOM, no full-matrix materialization (only (B,N,T) intermediate). Code is correct.
+
+**Directional OCR test (limit=50, TextVQA, r=0.5) — the KEY thesis test — NEGATIVE:**
+| selector (matched first-50 TextVQA, r=0.5) | acc | note |
+|---|---|---|
+| proxy (hidden-state deviation) | **0.500** | matched control, same 50 samples |
+| **query_aware (cosine, max pool)** | **0.380** | **WORSE than proxy by 12 pts** |
+| query_aware (cosine, mean pool) | 0.220 | even worse |
+| (for reference, full n=200) proxy=0.530, v1 true_cls=0.445, FastV=0.555 | | |
+
+**The thesis is NOT validated by raw cosine text↔patch similarity.** Query-aware selection does NOT recover OCR — it is *worse* than the proxy's hidden-state saliency at the same budget on the same samples. The mechanism hypothesis (question text → relevant patches survive) fails because **raw cosine similarity between question-token embeddings and patch embeddings is a WEAK signal for localizing task/text regions**: question tokens encode the *semantics* of the words ("what/time/displayed"), while text-region patch embeddings encode the *glyph pixels* projected into the LLM space — these do not strongly align in cosine. The proxy's hidden-state deviation, by contrast, captures foreground/saliency which incidentally includes text regions.
+
+**Implication for v2 (needs Main decision):** the *plumbing* works (boundary query-aware selection is feasible and vLLM-integrable), but the *scoring function* must be stronger than raw cosine. Options for v2-step-2 (do NOT implement now — Main decides):
+- **(a) SparseVLM's full mechanism:** aggregate similarity over ALL question tokens weighted by a learned/attention-derived coefficient, not just max/mean cosine — SparseVLM uses a coarse-to-fine two-stage with a cross-attention-like re-ranker, not a single dot product.
+- **(b) Learned projection:** a tiny MLP that maps (patch, query) → relevance score, trained on a small VQA set. (Breaks training-free, but 1× A40 can train a 1-layer projection cheaply.)
+- **(c) Hybrid:** keep proxy (saliency) as the primary signal, ADD query-aware as a boost on top (e.g. score = 0.5·proxy + 0.5·query, or query re-ranks proxy's top-2k to final-k). This is the lowest-risk path — proxy already works; query refines it.
+- **(d) Pivot the v2 thesis:** if query-aware doesn't beat proxy, the v2 differentiator becomes **load-adaptive budget** (§7, the serving-specific novel lever) layered on the PROXY selector, not a new selector. The proxy is the accuracy baseline; load-adaptivity is the contribution. This keeps the serving-engine novelty intact without a selector gamble.
+
+**Recommendation:** option (c) hybrid as a quick v2-step-1.1 sanity check (1 run), then if it also fails, pivot to (d). The provisional GO (compression → served speedup) is selector-independent and unaffected.
+
+**Artifacts:** `runs/p2_v2/v2_gqa_r50_limit3_check.json` (mechanism), `runs/p2_v2/v2_textvqa_r50_limit50_check.json` (directional OCR, query_aware), `runs/p2_v2/proxy_textvqa_r50_limit50_control.json` (matched proxy control), `runs/p2_v2/v2_textvqa_r50_limit50_mean.json` (mean pool). Full v2 probe jobs: `notes/v2_probe_jobs.json` (8 jobs, gqa+textvqa × r0/r25/r50/r75, query_aware).
+
+— End Part III. v2-step-1 code in `src/compressors.py` (`QueryAwareSelector`, `text_patch_scores`); wiring in `src/serve_bench.py`; probe jobs in `notes/v2_probe_jobs.json`. —

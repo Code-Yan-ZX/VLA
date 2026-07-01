@@ -52,8 +52,10 @@ from typing import Optional
 from .compressors import (  # noqa: F401  (re-export)
     ClsAttnSelector,
     TrueClsAttnSelector,
+    QueryAwareSelector,
     ClsAttnCapture,
     cls_attention_scores,
+    text_patch_scores,
     keep_count,
 )
 
@@ -324,6 +326,42 @@ def build_engine(model: str, args):
     captured = {"scores": None, "n_vision_calls": 0}
     cls_capture: Optional[ClsAttnCapture] = None
 
+    # ---- v2 query-aware plumbing: tokenizer + LLM input-embedding layer ----
+    # WHY: query_aware scores each of the 576 patch embeddings by similarity to
+    # the QUESTION's token embeddings. Both live in the LLM input-embedding space
+    # (projector output == embed_tokens output space), so they're directly
+    # comparable. The question text is known at preprocessing time (it's in the
+    # per-sample loop before llm.chat()), so we tokenize the raw question, run it
+    # through `embed_tokens` (a CHEAP LOOKUP, not a transformer pass), and stash
+    # the (T, D) embeddings in a FIFO queue that the projector hook pops.
+    # PLUMBING POINT (method-design §9): pre-compute BEFORE llm.chat(), keyed by
+    # a queue (request order = pop order; vLLM offline LLM.chat is one request at
+    # a time so this is unambiguous). No intra-forward input_ids threading needed.
+    embed_tokens = None
+    tokenizer = None
+    query_queue: list = []   # FIFO of (B,T,D) question-embedding tensors
+    if selector_kind == "query_aware":
+        import torch  # noqa
+        # tokenizer: vLLM keeps it on the engine; load it fresh from the model
+        # path for robustness (the offline LLM.chat path re-tokenizes anyway, so
+        # this is consistent with what the engine sees).
+        from transformers import AutoTokenizer  # noqa
+        tokenizer = AutoTokenizer.from_pretrained(model, trust_remote_code=False)
+        # embed_tokens: LLaVA -> language_model (LlamaForCausalLM) -> .model
+        # (LlamaModel) -> .embed_tokens (VocabParallelEmbedding). Verified path
+        # via vLLM llama.py:378 get_input_embeddings wrapper.
+        lang_model = getattr(engine_model, "language_model", None)
+        llama_model = getattr(lang_model, "model", None) if lang_model is not None else None
+        embed_tokens = getattr(llama_model, "embed_tokens", None) if llama_model is not None else None
+        if embed_tokens is None:
+            raise RuntimeError(
+                "query_aware selector: cannot locate embed_tokens on the engine "
+                "model (expected engine_model.language_model.model.embed_tokens). "
+                "Wrong arch?")
+        print(f"[serve_bench] QUERY_AWARE selector: tokenizer={type(tokenizer).__name__} "
+              f"embed_tokens={type(embed_tokens).__name__} (will embed question "
+              f"tokens per request for text<->patch scoring)", flush=True)
+
     def _vision_hook_proxy(module, inputs, outputs):  # noqa: ANN001
         import torch  # noqa
         hs = outputs.last_hidden_state if hasattr(outputs, "last_hidden_state") \
@@ -368,6 +406,55 @@ def build_engine(model: str, args):
         if args.pruning_rate == 0.0:
             hook_state["kept_counts"].append(output.shape[1])
             return None  # control: no-op, but still log full token count
+
+        # ---- v2 query-aware path: pop the pre-computed question embeddings ----
+        if selector_kind == "query_aware":
+            query_embeds = query_queue.pop(0) if query_queue else None
+            full_n = output.shape[1]
+            # shape guard: query_embeds must be (B, T, D) with B matching output,
+            # D matching output's D (T can differ -- it's the question length).
+            bad = (query_embeds is None
+                   or query_embeds.dim() != 3
+                   or query_embeds.shape[0] != output.shape[0]
+                   or query_embeds.shape[2] != output.shape[2])
+            if bad:
+                # shape-mismatch fallback (shouldn't happen): keep first target_k
+                kept = output[:, :target_k, :].contiguous()
+                keep_idx = torch.arange(target_k, device=output.device).unsqueeze(0).expand(
+                    output.shape[0], -1)
+            else:
+                sel = QueryAwareSelector(
+                    pruning_rate=args.pruning_rate,
+                    pool=getattr(args, "query_pool", "max"),
+                    sim=getattr(args, "query_sim", "cosine"),
+                )
+                kept, keep_idx = sel.select(output, query_embeds)
+                if kept.shape[1] != target_k:
+                    kept = kept[:, :target_k, :].contiguous()
+                    keep_idx = keep_idx[:, :target_k].contiguous()
+                # one-time log: confirm the selector received the question and
+                # the scores are text<->patch similarities (not CLS-attn)
+                if hook_state["n_calls"] == 1:
+                    with torch.no_grad():
+                        sc = text_patch_scores(output, query_embeds,
+                                               pool=sel.pool, sim=sel.sim)[0]
+                    print(f"[serve_bench] QUERY_AWARE shape check: patches={full_n} "
+                          f"query_tokens={query_embeds.shape[1]} "
+                          f"scores_shape={tuple(sc.shape)} "
+                          f"score[min,med,max]=[{sc.min().item():.4f},"
+                          f"{sc.median().item():.4f},{sc.max().item():.4f}] "
+                          f"top5_patch_idx={torch.topk(sc, 5).indices.tolist()}",
+                          flush=True)
+            module._vtc_keep_idx = keep_idx         # type: ignore[attr-defined]
+            module._vtc_keep_count = kept.shape[1]  # type: ignore[attr-defined]
+            hook_state["kept_counts"].append(kept.shape[1])
+            if hook_state["n_calls"] <= 5:
+                print(f"[serve_bench] projector hook fire #{hook_state['n_calls']}: "
+                      f"in={output.shape[1]} -> kept={kept.shape[1]} "
+                      f"(prune_rate={args.pruning_rate}, selector={selector_kind})",
+                      flush=True)
+            return kept
+
         scores = score_provider()
         # one-time validation log: confirm the capture retains ONLY the CLS row
         # (B,H,1,S) -> head-meaned (B,N), NOT the full (B,H,S,S) [the OOM cause]
@@ -421,7 +508,34 @@ def build_engine(model: str, args):
     # stash hook_state + cls_capture on the projector for run() to read/clean up
     projector._vtc_hook_state = hook_state  # type: ignore[attr-defined]
     projector._vtc_cls_capture = cls_capture  # type: ignore[attr-defined]
+    projector._vtc_query_queue = query_queue  # type: ignore[attr-defined]
+    projector._vtc_tokenizer = tokenizer     # type: ignore[attr-defined]
+    projector._vtc_embed_tokens = embed_tokens  # type: ignore[attr-defined]
     return llm, projector
+
+
+def embed_question(question: str, tokenizer, embed_tokens, device) -> "torch.Tensor":
+    """Tokenize a question and look up its LLM input embeddings (B=1, T, D).
+
+    PLUMBING for the query_aware selector (method-design.md §9): both the
+    question token embeddings and the post-projector patch embeddings live in
+    the LLM's input-embedding space, so they're directly comparable via cosine
+    similarity. The question text is known BEFORE the forward (it's part of the
+    prompt), so we tokenize JUST the question (not the full chat-template prompt
+    -- avoids the image placeholder `<image>` x576 and the USER/ASSISTANT template
+    tokens; the question's own tokens are what we want to match against patches),
+    run embed_tokens (a lookup, not a transformer pass), and stash the result.
+
+    Returns a (1, T, D) fp16 tensor on `device`. Cheap (~ms for T<=~30 tokens).
+    """
+    import torch  # noqa
+    enc = tokenizer(question, return_tensors="pt", add_special_tokens=False)
+    ids = enc["input_ids"].to(device)        # (1, T)
+    if ids.numel() == 0:                     # degenerate: fall back to BOS
+        bos = tokenizer.bos_token_id if tokenizer.bos_token_id is not None else 1
+        ids = torch.tensor([[bos]], device=device, dtype=torch.long)
+    emb = embed_tokens(ids)                  # (1, T, D) -- a lookup
+    return emb.to(torch.float16)
 
 
 # --------------------------------------------------------------------------- #
@@ -449,12 +563,25 @@ def run(args) -> dict:
     from vllm import SamplingParams  # noqa (lazy)
     sp = SamplingParams(temperature=0.0, max_tokens=args.max_tokens, seed=args.seed)
 
+    # query_aware plumbing: pop the per-request question-embedding queue that
+    # build_engine stashed on the projector; pre-compute the question embeddings
+    # BEFORE each llm.chat() call so the projector hook can pop them in order.
+    query_queue = getattr(projector, "_vtc_query_queue", None)
+    do_query_aware = (getattr(args, "selector", "proxy") == "query_aware")
+
     raw = []
     import torch  # noqa
+    device = "cuda" if torch.cuda.is_available() else "cpu"
     torch.cuda.reset_peak_memory_stats()
 
     t_all_start = time.perf_counter()
     for s in samples:
+        # query_aware: embed the question NOW (cheap lookup) and push to the FIFO
+        # so the projector hook pops it during this request's forward.
+        if do_query_aware:
+            assert query_queue is not None
+            query_queue.append(embed_question(s.question, projector._vtc_tokenizer,  # type: ignore[attr-defined]
+                                              projector._vtc_embed_tokens, device))  # type: ignore[attr-defined]
         # Use llm.chat() with the OpenAI-style message format: the processor
         # applies the correct chat template and counts exactly one image (raw
         # "<image>\n..." prompts were double-counted by the multimodal validator
@@ -549,13 +676,21 @@ def main() -> None:
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--limit", type=int, default=0,
                     help="use only first N subset samples (0=all; for quick validation)")
-    ap.add_argument("--selector", default="proxy", choices=["proxy", "true_cls"],
-                    help="score source: 'proxy' = hidden-state-deviation (the P2 probe) "
-                         "or 'true_cls' = real [CLS]->patch softmax attention (v1 method, "
-                         "via ClsAttnCapture on the last vision-tower layer)")
+    ap.add_argument("--selector", default="proxy", choices=["proxy", "true_cls", "query_aware"],
+                    help="score source: 'proxy' = hidden-state-deviation (the P2 probe); "
+                         "'true_cls' = real [CLS]->patch softmax attention (v1 method, "
+                         "via ClsAttnCapture on the last vision-tower layer); "
+                         "'query_aware' = text<->patch similarity (v2-step-1, SparseVLM-style "
+                         "text-guided selection at the projector-output boundary).")
     ap.add_argument("--diversity-lam", type=float, default=0.0,
                     help="PRUNESID-style diversity weight (only with --selector true_cls); "
                          "0.0 = pure top-k by CLS-attn (v1 default)")
+    ap.add_argument("--query-pool", default="max", choices=["max", "mean"],
+                    help="question-token pooling for query_aware: 'max' (SparseVLM default) "
+                         "keeps the best-matching token per patch; 'mean' averages.")
+    ap.add_argument("--query-sim", default="cosine", choices=["cosine", "dot"],
+                    help="text<->patch similarity function for query_aware "
+                         "(default cosine = L2-normalize both sides first).")
     args = ap.parse_args()
     run(args)
 
