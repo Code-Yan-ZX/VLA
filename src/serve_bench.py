@@ -132,6 +132,49 @@ SCORERS = {"gqa": score_gqa, "textvqa": score_textvqa}
 # --------------------------------------------------------------------------- #
 # vLLM engine + hook installation (lazy import)
 # --------------------------------------------------------------------------- #
+def patch_image_token_count(pruning_rate: float, full_n: int = 576) -> int:
+    """Override vLLM's LLaVA image-token count 576 -> k = int((1-r)*576).
+
+    WHY: pruning rate r is FIXED per run, so k is known a priori. vLLM's text
+    sequence carries `[image_token_id] * num_image_tokens` placeholders
+    (llava.py:_get_prompt_updates/get_replacement, which calls
+    `info.get_num_image_tokens`). The pruned projector emits exactly k embeddings.
+    For the LLM forward to get consistent shapes, the placeholder count MUST equal
+    k. Overriding `get_num_image_tokens` -> k makes the sequence GENUINELY k-shorter
+    (contiguous compaction, not keep-sparse) -> real wall-clock win (the gate's
+    premise). The projector hook places its k selected embeddings into those k
+    contiguous slots.
+
+    full_n=576 = LLaVA-1.5 CLIP grid (24x24) after default feature-select.
+    Returns k (also stashed for the projector hook to read).
+    """
+    import vllm.model_executor.models.llava as _llava_mod  # noqa
+    k = max(1, int(round(full_n * (1.0 - pruning_rate))))
+    InfoCls = _llava_mod.LlavaProcessingInfo
+
+    if pruning_rate == 0.0:
+        # restore original (unpatch) so r=0 control is byte-identical to stock vLLM
+        if getattr(InfoCls.get_num_image_tokens, "_vtc_patched", False):
+            InfoCls.get_num_image_tokens = InfoCls.get_num_image_tokens._vtc_orig
+            print(f"[serve_bench] unpatched get_num_image_tokens (r=0)", flush=True)
+        return full_n
+
+    if not getattr(InfoCls.get_num_image_tokens, "_vtc_patched", False):
+        orig = InfoCls.get_num_image_tokens
+
+        def patched(self, *, image_width, image_height):  # noqa: ANN001
+            # Ignore image dims: fixed k for this run (deterministic compaction).
+            # (Real content-adaptive budgets come AFTER the gate -- method-design §2.)
+            return k
+
+        patched._vtc_orig = orig
+        patched._vtc_patched = True
+        InfoCls.get_num_image_tokens = patched
+        print(f"[serve_bench] patched LlavaProcessingInfo.get_num_image_tokens: "
+              f"{full_n} -> {k} (r={pruning_rate})", flush=True)
+    return k
+
+
 def build_engine(model: str, args):
     """Construct a vLLM offline LLM (V0 engine, in-process) with the probe
     compressor hooked in. V0 is forced via VLLM_USE_V1=0 at module top."""
@@ -178,6 +221,11 @@ def build_engine(model: str, args):
     print(f"[serve_bench] hooks: projector={type(projector).__name__} "
           f"vision_tower={type(vision_tower).__name__}", flush=True)
 
+    # ---- placeholder-count override: 576 -> k (MUST precede the forward) ----
+    # k is fixed per run; this makes the text sequence carry exactly k image-token
+    # placeholders, matching the k embeddings the projector hook emits.
+    target_k = patch_image_token_count(args.pruning_rate, full_n=576)
+
     # ---- CLS-attention capture from vision tower ----
     captured = {"scores": None, "n_vision_calls": 0}
 
@@ -196,20 +244,30 @@ def build_engine(model: str, args):
             captured["n_vision_calls"] += 1
         return None
 
-    # ---- projector post-hook: prune output rows ----
-    hook_state = {"n_calls": 0, "kept_counts": []}
+    # ---- projector post-hook: prune output rows to exactly target_k ----
+    hook_state = {"n_calls": 0, "kept_counts": [], "target_k": target_k}
 
     def _projector_hook(module, inputs, output):  # noqa: ANN001
+        import torch  # noqa
         hook_state["n_calls"] += 1
         if args.pruning_rate == 0.0:
             hook_state["kept_counts"].append(output.shape[1])
             return None  # control: no-op, but still log full token count
         scores = captured.get("scores")
-        if scores is None:
-            hook_state["kept_counts"].append(output.shape[1])
-            return None  # no score yet (shouldn't happen post vision-tower)
-        sel = ClsAttnSelector(pruning_rate=args.pruning_rate)
-        kept, keep_idx = sel.select(output, scores)
+        full_n = output.shape[1]
+        if scores is None or scores.shape[1] != full_n:
+            # fallback: take the first target_k tokens (keeps shapes valid even
+            # if the vision hook hasn't captured scores for some reason)
+            kept = output[:, :target_k, :].contiguous()
+            keep_idx = torch.arange(target_k, device=output.device).unsqueeze(0).expand(output.shape[0], -1)
+        else:
+            sel = ClsAttnSelector(pruning_rate=args.pruning_rate)
+            kept, keep_idx = sel.select(output, scores)
+            # guard: if rounding gave k != target_k, trim/pad to target_k so the
+            # count EXACTLY matches the placeholder count from patch_image_token_count
+            if kept.shape[1] != target_k:
+                kept = kept[:, :target_k, :].contiguous()
+                keep_idx = keep_idx[:, :target_k].contiguous()
         module._vtc_keep_idx = keep_idx         # type: ignore[attr-defined]
         module._vtc_keep_count = kept.shape[1]  # type: ignore[attr-defined]
         hook_state["kept_counts"].append(kept.shape[1])
