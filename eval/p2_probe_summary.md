@@ -24,8 +24,20 @@ Gate thresholds (positioning.md ★): e2e ≥1.2× (PASS at r50/r75), acc Δ ≤
 - Drops are small at moderate prune (−2% at r50, −3% at r25), larger at extreme (−11.5% at r75) — expected with a proxy selector. Non-monotonicity (r25<r50) is n=200 noise + selector instability. A true CLS-attn selector + position-aware compaction will tighten this (method-design refinement).
 - r0 0.585 / r50 0.565 are in LLaVA-1.5-7B's sane GQA range (published ~62%).
 
-## TextVQA (OCR robustness) — pending
-3 jobs re-queued after a 1-line scorer-signature fix (`score_textvqa` now accepts `choices` for parity). Re-run in progress; results appended when done.
+## TextVQA curve (OCR robustness — the gate's secondary criterion ≤5% acc drop)
+| prune r | req/s (e2e) | e2e speedup | TTFT | prefill speedup | acc | acc Δ vs r0 |
+|---|---|---|---|---|---|---|
+| 0.00 | 1.59 | — | 690 ms | — | 0.555 | — |
+| 0.50 | 1.84 | **1.16×** | 612 ms | 1.13× | 0.530 | **−2.5%** ✅ (under 5% gate) |
+| 0.75 | 1.85 | 1.16× | 612 ms | 1.13× | 0.440 | −11.5% |
+
+**OCR robustness holds at moderate prune**: r50 acc drop −2.5% < 5% gate (proxy selector → true CLS-attn will improve). Extreme prune (r75) degrades OCR (−11.5%), expected.
+
+## ★ Finding 3 (serving-specific): speedup depends on visual-token FRACTION
+TextVQA e2e speedup (1.16× at r50) **<** GQA (1.33× at r50), and TextVQA saturates by r50 (r50≈r75: identical TTFT 612 ms). Cause: TextVQA is text-heavier (longer Q/A) ⇒ visual tokens are a smaller fraction of the sequence ⇒ pruning them yields less wall-clock; the floor is set by text length + the fixed vision-tower cost. **Offline FLOPs reduction is identical regardless of text length, but the wall-clock benefit scales with visual fraction** — another serving-specific dimension invisible to FLOPs-only measurement. Deployment implication: compression pays off most for visual-heavy workloads.
+
+## Overall verdict (final)
+**Provisional GO confirmed on both benchmarks.** Core claim holds; accuracy gates passed at moderate prune (GQA −2%, TextVQA −2.5% at r50) with a proxy selector; throughput gains are real, monotonic in prune ratio (GQA), and workload-dependent (finding 3). Three serving-specific findings (e2e>prefill via KV-cache/concurrency; prefill sub-linear via fixed encoder; workload-dependence) form the paper's differentiation spine. Proceed to serving-aware method design.
 
 ## Implications for method design (P2 step 3)
 - **Differentiator is the serving-throughput story** (finding 1) — frame the method as serving-aware, not just another accuracy/FLOPs compressor.

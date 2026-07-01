@@ -90,10 +90,10 @@
       "priority": 90,
       "est_min": 25,
       "deps": [],
-      "status": "pending",
+      "status": "done",
       "note": "TextVQA CONTROL (r=0). OCR-heavy stress test. Denominator for TextVQA speedups.",
-      "rc": 1,
-      "last_run": 1782894464
+      "rc": 0,
+      "last_run": 1782895342
     },
     {
       "name": "probe_textvqa_r50",
@@ -103,8 +103,10 @@
       "deps": [
         "probe_textvqa_r0"
       ],
-      "status": "pending",
-      "note": "TextVQA at 50% prune. Gate robustness: GO needs <=5% acc drop here (OCR is the weak spot)."
+      "status": "done",
+      "note": "TextVQA at 50% prune. Gate robustness: GO needs <=5% acc drop here (OCR is the weak spot).",
+      "rc": 0,
+      "last_run": 1782895510
     },
     {
       "name": "probe_textvqa_r75",
@@ -114,8 +116,10 @@
       "deps": [
         "probe_textvqa_r0"
       ],
-      "status": "pending",
-      "note": "TextVQA at 75% prune. OCR-degradation stress point."
+      "status": "done",
+      "note": "TextVQA at 75% prune. OCR-degradation stress point.",
+      "rc": 0,
+      "last_run": 1782895679
     }
   ]
 }
