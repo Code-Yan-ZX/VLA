@@ -107,4 +107,14 @@ AgilePruner (2603.01236), VisionTrim (2601.22674), PRUNESID (2603.09480) crowd t
 2. CLS-attention from CLIP vision tower: last layer only, or ensemble across last-K layers (VTC-CLS uses ensemble)? Start with last-layer (simplest); ensemble is a free ablation if accuracy is tight.
 3. Does shrinking placeholder count require patching `LLaVAProcessor` (HF side) or vLLM's `multimodal/processing.py`? → resolve during hook integration.
 
+## 5. Subset prep (P2-step2, 2026-07-01)
+Probe subsets built and verified (script: `scripts/build_subsets.py`, log `runs/build_subsets.log`):
+- **GQA**: 200 samples from `lmms-lab/gqa` `testdev_balanced` (instructions+images parquets, ~68 MB pulled). Local JPEGs `runs/data/gqa/*.jpg` (20 MB). `gt` = single open-vocab answer; no `choices` (score_gqa exact-match).
+- **TextVQA**: 200 samples from `lmms-lab/TextVQA` `validation` (streamed, stopped after 600 good rows — avoided the full ~920 MB parquet). Local JPEGs `runs/data/textvqa/*.jpg` (35 MB). `gt` = multiple human answers **semicolon-separated** (score_textvqa).
+- Both: seed=0 deterministic, all 400 PIL-verified, q/gt non-empty, load_subset-parsed. **No gating, no token, no full VG dump.** Total local image footprint: 55 MB; HF cache delta ~73 MB.
+- Sample GQA line: `{"id":"202147765","image":".../runs/data/gqa/202147765.jpg","question":"Is the chair in the bottom of the image?","gt":"no"}`
+- Sample TextVQA line: `{"id":"35066","image":".../runs/data/textvqa/35066.jpg","question":"what time is displayed?","gt":"12:34;12:34 am;..."}`
+
+— End. Probe jobs in `notes/p2_probe_jobs.json`. Subsets in `eval/subsets/`. —
+
 — End. Probe jobs in `notes/p2_probe_jobs.json`. —
