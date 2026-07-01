@@ -127,10 +127,10 @@
       "priority": 1,
       "est_min": 25,
       "deps": [],
-      "status": "failed",
+      "status": "done",
       "note": "v1 TRUE-CLS-attn selector CONTROL on GQA (r=0). At r=0 the selector is a no-op (control), so this is byte-identical to the proxy r=0 baseline -- we re-run it as the speedup denominator FOR THE v1 SERIES so speedup ratios are computed within one selector family (avoids conflating selector change with prune-rate change). Note: r0 metrics SHOULD match the proxy probe's gqa_r0 within noise (sanity check).",
-      "rc": 1,
-      "last_run": 1782897394
+      "rc": 0,
+      "last_run": 1782899153
     },
     {
       "name": "v1_probe_gqa_r25",
@@ -140,8 +140,10 @@
       "deps": [
         "v1_probe_gqa_r0"
       ],
-      "status": "pending",
-      "note": "v1 GQA @ 25% prune (keep 432/576), REAL [CLS]->patch attn selector (diversity OFF, lam=0 -- the FasterVLM/VTC-CLS setting). PRIMARY accuracy comparison point vs proxy probe r25 (acc 0.555, -3.0%): expect true CLS-attn to tighten the drop."
+      "status": "done",
+      "note": "v1 GQA @ 25% prune (keep 432/576), REAL [CLS]->patch attn selector (diversity OFF, lam=0 -- the FasterVLM/VTC-CLS setting). PRIMARY accuracy comparison point vs proxy probe r25 (acc 0.555, -3.0%): expect true CLS-attn to tighten the drop.",
+      "rc": 0,
+      "last_run": 1782900411
     },
     {
       "name": "v1_probe_gqa_r50",
@@ -151,8 +153,10 @@
       "deps": [
         "v1_probe_gqa_r0"
       ],
-      "status": "pending",
-      "note": "v1 GQA @ 50% prune (keep 288/576), REAL CLS-attn. THE GATE POINT for the v1 selector: proxy r50 was 0.565 (-2.0%); v1 should improve accuracy at iso-throughput (the throughput numbers should match the proxy r50 within noise -- same hook, same KV-cache win -- confirming the serving win is selector-agnostic, the accuracy is not)."
+      "status": "done",
+      "note": "v1 GQA @ 50% prune (keep 288/576), REAL CLS-attn. THE GATE POINT for the v1 selector: proxy r50 was 0.565 (-2.0%); v1 should improve accuracy at iso-throughput (the throughput numbers should match the proxy r50 within noise -- same hook, same KV-cache win -- confirming the serving win is selector-agnostic, the accuracy is not).",
+      "rc": 0,
+      "last_run": 1782902215
     },
     {
       "name": "v1_probe_gqa_r75",
@@ -162,8 +166,10 @@
       "deps": [
         "v1_probe_gqa_r0"
       ],
-      "status": "pending",
-      "note": "v1 GQA @ 75% prune (keep 144/576), REAL CLS-attn. Stress point: proxy r75 was 0.470 (-11.5%, the steep-drop region). True CLS-attn should recover meaningful accuracy here -- if it brings r75 to within ~6% of r0, the v1 method's accuracy story is strong and we can argue the proxy UNDERSTATED the method."
+      "status": "done",
+      "note": "v1 GQA @ 75% prune (keep 144/576), REAL CLS-attn. Stress point: proxy r75 was 0.470 (-11.5%, the steep-drop region). True CLS-attn should recover meaningful accuracy here -- if it brings r75 to within ~6% of r0, the v1 method's accuracy story is strong and we can argue the proxy UNDERSTATED the method.",
+      "rc": 0,
+      "last_run": 1782899831
     },
     {
       "name": "v1_probe_textvqa_r0",
@@ -171,8 +177,10 @@
       "priority": 1,
       "est_min": 25,
       "deps": [],
-      "status": "pending",
-      "note": "v1 TRUE-CLS CONTROL on TextVQA (r=0). OCR-heavy denominator for the v1 TextVQA series."
+      "status": "done",
+      "note": "v1 TRUE-CLS CONTROL on TextVQA (r=0). OCR-heavy denominator for the v1 TextVQA series.",
+      "rc": 0,
+      "last_run": 1782901258
     },
     {
       "name": "v1_probe_textvqa_r50",
@@ -182,8 +190,10 @@
       "deps": [
         "v1_probe_textvqa_r0"
       ],
-      "status": "pending",
-      "note": "v1 TextVQA @ 50% prune, REAL CLS-attn. OCR robustness gate for v1: proxy r50 was 0.530 (-2.5%, passed the <=5% gate). Expect v1 to hold or improve. This is the key OCR-degradation-resistance data point."
+      "status": "done",
+      "note": "v1 TextVQA @ 50% prune, REAL CLS-attn. OCR robustness gate for v1: proxy r50 was 0.530 (-2.5%, passed the <=5% gate). Expect v1 to hold or improve. This is the key OCR-degradation-resistance data point.",
+      "rc": 0,
+      "last_run": 1782901682
     },
     {
       "name": "v1_probe_textvqa_r75",
@@ -193,8 +203,10 @@
       "deps": [
         "v1_probe_textvqa_r0"
       ],
-      "status": "pending",
-      "note": "v1 TextVQA @ 75% prune, REAL CLS-attn. Proxy r75 was 0.440 (-11.5%). The OCR stress test -- if true CLS-attn (which prioritizes text-region patches) recovers accuracy here, it directly demonstrates selector quality matters for OCR-heavy workloads."
+      "status": "done",
+      "note": "v1 TextVQA @ 75% prune, REAL CLS-attn. Proxy r75 was 0.440 (-11.5%). The OCR stress test -- if true CLS-attn (which prioritizes text-region patches) recovers accuracy here, it directly demonstrates selector quality matters for OCR-heavy workloads.",
+      "rc": 0,
+      "last_run": 1782901479
     },
     {
       "name": "fastv_gqa_control",
@@ -215,10 +227,10 @@
       "deps": [
         "fastv_gqa_control"
       ],
-      "status": "failed",
+      "status": "done",
       "note": "FastV @ r50 (keep 288/576) on GQA. THE ACCURACY ANCHOR: this is the canonical TF compressor at 50% prune. Compare to (a) proxy probe r50 (0.565, -2.0%) and (b) v1 true_cls r50 (to be run). FastV prunes INTRA-LLM at layer 2 (attention-rank on the last decode token) -- a DIFFERENT mechanism from boundary CLS-attn -- so it sets the bar our boundary method should approach/match at iso-budget. Published FastV GQA at ~50% prune is ~60% on full val (we're on a 200-subset, expect noise).",
-      "rc": 1,
-      "last_run": 1782898331
+      "rc": 0,
+      "last_run": 1782899563
     },
     {
       "name": "fastv_gqa_r75",
@@ -228,10 +240,10 @@
       "deps": [
         "fastv_gqa_control"
       ],
-      "status": "failed",
+      "status": "done",
       "note": "FastV @ r75 (keep 144/576) on GQA. The high-prune anchor. Compare to proxy r75 (0.470, -11.5%) -- FastV's intra-LLM attention-rank should degrade more gracefully here than boundary CLS-attn at extreme prune (this is FastV's known strength). If our v1 true_cls r75 approaches FastV r75, that's a strong result (boundary method matching intra-LLM method at extreme budget).",
-      "rc": 1,
-      "last_run": 1782898399
+      "rc": 0,
+      "last_run": 1782900202
     },
     {
       "name": "fastv_textvqa_r50",
@@ -239,10 +251,10 @@
       "priority": 2,
       "est_min": 28,
       "deps": [],
-      "status": "failed",
+      "status": "done",
       "note": "FastV @ r50 on TextVQA. OCR-robustness anchor: proxy r50 was 0.530 (-2.5%). FastV is known to degrade on OCR at high prune -- this characterizes whether intra-LLM pruning preserves text-region tokens better than boundary CLS-attn. The OCR comparison (FastV vs v1 true_cls) is a key table row.",
-      "rc": 1,
-      "last_run": 1782898424
+      "rc": 0,
+      "last_run": 1782901046
     }
   ]
 }

@@ -4,29 +4,29 @@
 > 最近更新：2026-07-01
 
 ## 当前阶段
-**P2 — go/no-go 闸门已过（provisional GO）**；TextVQA 曲线运行中 → 接方法设计
+**P2 方法-v1 对比完成 → 方法重定向到 v2（query-aware boundary selector）**
 
-## ★ go/no-go 判定（2026-07-01）：provisional GO，非 §6 升级
-GQA 曲线（LLaVA-1.5-7B @ vLLM V0, n=200, 连续 compaction, proxy CLS-attn selector）：
-| r | e2e req/s 加速 | prefill(TTFT) 加速 | acc Δ |
-|---|---|---|---|
-| 0.25 | 1.17× | 1.14× | −3.0% |
-| 0.50 | **1.33×** | 1.24× | −2.0% |
-| 0.75 | **1.43×** | 1.30× | −11.5% |
-核心 claim（压缩→serving 真实 wall-clock 加速）**确认**。详见 `eval/p2_probe_summary.md`。
-**两条论文级发现**：① e2e>prefill（每档都是）→ 收益主来自 KV-cache/并发，非 prefill FLOPs（serving 专属，离线测不到）；② prefill 次线性 → vision tower 固定开销 → 启示更早 prune。
+## ★ 已确立（不变）
+- **go/no-go provisional GO**：压缩→serving 真实 wall-clock 加速（proxy probe: GQA e2e 1.33× @ r50）。核心 claim 成立。
+- **3 条 serving 专属发现**：① e2e>prefill（KV-cache/并发收益）；② prefill 次线性（vision tower 固定开销→早 prune 杠杆）；③ 加速依赖视觉 token 占比。
 
-## 立即下一步
-1. **TextVQA 曲线跑**（driver `bclc6511e`，~60min）—— OCR 鲁棒性（gate 次判据 ≤5% 掉点）。已修 score_textvqa 签名。
-2. TextVQA 完 → 补 `eval/p2_probe_summary.md` + 各 digest + commit。
-3. **P2 方法设计**（`notes/method-design.md` 扩展，Dev subagent）：① 真 CLS-attn selector（替 proxy）提 acc；② **编码器内/后更早 prune**（吃掉固定编码器开销，提 prefill）；③ **KV-cache/batch 感知 budget**（强化 e2e>prefill 这个核心差异点）。复现 FastV 基线（`fastv` env，clone 上游）。
-4. → P3 全基准 × 多压缩比 × 基线对比。
+## P2 方法-v1 结果（proxy vs v1-真CLS vs FastV，详见 `eval/p2_method_v1_comparison.md`）
+- **v1 真 CLS-attn 非赢家**：TextVQA 灾难（r50 0.445 vs proxy 0.530，r75 0.275）—— vision-tower CLS 不关注文本/OCR。GQA 也不优（r50 0.545≤proxy 0.565）。capture 另加吞吐开销。
+- **FastV（intra-LLM）OCR/极端压缩占优**（GQA r75 0.515, TextVQA r50 0.555），但 intra-LLM 在 vLLM 不可集成。
+- **核心约束**：serving 方法必须**边界 prune**（vLLM 可集成），但边界视觉显著性丢 OCR → **需要边界 query-aware selector**。
 
-## 已完成
-- P0 env+scaffold+queue；P1 lit-survey(37 法)+positioning(Gap A)；P2 probe（vtc_serve/vLLM0.10.2/V0 hook+placeholder-compact patch c05ca86、scorer 46f9b9d）。
-- novelty 复核 Gap A 仍 OPEN（0/37 在 serving engine 内测吞吐）。
+## 立即下一步 —— 方法 v2（Dev subagent）
+1. **边界 query-aware selector**：问题文本 ↔ patch 相关性选 top-k（边界、vLLM 可集成、保任务/文本 patch）。目标：边界恢复 FastV 级 OCR 精度。
+2. **早 prune**（finding #2）：选择点移入 vision tower（V0 eager，可行）→ 编码器少干活 → 更大 prefill 加速。
+3. **KV-cache/batch 感知 budget**（finding #1，v2 sketch）。
+4. served 吞吐为差异判据（0/37 测过）。
+
+## v2 之后
+- P3 全基准（MME/MMBench/ScienceQA 等）× 多压缩比 × {v2, FastV, 早-prune} 基线。
+- 复现 1-2 个 serving-throughput baseline 对比（无现成，自建）。
 
 ## 关键约束
-- 算力 1× A40 46GB 串行；GPU job 走 `scripts/queue`。env：`vtc`/`vtc_serve`(vLLM0.10.2)/`fastv`。
+- 算力 1× A40 46GB 串行；GPU job 走 `scripts/queue`（注意：driver 连跑需 GPU-settle，曾出现 stale-vLLM 进程致 OOM）。
+- env：`vtc` / `vtc_serve`(vLLM0.10.2 V0) / `fastv`(FastV accuracy-only)。
 - 提交以用户本人名义，禁 AI 署名。
 - 升级找人：凭据 / >6GPU·h / claim 被推翻 / 投稿前。
