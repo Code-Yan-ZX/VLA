@@ -11,7 +11,7 @@ from src.serve_bench import score_gqa, score_textvqa  # fixed scorers, lazy vllm
 
 SCORER = {"gqa": score_gqa, "textvqa": score_textvqa}
 EXP = os.path.join(ROOT, "experiments")
-SKIP = {"probe_gqa_r0", "probe_gqa_r50"}  # keep hand-written gate digests
+SKIP = {"gqa_r0", "gqa_r50"}  # metric-names of the hand-written gate digests
 
 def fmt_x(x): return f"{x:.2f}x" if isinstance(x, (int, float)) else "—"
 
@@ -35,6 +35,6 @@ for p in sorted(glob.glob(os.path.join(ROOT, "runs", "p2_probe", "*_metrics.json
         "",
         "Full curve + analysis: `eval/p2_probe_summary.md`. Probe n=200 is a seed subset (seed=0) for the go/no-go gate, not the final benchmark number.",
     ]
-    with open(os.path.join(EXP, f"{name}.md"), "w") as f:
+    with open(os.path.join(EXP, f"probe_{name}.md"), "w") as f:
         f.write("\n".join(lines) + "\n")
-    print(f"wrote experiments/{name}.md  acc={acc:.3f} e2e={fmt_x(ex)}")
+    print(f"wrote experiments/probe_{name}.md  acc={acc:.3f} e2e={fmt_x(ex)}")

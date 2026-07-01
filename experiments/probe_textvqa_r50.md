@@ -1,16 +1,9 @@
-# probe_textvqa_r50
+# textvqa_r50 — TEXTVQA @ prune 0.5 (keep 288/576), n=200
 
-- **status**: done (rc=0)
-- **ran**: 2026-07-01 16:42 · 168s
-- **cmd**: `/home/dell/miniconda3/envs/vtc_serve/bin/python -m src.serve_bench --model runs/models/llava-1.5-7b-hf --pruning-rate 0.50 --benchmark textvqa --subset eval/subsets/textvqa_200.jsonl --metrics-out runs/p2_probe/textvqa_r50_metrics.json --max-tokens 32 --max-model-len 4096 --gpu-memory-utilization 0.90 --seed 0`
-- **est_min**: 20 · **priority**: 85
-- **log**: `runs/probe_textvqa_r50.log`
+- **e2e req/s**: 1.84  (1.16x vs r0)
+- **prefill TTFT**: 612 ms  (1.13x vs r0)
+- **served tok/s**: 25.47
+- **accuracy (re-scored, fixed scorer)**: 0.530 (106/200)
+- **log**: `runs/textvqa_r50.log` · **metrics**: `runs/p2_probe/textvqa_r50_metrics.json` (gitignored; raw answers saved)
 
-## 结果 / 指标
-<填: 关键 metrics — 精度/压缩比/延迟/显存；引用 eval/ 表>
-
-## 结论
-<填: 是否支撑 claim / 下一步>
-
-## 产物路径
-<填: 权重在 runs/... （gitignored）>
+Full curve + analysis: `eval/p2_probe_summary.md`. Probe n=200 is a seed subset (seed=0) for the go/no-go gate, not the final benchmark number.
