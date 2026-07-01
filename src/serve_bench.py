@@ -178,13 +178,15 @@ def score_gqa(pred: str, gt: str, choices: Optional[list[str]] = None) -> int:
     return 0
 
 
-def score_textvqa(pred: str, gt: str) -> int:
+def score_textvqa(pred: str, gt: str, choices: Optional[list[str]] = None) -> int:
     """TextVQA VQA-accuracy (soft): correct if ANY of the semicolon-separated
     GT answers appears as a whole word/phrase in the model's answer.
 
     The official TextVQA metric is min(1, len(pred∩gt_set)/3); for the probe we
     use the conservative 'any-gt-contained' rule which is a tight lower bound.
     Full ANLS computed later in the accuracy table. Plural-normalized.
+    (`choices` accepted for signature parity with score_gqa; unused — TextVQA
+    GTs are semicolon-separated inside `gt`.)
     """
     if not gt:
         return 0

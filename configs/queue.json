@@ -29,8 +29,10 @@
       "priority": 50,
       "est_min": 0,
       "deps": [],
-      "status": "pending",
-      "note": "subagent-driven; do not run via queue"
+      "status": "done",
+      "note": "subagent-driven; do not run via queue",
+      "rc": 0,
+      "last_run": 1782894762
     },
     {
       "name": "probe_gqa_r0",
@@ -51,8 +53,10 @@
       "deps": [
         "probe_gqa_r0"
       ],
-      "status": "pending",
-      "note": "GQA at 50% prune (keep 288/576). HOOK VALIDATION + THE GATE POINT: GO needs >=1.5x prefill speedup & >=1.2x e2e req/s & <=2% acc drop vs r0."
+      "status": "done",
+      "note": "GQA at 50% prune (keep 288/576). HOOK VALIDATION + THE GATE POINT: GO needs >=1.5x prefill speedup & >=1.2x e2e req/s & <=2% acc drop vs r0.",
+      "rc": 0,
+      "last_run": 1782893986
     },
     {
       "name": "probe_gqa_r25",
@@ -62,8 +66,10 @@
       "deps": [
         "probe_gqa_r0"
       ],
-      "status": "pending",
-      "note": "GQA at 25% prune (keep 432/576). Curve point."
+      "status": "done",
+      "note": "GQA at 25% prune (keep 432/576). Curve point.",
+      "rc": 0,
+      "last_run": 1782894620
     },
     {
       "name": "probe_gqa_r75",
@@ -73,8 +79,10 @@
       "deps": [
         "probe_gqa_r0"
       ],
-      "status": "pending",
-      "note": "GQA at 75% prune (keep 144/576). NO-GO stress: if e2e speedup <1.2x even here, premise fails -> escalate (charter §6)."
+      "status": "done",
+      "note": "GQA at 75% prune (keep 144/576). NO-GO stress: if e2e speedup <1.2x even here, premise fails -> escalate (charter §6).",
+      "rc": 0,
+      "last_run": 1782894762
     },
     {
       "name": "probe_textvqa_r0",
@@ -83,7 +91,9 @@
       "est_min": 25,
       "deps": [],
       "status": "pending",
-      "note": "TextVQA CONTROL (r=0). OCR-heavy stress test. Denominator for TextVQA speedups."
+      "note": "TextVQA CONTROL (r=0). OCR-heavy stress test. Denominator for TextVQA speedups.",
+      "rc": 1,
+      "last_run": 1782894464
     },
     {
       "name": "probe_textvqa_r50",
