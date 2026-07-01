@@ -1,0 +1,128 @@
+#!/usr/bin/env python
+"""Single-card serial job queue driver (1x A40).
+
+Reads configs/queue.json, runs ONE pending job at a time (highest priority,
+deps satisfied), logs to runs/<name>.log, updates status in-place, and writes
+an experiments/<name>.md digest stub on completion. Mutates configs/queue.json
+-- commit on checkpoints (one meaningful job = one commit).
+
+Usage:
+  python scripts/queue list                 # show all jobs + status
+  python scripts/queue next                 # show next job to run (dry)
+  python scripts/queue run [name]           # run next (or named) job, blocking
+  python scripts/queue mark <name> <status> # manually set status
+  python scripts/queue reset [name|all]     # set status -> pending
+"""
+import json, os, subprocess, sys, time, datetime
+
+ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
+QPATH = os.path.join(ROOT, "configs", "queue.json")
+RUNS = os.path.join(ROOT, "runs")
+EXP = os.path.join(ROOT, "experiments")
+os.makedirs(RUNS, exist_ok=True)
+os.makedirs(EXP, exist_ok=True)
+
+def load():
+    with open(QPATH) as f:
+        return json.load(f)
+
+def save(doc):
+    doc["_doc"] = doc.get("_doc", "")
+    with open(QPATH, "w") as f:
+        json.dump(doc, f, indent=2, ensure_ascii=False)
+        f.write("\n")
+
+def status_of(job): return job.get("status", "pending")
+
+def deps_ok(doc, job):
+    names = {j["name"]: j for j in doc["jobs"]}
+    return all(status_of(names[d]) == "done" for d in job.get("deps", []) if d in names)
+
+def pick_next(doc, name=None):
+    if name:
+        for j in doc["jobs"]:
+            if j["name"] == name:
+                return j
+        sys.exit(f"job not found: {name}")
+    cands = [j for j in doc["jobs"] if status_of(j) == "pending" and deps_ok(doc, j)]
+    if not cands:
+        return None
+    cands.sort(key=lambda j: (-j.get("priority", 0), doc["jobs"].index(j)))
+    return cands[0]
+
+def write_digest(job, rc, started, ended, logpath):
+    dur = ended - started
+    lines = [
+        f"# {job['name']}", "",
+        f"- **status**: {'done' if rc == 0 else 'failed'} (rc={rc})",
+        f"- **ran**: {datetime.datetime.fromtimestamp(started).strftime('%Y-%m-%d %H:%M')} · {dur:.0f}s",
+        f"- **cmd**: `{job.get('cmd','')}`",
+        f"- **est_min**: {job.get('est_min','?')} · **priority**: {job.get('priority','?')}",
+        f"- **log**: `{os.path.relpath(logpath, ROOT)}`",
+        "",
+        "## 结果 / 指标",
+        "<填: 关键 metrics — 精度/压缩比/延迟/显存；引用 eval/ 表>", "",
+        "## 结论",
+        "<填: 是否支撑 claim / 下一步>", "",
+        "## 产物路径",
+        "<填: 权重在 runs/... （gitignored）>", "",
+    ]
+    with open(os.path.join(EXP, f"{job['name']}.md"), "w") as f:
+        f.write("\n".join(lines))
+
+def cmd_list(doc):
+    for j in doc["jobs"]:
+        print(f"  [{status_of(j):7s}] pri={j.get('priority',0):>3} {j['name']:<18} deps={j.get('deps',[])}  {j.get('note','')}")
+
+def cmd_next(doc):
+    j = pick_next(doc)
+    print("next:", j["name"] if j else "(none — all done or blocked)")
+
+def cmd_run(doc, name=None):
+    j = pick_next(doc, name)
+    if j is None:
+        print("no runnable job"); return
+    logpath = os.path.join(RUNS, f"{j['name']}.log")
+    j["status"] = "running"; save(doc)
+    print(f"RUN {j['name']}: {j.get('cmd','')}")
+    print(f"   log -> {logpath}")
+    started = time.time()
+    with open(logpath, "w") as log:
+        log.write(f"$ {j.get('cmd','')}\n"); log.flush()
+        try:
+            rc = subprocess.call(j.get("cmd",""), shell=True, cwd=ROOT, stdout=log, stderr=subprocess.STDOUT)
+        except KeyboardInterrupt:
+            rc = 130
+    ended = time.time()
+    j["status"] = "done" if rc == 0 else "failed"
+    j["rc"] = rc; j["last_run"] = int(ended)
+    save(doc)
+    write_digest(j, rc, started, ended, logpath)
+    print(f"   -> {j['status']} (rc={rc}, {ended-started:.0f}s)  digest -> experiments/{j['name']}.md")
+
+def cmd_mark(doc, name, st):
+    for j in doc["jobs"]:
+        if j["name"] == name:
+            j["status"] = st; save(doc); print(f"{name} -> {st}"); return
+    sys.exit(f"job not found: {name}")
+
+def cmd_reset(doc, name=None):
+    for j in doc["jobs"]:
+        if name in (None, "all", j["name"]):
+            j["status"] = "pending"
+    save(doc); print("reset done")
+
+def main():
+    a = sys.argv[1:]
+    if not a:
+        print(__doc__); return
+    cmd, doc = a[0], load()
+    if cmd == "list": cmd_list(doc)
+    elif cmd == "next": cmd_next(doc)
+    elif cmd == "run": cmd_run(doc, a[1] if len(a) > 1 else None)
+    elif cmd == "mark": cmd_mark(doc, a[1], a[2])
+    elif cmd == "reset": cmd_reset(doc, a[1] if len(a) > 1 else None)
+    else: sys.exit(f"unknown cmd: {cmd}")
+
+if __name__ == "__main__":
+    main()

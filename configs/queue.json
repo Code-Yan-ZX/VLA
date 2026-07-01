@@ -1,0 +1,36 @@
+{
+  "_doc": "Single-card serial job queue (1x A40). Driver: python scripts/queue {list|next|run|reset|mark}. fields: name, cmd(shell str), priority(higher=earlier), est_min, deps[], status(pending|running|done|failed), note. Commit on checkpoints.",
+  "jobs": [
+    {
+      "name": "smoke-dummy",
+      "cmd": "python scripts/_dummy.py",
+      "priority": 100,
+      "est_min": 1,
+      "deps": [],
+      "status": "done",
+      "note": "P0 queue mechanism smoke test (no GPU, no torch dep)",
+      "rc": 0,
+      "last_run": 1782884660
+    },
+    {
+      "name": "env-smoke",
+      "cmd": "/home/dell/miniconda3/envs/vtc/bin/python -c \"import torch,transformers,accelerate,PIL; print('vtc OK', torch.__version__, torch.cuda.is_available())\"",
+      "priority": 95,
+      "est_min": 1,
+      "deps": [],
+      "status": "done",
+      "note": "Verify vtc env post-build (queued; run after build_env.sh completes)",
+      "rc": 0,
+      "last_run": 1782884930
+    },
+    {
+      "name": "p1-lit-survey",
+      "cmd": "echo 'NOT A GPU JOB: P1 lit-survey driven by Lit subagent -> notes/lit-survey.md. Mark done manually.'",
+      "priority": 50,
+      "est_min": 0,
+      "deps": [],
+      "status": "pending",
+      "note": "subagent-driven; do not run via queue"
+    }
+  ]
+}
