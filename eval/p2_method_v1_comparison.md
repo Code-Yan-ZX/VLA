@@ -39,3 +39,28 @@ Provisional GO unchanged: the core claim (compression → served speedup) was es
 
 ## Artifacts (gitignored)
 - proxy: `runs/p2_probe/*` · v1: `runs/p2_probe_v1/*` · FastV: `runs/fastv_baseline/*` (raw answers saved for re-scoring)
+
+---
+
+## Addendum: v2 query-aware boundary selector — ALSO NEGATIVE (2026-07-01)
+**v2 = text↔patch cosine similarity selector** (question embedded via LLM `embed_tokens`, scored vs post-projector patches, top-k at boundary). Plumbing resolved & working (query-sensitive, deterministic, no OOM).
+
+Directional OCR test (TextVQA, **same first-50 samples**, r=0.5):
+| selector | acc (n=50) |
+|---|---|
+| proxy (matched control) | **0.500** |
+| v2 query_aware (cosine, max) | **0.380** |
+| v2 query_aware (cosine, mean) | 0.220 |
+
+**v2 is WORSE than proxy** (same samples — not a distribution artifact). Root cause: raw cosine text↔patch similarity is a weak text-region localizer (question tokens = word semantics; text patches = glyph pixels — don't align in cosine). The plumbing is right, the scoring function is too weak.
+
+### Pattern (2 selectors failed on OCR)
+- v1 (boundary CLS-attn): TextVQA r50 0.445.
+- v2 (boundary cosine query): TextVQA r50 ~0.38.
+- proxy (hidden-state deviation): TextVQA r50 0.530 — still the best boundary selector.
+- FastV (intra-LLM): TextVQA r50 0.555 — best overall, but NOT vLLM-integrable.
+
+**Boundary training-free cheap signals underperform intra-LLM on OCR** — consistent with why the literature has 5+ OCR-specific methods using trained/learned components. Cracking OCR at the boundary likely needs a learned component (breaks training-free) or a stronger aggregation (SparseVLM-style attention, which drifts toward intra-LLM).
+
+### Strategic fork (Main ↔ user)
+The strong, novel, validated contribution is the **serving-throughput measurement + the 3 serving-specific findings** (0/37 papers measure served throughput). The proxy selector already gives acceptable accuracy (GQA r50 0.565, TextVQA r50 0.530) with real serving speedup. ⇒ Candidate pivot: stop chasing the selector; build the **serving-aware method** (early-prune + KV-cache/load-adaptive budget) on the proxy selector, with served-throughput as the core novelty. Alternatives: one more selector attempt (SparseVLM-style attention aggregation), switch base to Qwen2.5-VL, or hybrid proxy+query.
