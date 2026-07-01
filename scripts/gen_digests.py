@@ -6,16 +6,19 @@ needed (scorers are standalone). Run: python scripts/gen_digests.py
 """
 import json, glob, os, sys
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
-sys.path.insert(0, os.path.join(ROOT, "src"))
-from serve_bench import score_gqa, score_textvqa  # fixed scorers, lazy vllm import
+sys.path.insert(0, ROOT)
+from src.serve_bench import score_gqa, score_textvqa  # fixed scorers, lazy vllm import
 
 SCORER = {"gqa": score_gqa, "textvqa": score_textvqa}
 EXP = os.path.join(ROOT, "experiments")
+SKIP = {"probe_gqa_r0", "probe_gqa_r50"}  # keep hand-written gate digests
 
 def fmt_x(x): return f"{x:.2f}x" if isinstance(x, (int, float)) else "—"
 
 for p in sorted(glob.glob(os.path.join(ROOT, "runs", "p2_probe", "*_metrics.json"))):
     d = json.load(open(p)); a = d["agg"]; name = os.path.basename(p).replace("_metrics.json", "")
+    if name in SKIP:
+        continue
     bm = d["benchmark"]; r = d["pruning_rate"]
     raw = d.get("raw", [])
     sc = SCORER[bm]
