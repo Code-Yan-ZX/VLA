@@ -4,23 +4,26 @@
 > 最近更新：2026-07-01
 
 ## 当前阶段
-**P1 进行中**（定位与切入点）—— P0 已完成
+**P2 进行中**（方法设计 + go/no-go 闸门）—— P1 已完成
 
-## P0 已完成（2026-07-01）
-- env：新建 `vtc`（python 3.11 / torch 2.11.0+cu128 / transformers 5.12.1 / accelerate 1.14.0）✅ CUDA=A40
-- 双 env 策略：`vtc`(新方法+Qwen-VL) / `fastv`(torch2.0·复现 FastV@LLaVA-1.5)
-- 目录树建好；`scripts/queue` 串行 runner + `configs/queue.json` + `scripts/_dummy.py`；dummy & env-smoke 冒烟测通过
-- `DECISIONS.md` 建好（3 条 P0 决策）；base 专属依赖(mmcv/flash-attn)延后
+## P1 已完成（2026-07-01，commit de03843）
+- `notes/lit-survey.md`（23 法 survey，arXiv 核验；**0/23 在 serving engine 内测吞吐**）
+- `notes/positioning.md`：**Gap A = serving-engine-aware 压缩**（方法+测量框定）；基座 LLaVA-1.5-7B→Qwen2.5-VL-7B
+- DECISIONS：gap/基座 + **go/no-go kill-switch**（P2 第一里程碑）+ novelty 复核闸门
 
-## 立即下一步 —— P1（Lit subagent 已派）
-1. **Lit subagent（后台运行中）**：系统调研"VLM 视觉 token 压缩"。
-   种子：FastV / FasterVLM / SparseVLM / VisionZip / LLaVA-PruMerge / ToMe 系列；基座 LLaVA-1.5/NeXT + Qwen2/2.5-VL。
-   产出全文 → `notes/lit-survey.md`（含对比表：方法/训练免?/基座/基准/压缩比/精度/**是否报真实吞吐**）+ 3 候选 gap 评估。
-2. Main 收 digest → 合成 `notes/positioning.md`（选 gap + novelty 句 + 基座 + 理由 + 成功判据）。
-3. `DECISIONS.md` 追加 gap 选择、基座选择。
-4. 自主进 P2（digest 浮给用户，不阻塞）。细节见 ORCHESTRATION.md §4 P1。
+## 立即下一步 —— P2 Step1（Dev subagent 已派，后台）
+1. **novelty 复核**（cheap 先跑）：last-6mo 复扫 vLLM/SGLang/lmdeploy/TRT-LLM 集成压缩+吞吐论文 → Gap A 仍开放?
+2. **建 `vtc_serve` env**（vLLM 自带兼容 transformers/torch；与 vtc 隔离）→ 下 LLaVA-1.5-7B（公开，无凭据）→ vLLM smoke。
+3. **写 `notes/method-design.md`**：go/no-go 探针设计（边界级 training-free 压缩器 × vLLM mm_processor hook × {0,25,50,75}% × GQA+TextVQA × tok/s,req/s,TTFT,KV-cache）+ GO/NO-GO 阈值(positioning) + 方法假设骨架 + 基线(FastV@fastv env)。
+4. **实现 `src/`** 探针 harness（压缩器模块 + serve_bench.py）；CPU 自测，**不跑 GPU job**。
+5. 交回 `notes/p2_probe_jobs.json` → Main 入 configs/queue.json 串行跑 GPU 探针。
 
-## 关键约束 / 备注
-- 算力 1× A40 46GB，单卡串行；P1 末自主选定基座。
-- transformers 5.x API 与 4.x 有变，基座加载/压缩 hook 实现需适配。
-- 升级找人：凭据 / 单次>6GPU·h 训练 / claim 被推翻 / P1 无可行 gap / 投稿前。
+## P2 之后（go/no-go 结果定方向）
+- **GO**(≥1.5×prefill & ≥1.2×e2e req/s @ ≤2%掉点) → 设计 serving-aware 方法 → P3 全基准。
+- **NO-GO**(<1.2×e2e) → 转 negative-result paper 或 Gap D；**触发 charter §6 升级找人**。
+细节见 ORCHESTRATION.md §4 P2/P3。
+
+## 关键约束
+- 算力 1× A40 46GB 串行；GPU job 一律走 `scripts/queue`。
+- env：`vtc`(方法 dev,tf5.x) / `vtc_serve`(vLLM serving) / `fastv`(FastV 基线复现)。
+- 升级找人：凭据 / >6GPU·h / claim 被推翻(NO-GO) / 投稿前。
