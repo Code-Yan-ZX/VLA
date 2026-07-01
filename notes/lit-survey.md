@@ -167,3 +167,32 @@ The only serving-engine artifact found is **vLLM RFC #45098** (`--image-pruning-
 ---
 
 *End of survey. Next: main window synthesizes `notes/positioning.md` from this file's §4–§5.*
+
+---
+
+## 7. Novelty re-check (2026-07-01, P2-step-1)
+
+**Task:** re-scan 2026-H1 for ANY paper that integrates a visual-token compressor INSIDE vLLM / SGLang / lmdeploy / TRT-LLM AND reports served throughput (tok/s, req/s, TTFT). Sources: WebSearch + arXiv. Verdict below.
+
+### Closest hits found (and why none close Gap A)
+
+1. **ElasticMM: Efficient Multimodal LLMs Serving with Elastic Multimodal Parallelism** — arXiv **2507.10069** (Liu, Cheng, Tan, You, Tao; NUS + ICT-CAS; v1 Jul 2025, v2 Aug 2025). Built on vLLM v0.6.6; reports TTFT↓4.2×, SLO-throughput 3.2–4.5×. **BUT it is NOT a visual-token compressor** — it does modality-aware load balancing, elastic stage parallelism, unified multimodal prefix caching (memoizes *identical* images, token count unchanged), and async encoding. The paper *explicitly disclaims* compression: "These methods operate at the model level, trading off accuracy… Therefore, we do not compare against these optimization methods." **Verdict: adjacent (scheduling/disaggregation), not a competitor. Stackable with — not subsuming — our compression.**
+
+2. **A Survey of Token Compression for Efficient Multimodal LLMs** — arXiv **2507.20198** (Shao, Tao et al.; Westlake/ZJU/NUS; v5 Feb 2026). ~90–100 methods surveyed. **§6.5.3 "Deployment Hurdles" explicitly states** that attention-score pruning "cannot be seamlessly integrated into current optimization frameworks" because FlashAttention fuses matmul+softmax, making scores inaccessible — "this creates a critical gap, as these compression methods cannot leverage the performance gains of state-of-the-art deployment pipelines." **§6.5.4 "Evaluation Challenges"** names **TTFT** and per-token decode latency as "crucial for accurately assessing real-world inference acceleration" but notes they are **missing/unreported**. **No method in the survey** integrates compression inside vLLM/SGLang/lmdeploy/TRT-LLM with served throughput; vLLM/RFC #45098 not mentioned anywhere. **Verdict: this survey CONFIRMS Gap A is open — it is the strongest independent corroboration that the deployment-engine-throughput gap is real and unfilled.**
+
+3. **vLLM RFC #45098** (`--image-pruning-rate`, https://github.com/vllm-project/vllm/issues/45098): still an **RFC/infrastructure** (opt-in flag, "pruned before LLM fusion using a configurable method"), **no published benchmarks, no method paper** as of 2026-07-01. Natural host for our method but not a competitor.
+
+4. Other 2026 arXiv hits checked (DyToK 2512.06866, VisionTrim ICLR'26 2601.22674, Nüwa 2602.02951, Vision Token Reduction 2602.12618, HoloCV NeurIPS'25, Unified Spatiotemporal CVPR'26): **all report FLOPs/token-count only**, none integrate inside a serving engine. SparseVILA (ICCV'25) remains the only deployment-flavored wall-clock result but on its own AWQ pipeline, not vLLM/SGLang/lmdeploy/TRT-LLM.
+
+### Additional 2026-H1 papers folded in (coordinator update 2026-07-01)
+
+5. **EffiVLM-BENCH: Unified Benchmark for Efficient VLMs** — arXiv **2506.00479**. Unifies eval of training-free token-pruning (FastV/VisionZip/PruMerge+) + KV-cache compression on 17 benchmarks; reports **offline** TTFT + decode-time speedup, batch=1, on **lmms-eval + HuggingFace transformers** (single A800, FlashAttention-2). **Does NOT use vLLM/SGLang/lmdeploy/TRT-LLM and does NOT report served throughput (tok/s, req/s under batching) or KV-cache MB.** vLLM RFC #45098 not mentioned. **Verdict: OFFLINE eval harness → leaves our gap open.** Useful as a *positioning anchor* (proves the field still measures offline latency) and as a candidate eval-harness backbone for our accuracy tables (its OP/OG/OL/OE indices are reusable). **Confirmed: served-throughput-inside-engine gap is still unfilled.**
+
+6. **Combination-study competitors (ICLR 2026 cluster) — crowd the *accuracy/FLOPs systematic-study* space, NOT our gap:**
+   - **AgilePruner** (arXiv 2603.01236) — user flags it as "exactly the systematic-research paradigm you want to do": systematic empirical combination of scoring-basis × reduction-method. ⇒ A PURE accuracy/FLOPs combination study is no longer novel.
+   - **VisionTrim** (arXiv 2601.22674) — unified training-free framework.
+   - **PRUNESID** (arXiv 2603.09480) — importance + diversity co-scoring.
+   All three report accuracy + FLOPs/token-count on offline research code; **none integrates inside a serving engine or reports served throughput.** They reinforce that our differentiator MUST be **serving-engine real throughput**, not another combination study on accuracy/FLOPs.
+
+### Verdict: **Gap A is still OPEN.**
+No competitor landed. The most-recent relevant works all *strengthen* our novelty: ElasticMM is non-overlapping (scheduling, explicitly avoids compression); the 2507.20198 survey independently documents the exact gap (deployment-engine integration + served TTFT/throughput) and diagnoses the FlashAttention-score root cause; EffiVLM-BENCH confirms the field still measures offline latency; AgilePruner/VisionTrim/PRUNESID crowd the accuracy/FLOPs-combination space but leave serving-throughput untouched. **Our served-throughput-inside-engine angle is uncontested. No blocker. Proceed to go/no-go probe.**
