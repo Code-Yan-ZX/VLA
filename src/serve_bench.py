@@ -53,6 +53,8 @@ from .compressors import (  # noqa: F401  (re-export)
     ClsAttnSelector,
     TrueClsAttnSelector,
     QueryAwareSelector,
+    ClipQuerySelector,
+    clip_text_patch_scores,
     ClsAttnCapture,
     cls_attention_scores,
     text_patch_scores,
@@ -326,30 +328,31 @@ def build_engine(model: str, args):
     captured = {"scores": None, "n_vision_calls": 0}
     cls_capture: Optional[ClsAttnCapture] = None
 
-    # ---- v2 query-aware plumbing: tokenizer + LLM input-embedding layer ----
-    # WHY: query_aware scores each of the 576 patch embeddings by similarity to
-    # the QUESTION's token embeddings. Both live in the LLM input-embedding space
-    # (projector output == embed_tokens output space), so they're directly
-    # comparable. The question text is known at preprocessing time (it's in the
-    # per-sample loop before llm.chat()), so we tokenize the raw question, run it
-    # through `embed_tokens` (a CHEAP LOOKUP, not a transformer pass), and stash
-    # the (T, D) embeddings in a FIFO queue that the projector hook pops.
+    # ---- v2 query-aware / A'' clip_query plumbing ----
+    # WHY: both query_aware and clip_query score patches by relevance to the
+    # QUESTION. The question text is known at preprocessing time (it's in the
+    # per-sample loop before llm.chat()), so we tokenize it, embed it, and stash
+    # the (T, D) features in a FIFO queue the projector hook pops.
+    #   * query_aware: question embedded via LLM `embed_tokens` (LLM space).
+    #   * clip_query  : question embedded via CLIPTextModel + text_projection
+    #     (CLIP CONTRASTIVE space -- the v2 fix). Patches come from the vision
+    #     tower's last_hidden_state patch tokens @ CLIP visual_projection. Both
+    #     live in CLIP's 768-d contrastive space, so cosine is a meaningful
+    #     cross-modal similarity (CLIP trained for it). ~0.5GB extra for CLIP text.
     # PLUMBING POINT (method-design §9): pre-compute BEFORE llm.chat(), keyed by
     # a queue (request order = pop order; vLLM offline LLM.chat is one request at
     # a time so this is unambiguous). No intra-forward input_ids threading needed.
     embed_tokens = None
     tokenizer = None
-    query_queue: list = []   # FIFO of (B,T,D) question-embedding tensors
+    clip_text_model = None
+    clip_text_proj = None       # Linear -> .weight.T projects text hidden->contrastive
+    clip_visual_proj = None     # Linear -> .weight.T projects vision patches->contrastive
+    clip_tokenizer = None
+    query_queue: list = []   # FIFO of (T, D) question-feature tensors
     if selector_kind == "query_aware":
         import torch  # noqa
-        # tokenizer: vLLM keeps it on the engine; load it fresh from the model
-        # path for robustness (the offline LLM.chat path re-tokenizes anyway, so
-        # this is consistent with what the engine sees).
         from transformers import AutoTokenizer  # noqa
         tokenizer = AutoTokenizer.from_pretrained(model, trust_remote_code=False)
-        # embed_tokens: LLaVA -> language_model (LlamaForCausalLM) -> .model
-        # (LlamaModel) -> .embed_tokens (VocabParallelEmbedding). Verified path
-        # via vLLM llama.py:378 get_input_embeddings wrapper.
         lang_model = getattr(engine_model, "language_model", None)
         llama_model = getattr(lang_model, "model", None) if lang_model is not None else None
         embed_tokens = getattr(llama_model, "embed_tokens", None) if llama_model is not None else None
@@ -361,6 +364,32 @@ def build_engine(model: str, args):
         print(f"[serve_bench] QUERY_AWARE selector: tokenizer={type(tokenizer).__name__} "
               f"embed_tokens={type(embed_tokens).__name__} (will embed question "
               f"tokens per request for text<->patch scoring)", flush=True)
+    elif selector_kind == "clip_query":
+        # A'': load the CLIP text tower + both projections from the SAME CLIP
+        # checkpoint that LLaVA-1.5's vision tower is built from
+        # (openai/clip-vit-large-patch14-336). LLaVA-1.5's vision_tower IS a
+        # CLIPVisionModel from this checkpoint, so the visual_projection here
+        # exactly matches the contrastive head the patches were trained against.
+        import torch  # noqa
+        from transformers import CLIPModel, CLIPTokenizer  # noqa
+        clip_id = "openai/clip-vit-large-patch14-336"
+        clip_m = CLIPModel.from_pretrained(clip_id, torch_dtype=torch.float16).eval()
+        clip_text_model = clip_m.text_model.to("cuda")
+        clip_text_proj = clip_m.text_projection     # Linear (768,768); use .weight.T
+        clip_visual_proj = clip_m.visual_projection  # Linear (768,1024); use .weight.T
+        clip_tokenizer = CLIPTokenizer.from_pretrained(clip_id)
+        # sanity: confirm dims match LLaVA's vision tower (hidden=1024 -> contrastive 768)
+        inner_vt = getattr(vision_tower, "vision_model", vision_tower)
+        vt_hidden = getattr(getattr(inner_vt, "config", None), "hidden_size", None)
+        assert clip_visual_proj.weight.shape[1] == vt_hidden, (
+            f"clip visual_proj in-dim {clip_visual_proj.weight.shape[1]} != vision tower "
+            f"hidden {vt_hidden} -- wrong CLIP checkpoint?")
+        print(f"[serve_bench] CLIP_QUERY selector (A''): loaded CLIP text tower from "
+              f"{clip_id} (text layers={clip_text_model.config.num_hidden_layers}, "
+              f"hidden={clip_text_model.config.hidden_size}, proj->"
+              f"{clip_text_proj.weight.shape[0]}). visual_proj "
+              f"{tuple(clip_visual_proj.weight.shape)} matches vision tower hidden "
+              f"{vt_hidden}. ~0.5GB extra.", flush=True)
 
     def _vision_hook_proxy(module, inputs, outputs):  # noqa: ANN001
         import torch  # noqa
@@ -371,6 +400,20 @@ def build_engine(model: str, args):
             sal = (patches - patches.mean(dim=1, keepdim=True)).norm(dim=-1)
             sal = sal / (sal.sum(dim=1, keepdim=True) + 1e-6)
             captured["scores"] = sal                    # (B, N)
+            captured["n_vision_calls"] += 1
+        return None
+
+    def _vision_hook_clip(module, inputs, outputs):  # noqa: ANN001
+        # A'': stash the PRE-PROJECTOR vision-tower patch features (last_hidden_state
+        # patch tokens, (B,N,1024)). The projector hook applies CLIP visual_projection
+        # to land them in contrastive space and scores against the CLIP-text(question).
+        import torch  # noqa
+        hs = outputs.last_hidden_state if hasattr(outputs, "last_hidden_state") \
+            else (outputs[0] if isinstance(outputs, tuple) else outputs)
+        if hs.dim() == 3:
+            # store the FULL hidden state (with CLS at index 0); projector hook
+            # slices [1:] to get patches. Keep on GPU -- (B,577,1024) fp16 ~4.7MB.
+            captured["clip_patches_hidden"] = hs.detach()
             captured["n_vision_calls"] += 1
         return None
 
@@ -455,6 +498,59 @@ def build_engine(model: str, args):
                       flush=True)
             return kept
 
+        # ---- A'' clip_query path: CLIP contrastive text<->patch selection ----
+        if selector_kind == "clip_query":
+            query_feats = query_queue.pop(0) if query_queue else None   # (B,T,768) CLIP-text
+            clip_hs = captured.get("clip_patches_hidden")               # (B,577,1024)
+            full_n = output.shape[1]
+            bad = (query_feats is None or query_feats.dim() != 3
+                   or clip_hs is None or clip_hs.dim() != 3
+                   or clip_hs.shape[0] != output.shape[0]
+                   or clip_hs.shape[1] - 1 != full_n)
+            if bad:
+                kept = output[:, :target_k, :].contiguous()
+                keep_idx = torch.arange(target_k, device=output.device).unsqueeze(0).expand(
+                    output.shape[0], -1)
+            else:
+                # project vision-tower patch features (skip CLS) into CLIP
+                # contrastive space via visual_projection.weight.T (1024->768).
+                with torch.no_grad():
+                    patches_1024 = clip_hs[:, 1:, :]                       # (B,N,1024)
+                    # visual_projection.weight is (768,1024) [out,in]; .weight.T is
+                    # (1024,768) so patches(1024) @ W.T -> (768) contrastive space.
+                    wv = clip_visual_proj.weight.to(output.device, output.dtype).T
+                    clip_patch_feats = patches_1024 @ wv                   # (B,N,768)
+                    qf = query_feats.to(clip_patch_feats.dtype)            # (B,T,768)
+                sel = ClipQuerySelector(
+                    pruning_rate=args.pruning_rate,
+                    pool=getattr(args, "query_pool", "max"),
+                    sim=getattr(args, "query_sim", "cosine"),
+                )
+                kept, keep_idx = sel.select(output, clip_patch_feats, qf)
+                if kept.shape[1] != target_k:
+                    kept = kept[:, :target_k, :].contiguous()
+                    keep_idx = keep_idx[:, :target_k].contiguous()
+                if hook_state["n_calls"] == 1:
+                    with torch.no_grad():
+                        sc = clip_text_patch_scores(clip_patch_feats, qf,
+                                                    pool=sel.pool, sim=sel.sim)[0]
+                    print(f"[serve_bench] CLIP_QUERY shape check: patches={full_n} "
+                          f"clip_text_tokens={qf.shape[1]} "
+                          f"scores_shape={tuple(sc.shape)} "
+                          f"score[min,med,max]=[{sc.min().item():.4f},"
+                          f"{sc.median().item():.4f},{sc.max().item():.4f}] "
+                          f"top5_patch_idx={torch.topk(sc, 5).indices.tolist()}",
+                          flush=True)
+            module._vtc_keep_idx = keep_idx         # type: ignore[attr-defined]
+            module._vtc_keep_count = kept.shape[1]  # type: ignore[attr-defined]
+            hook_state["kept_counts"].append(kept.shape[1])
+            if hook_state["n_calls"] <= 5:
+                print(f"[serve_bench] projector hook fire #{hook_state['n_calls']}: "
+                      f"in={output.shape[1]} -> kept={kept.shape[1]} "
+                      f"(prune_rate={args.pruning_rate}, selector={selector_kind})",
+                      flush=True)
+            return kept
+
         scores = score_provider()
         # one-time validation log: confirm the capture retains ONLY the CLS row
         # (B,H,1,S) -> head-meaned (B,N), NOT the full (B,H,S,S) [the OOM cause]
@@ -500,9 +596,14 @@ def build_engine(model: str, args):
         return kept
 
     if selector_kind != "true_cls" and vision_tower is not None:
-        # PROXY path only needs the vision-tower saliency hook
+        # PROXY path needs the vision-tower saliency hook; clip_query needs the
+        # pre-projector patch-feature stash. Both are forward-hooks on the inner
+        # CLIPVisionTransformer (skip the wrapper's .vision_tower delegation).
         inner = getattr(vision_tower, "vision_model", vision_tower)
-        inner.register_forward_hook(_vision_hook_proxy)
+        if selector_kind == "clip_query":
+            inner.register_forward_hook(_vision_hook_clip)
+        else:
+            inner.register_forward_hook(_vision_hook_proxy)
     projector.register_forward_hook(_projector_hook)
 
     # stash hook_state + cls_capture on the projector for run() to read/clean up
@@ -511,6 +612,10 @@ def build_engine(model: str, args):
     projector._vtc_query_queue = query_queue  # type: ignore[attr-defined]
     projector._vtc_tokenizer = tokenizer     # type: ignore[attr-defined]
     projector._vtc_embed_tokens = embed_tokens  # type: ignore[attr-defined]
+    projector._vtc_clip_text_model = clip_text_model   # type: ignore[attr-defined]
+    projector._vtc_clip_text_proj = clip_text_proj     # type: ignore[attr-defined]
+    projector._vtc_clip_visual_proj = clip_visual_proj  # type: ignore[attr-defined]
+    projector._vtc_clip_tokenizer = clip_tokenizer     # type: ignore[attr-defined]
     return llm, projector
 
 
@@ -538,6 +643,34 @@ def embed_question(question: str, tokenizer, embed_tokens, device) -> "torch.Ten
     return emb.to(torch.float16)
 
 
+def embed_clip_question(question: str, clip_tokenizer, clip_text_model,
+                        clip_text_proj, device) -> "torch.Tensor":
+    """Embed the question via CLIP text encoder + text_projection (A'').
+
+    The v2 fix: instead of the LLM `embed_tokens` (word-semantics space, NOT
+    contrastively aligned -> OCR failed), embed the question through CLIP's text
+    tower and project into CLIP's contrastive space. CLIP was trained so this
+    feature ALIGNS with CLIP-ViT patch features, making cosine a meaningful
+    cross-modal similarity for text/OCR-relevant patch selection.
+
+    Returns (1, T, 768) fp16 contrastive features on `device`. Cheap for T<=~30
+    (one small transformer pass over ~12 layers, hidden=768).
+    """
+    import torch  # noqa
+    # CLIP tokenizer expects raw text; add BOS/EOS per CLIP convention.
+    enc = clip_tokenizer(question, return_tensors="pt", add_special_tokens=True,
+                         truncation=True, max_length=77)
+    ids = enc["input_ids"].to(device)        # (1, T)
+    if ids.numel() == 0:
+        bos = clip_tokenizer.bos_token_id if clip_tokenizer.bos_token_id is not None else 49406
+        ids = torch.tensor([[bos]], device=device, dtype=torch.long)
+    with torch.no_grad():
+        tout = clip_text_model(input_ids=ids)              # last_hidden_state (1,T,768)
+        wt = clip_text_proj.weight.to(device, tout.last_hidden_state.dtype).T  # (768,768)
+        text_contr = tout.last_hidden_state @ wt           # (1,T,768) contrastive
+    return text_contr.to(torch.float16)
+
+
 # --------------------------------------------------------------------------- #
 # Metrics aggregation
 # --------------------------------------------------------------------------- #
@@ -563,11 +696,13 @@ def run(args) -> dict:
     from vllm import SamplingParams  # noqa (lazy)
     sp = SamplingParams(temperature=0.0, max_tokens=args.max_tokens, seed=args.seed)
 
-    # query_aware plumbing: pop the per-request question-embedding queue that
+    # query-aware plumbing: pop the per-request question-embedding queue that
     # build_engine stashed on the projector; pre-compute the question embeddings
     # BEFORE each llm.chat() call so the projector hook can pop them in order.
     query_queue = getattr(projector, "_vtc_query_queue", None)
-    do_query_aware = (getattr(args, "selector", "proxy") == "query_aware")
+    sel_kind = getattr(args, "selector", "proxy")
+    do_query_aware = (sel_kind == "query_aware")
+    do_clip_query = (sel_kind == "clip_query")
 
     raw = []
     import torch  # noqa
@@ -576,12 +711,20 @@ def run(args) -> dict:
 
     t_all_start = time.perf_counter()
     for s in samples:
-        # query_aware: embed the question NOW (cheap lookup) and push to the FIFO
-        # so the projector hook pops it during this request's forward.
+        # query-aware: embed the question NOW (cheap) and push to the FIFO so the
+        # projector hook pops it during this request's forward.
+        #   * query_aware: LLM embed_tokens (word-semantics space).
+        #   * clip_query : CLIP text tower + projection (contrastive space, A'').
         if do_query_aware:
             assert query_queue is not None
             query_queue.append(embed_question(s.question, projector._vtc_tokenizer,  # type: ignore[attr-defined]
                                               projector._vtc_embed_tokens, device))  # type: ignore[attr-defined]
+        elif do_clip_query:
+            assert query_queue is not None
+            query_queue.append(embed_clip_question(  # type: ignore[attr-defined]
+                s.question,
+                projector._vtc_clip_tokenizer, projector._vtc_clip_text_model,
+                projector._vtc_clip_text_proj, device))
         # Use llm.chat() with the OpenAI-style message format: the processor
         # applies the correct chat template and counts exactly one image (raw
         # "<image>\n..." prompts were double-counted by the multimodal validator
@@ -676,12 +819,17 @@ def main() -> None:
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--limit", type=int, default=0,
                     help="use only first N subset samples (0=all; for quick validation)")
-    ap.add_argument("--selector", default="proxy", choices=["proxy", "true_cls", "query_aware"],
+    ap.add_argument("--selector", default="proxy",
+                    choices=["proxy", "true_cls", "query_aware", "clip_query"],
                     help="score source: 'proxy' = hidden-state-deviation (the P2 probe); "
                          "'true_cls' = real [CLS]->patch softmax attention (v1 method, "
                          "via ClsAttnCapture on the last vision-tower layer); "
-                         "'query_aware' = text<->patch similarity (v2-step-1, SparseVLM-style "
-                         "text-guided selection at the projector-output boundary).")
+                         "'query_aware' = text<->patch similarity in the LLM "
+                         "embed_tokens space (v2-step-1, SparseVLM-style text-guided "
+                         "selection -- OCR failed); "
+                         "'clip_query' = CLIP CONTRASTIVE text<->patch similarity (A'', "
+                         "the v2 fix: question via CLIP text tower, patches via CLIP "
+                         "visual_projection, scored in CLIP's aligned 768-d space).")
     ap.add_argument("--diversity-lam", type=float, default=0.0,
                     help="PRUNESID-style diversity weight (only with --selector true_cls); "
                          "0.0 = pure top-k by CLS-attn (v1 default)")

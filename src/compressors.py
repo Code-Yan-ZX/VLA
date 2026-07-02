@@ -283,6 +283,124 @@ class QueryAwareSelector:
 
 
 # --------------------------------------------------------------------------- #
+# A'' selector (step-2): CLIP CONTRASTIVE text<->patch (the v2 fix)
+# --------------------------------------------------------------------------- #
+# WHY A'': v2 scored in the LLM embed_tokens space -- NOT contrastively aligned,
+# so word-semantics vs glyph-pixels don't match in cosine -> OCR collapsed (r50
+# ~0.38 vs proxy 0.530). CLIP was trained (contrastive) so that CLIP-text embeds
+# ALIGN with CLIP-ViT features. So scoring CLIP-patch-features by
+# CLIP_text_encoder(question) . CLIP_patch_feature should rank text/OCR-relevant
+# patches HIGH, training-free. This is the SparseVLM signal relocated to the
+# boundary via CLIP (contrastive) features.
+#
+# MECHANISM (vLLM-side, see serve_bench.build_engine):
+#   * Load a CLIPTextModel + text_projection + visual_projection from the SAME
+#     CLIP checkpoint that LLaVA-1.5's vision tower is built from
+#     (openai/clip-vit-large-patch14-336). ~125M params, ~0.5GB.
+#   * Capture the vision tower's last_hidden_state patch tokens (pre-projector,
+#     (B,N,1024)) via the existing vision-tower forward-hook. Apply CLIP's
+#     visual_projection (1024->768) to land them in the CONTRASTIVE space.
+#   * Embed the question via CLIPTextModel + text_projection (768->768 contrastive).
+#   * Score = cos(clip_text_feat, clip_patch_feat) per patch, max/mean over the T
+#     question tokens (SparseVLM-style).
+#   * Selection indices are then applied to the PROJECTOR OUTPUT (B,N,4096) ->
+#     v1-of-A'' keeps contiguous-compaction + placeholder-shrink identical to
+#     proxy/v1/v2 plumbing (no pre-projector early-prune yet -- follow-on).
+#
+# Memory: score is (T_text x N=576) only -- never (B,H,S,S). visual_projection of
+# (B,576,1024)->(B,576,768) is ~3.5MB fp16. Cheap.
+
+def clip_text_patch_scores(
+    clip_patch_feats: torch.Tensor,   # (B, N, D_clip=768) ALREADY in contrastive space
+    clip_text_feats: torch.Tensor,    # (B, T, D_clip=768) ALREADY in contrastive space
+    pool: str = "max",                # "max" (SparseVLM default) or "mean" over T tokens
+    sim: str = "cosine",              # "cosine" (default) or "dot"
+) -> torch.Tensor:
+    """Score each of the N CLIP patch features by similarity to the CLIP text features.
+
+    Both inputs MUST live in CLIP's contrastive space (i.e. CLIPVisionModel output
+    @ visual_projection for patches, CLIPTextModel output @ text_projection for the
+    question). CLIP was trained so this dot product is a meaningful cross-modal
+    similarity; this is the v2 fix (v2 used LLM embed_tokens, which is NOT
+    contrastively aligned -> OCR failed).
+
+    Returns (B, N) per-patch scores. Memory: (B, N, T) intermediate only.
+    """
+    _validate(clip_patch_feats,
+              torch.zeros(clip_patch_feats.shape[:2], device=clip_patch_feats.device))
+    if clip_text_feats.dim() != 3 or clip_text_feats.shape[0] != clip_patch_feats.shape[0] \
+            or clip_text_feats.shape[2] != clip_patch_feats.shape[2]:
+        raise ValueError(
+            f"clip_text_feats must be (B,T,D_clip) matching clip_patch_feats (B,N,D_clip); "
+            f"got {tuple(clip_text_feats.shape)} vs {tuple(clip_patch_feats.shape)}")
+
+    a = clip_patch_feats                       # (B, N, D_clip)
+    q = clip_text_feats                        # (B, T, D_clip)
+    if sim == "cosine":
+        a = torch.nn.functional.normalize(a, dim=-1)
+        q = torch.nn.functional.normalize(q, dim=-1)
+    sim_mat = torch.bmm(a, q.transpose(1, 2))  # (B, N, T)
+    if pool == "max":
+        return sim_mat.max(dim=-1).values       # (B, N)
+    elif pool == "mean":
+        return sim_mat.mean(dim=-1)             # (B, N)
+    else:
+        raise ValueError(f"pool must be 'max' or 'mean', got {pool!r}")
+
+
+@dataclass
+class ClipQuerySelector:
+    """A'' selector: rank patches by CLIP CONTRASTIVE text<->patch similarity.
+
+    The v2 fix: v2 used LLM embed_tokens (word-semantics space) vs post-projector
+    patches (LLM space) -- NOT contrastively aligned, so OCR failed (r50 ~0.38).
+    A'' uses CLIP's contrastive alignment (CLIP trained so text-embeds align with
+    ViT-patch-features): score CLIP-projected patches by CLIP-text(question) and
+    select top-k. Training-free.
+
+    Inputs (both pre-computed by serve_bench from CLIP, NOT the LLM):
+      projector_output : (B, N, D_llm=4096) -- the boundary embeddings we COMPACT.
+                         (kept for signature symmetry; the SELECT happens on the
+                         CLIP-space scores, but the GATHER is on this tensor so
+                         v1-of-A'' applies CLIP-score indices to projector output,
+                         identical contiguous-compaction plumbing to proxy/v1/v2.)
+      clip_patch_feats : (B, N, D_clip=768) -- vision-tower last_hidden_state patch
+                         tokens @ CLIP visual_projection (contrastive space).
+      clip_text_feats  : (B, T, D_clip=768) -- CLIPTextModel(question) @ text_proj.
+
+    `pool="max"` (default) matches SparseVLM's per-token-max similarity. The
+    selector delegates to the shared `select_topk` so the contiguous-compaction +
+    placeholder-shrink integration is identical to proxy/v1/v2 plumbing.
+
+    CPU-testable: feed dummy (B,N,D_clip) patch feats + (B,T,D_clip) text feats.
+    """
+    pruning_rate: float = 0.0
+    pool: str = "max"          # "max" (SparseVLM) or "mean" over question tokens
+    sim: str = "cosine"        # "cosine" (default) or "dot"
+
+    def select(
+        self,
+        projector_output: torch.Tensor,   # (B, N, D_llm) -- the tensor we compact
+        clip_patch_feats: torch.Tensor,   # (B, N, D_clip) -- for SCORING
+        clip_text_feats: torch.Tensor,    # (B, T, D_clip) -- for SCORING
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        _validate(projector_output,
+                  torch.zeros(projector_output.shape[:2], device=projector_output.device))
+        if projector_output.shape[:2] != clip_patch_feats.shape[:2]:
+            raise ValueError(
+                f"projector_output and clip_patch_feats must share (B,N); got "
+                f"{tuple(projector_output.shape[:2])} vs {tuple(clip_patch_feats.shape[:2])}")
+        scores = clip_text_patch_scores(clip_patch_feats, clip_text_feats,
+                                        pool=self.pool, sim=self.sim)
+        # apply the CLIP-score top-k indices to the PROJECTOR OUTPUT (v1 of A'').
+        return select_topk(projector_output, scores, self.pruning_rate)
+
+    def __call__(self, projector_output, clip_patch_feats, clip_text_feats) -> torch.Tensor:
+        kept, _ = self.select(projector_output, clip_patch_feats, clip_text_feats)
+        return kept
+
+
+# --------------------------------------------------------------------------- #
 # Score utilities (CLS-attention extraction from a CLIP/SigLIP vision tower)
 # --------------------------------------------------------------------------- #
 def cls_attention_scores(
@@ -571,8 +689,46 @@ def _self_test() -> None:
     # score argmax for batch 0 must lie in the aligned span 10..20
     assert 10 <= int(sc_max[0].argmax().item()) < 20, "tp_scores argmax not in aligned span"
 
+    # --- 8. A'' ClipQuerySelector: shapes, determinism, query-sensitivity -------
+    # CLIP space is D_clip=768 (LLaVA's CLIP-L/14-336 visual+text projections).
+    d_clip = 768
+    clip_patch = torch.randn(b, n, d_clip)
+    clip_text = torch.randn(b, t, d_clip)
+    # align a SPAN of CLIP patches to CLIP text token 0 -> those must score highest
+    clip_patch[:, 30:40, :] = clip_text[:, 0:1, :].expand(-1, 10, -1)
+    for r in (0.25, 0.50, 0.75):
+        for pool in ("max", "mean"):
+            sel = ClipQuerySelector(pruning_rate=r, pool=pool, sim="cosine")
+            kept1, idx1 = sel.select(feats, clip_patch, clip_text)
+            kept2, idx2 = sel.select(feats, clip_patch, clip_text)
+            k = keep_count(n, r)
+            assert kept1.shape == (b, k, d), f"clip r={r} {pool}: bad shape {kept1.shape}"
+            assert torch.equal(idx1, idx2), f"clip r={r} {pool}: not deterministic"
+            # gather integrity: kept comes from feats via idx (CLIP-scored selection
+            # but projector-output gather)
+            check = torch.gather(feats, 1, idx1.unsqueeze(-1).expand(-1, -1, d))
+            assert torch.equal(kept1, check), f"clip r={r} {pool}: gather mismatch"
+            # query-sensitivity: aligned span 30..40 must be in the kept set
+            kept_set = set(idx1[0].tolist())
+            aligned = set(range(30, 40))
+            kept_aligned = aligned & kept_set
+            assert len(kept_aligned) >= 8, (
+                f"clip r={r} {pool}: CLIP-aligned patches not preferred "
+                f"(only {len(kept_aligned)}/10 kept) -- selector not query-aware")
+
+    # --- 9. clip_text_patch_scores: shape (B,N), max>=mean, argmax in aligned span -
+    cs_max = clip_text_patch_scores(clip_patch, clip_text, pool="max", sim="cosine")
+    cs_mean = clip_text_patch_scores(clip_patch, clip_text, pool="mean", sim="cosine")
+    assert cs_max.shape == (b, n) and cs_mean.shape == (b, n), "clip tp_scores bad shape"
+    assert torch.all(cs_max >= cs_mean - 1e-5), "clip max must be >= mean"
+    # dot != cosine
+    cs_dot = clip_text_patch_scores(clip_patch, clip_text, pool="max", sim="dot")
+    assert not torch.allclose(cs_max, cs_dot, atol=1e-4), "clip cosine==dot (norm broken)"
+    # argmax for batch 0 must lie in the aligned span 30..40
+    assert 30 <= int(cs_max[0].argmax().item()) < 40, "clip tp_scores argmax not in aligned span"
+
     print("compressors self-test OK: probe=true(lam0)==identical, diversity+determinism ok, "
-          "query_aware query-sensitive + shapes ok, "
+          "query_aware+clip_query query-sensitive + shapes ok, "
           "keep_counts=" + str([keep_count(n, r) for r in (0.0, .25, .50, .75)]) +
           " scores=" + str(tuple(s.shape)))
 

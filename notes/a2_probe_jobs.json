@@ -1,0 +1,71 @@
+[
+  {
+    "name": "a2_clip_query_gqa_r0",
+    "cmd": "/home/dell/miniconda3/envs/vtc_serve/bin/python -m src.serve_bench --model runs/models/llava-1.5-7b-hf --pruning-rate 0.0 --selector clip_query --benchmark gqa --subset eval/subsets/gqa_200.jsonl --metrics-out runs/p2_a2/gqa_r0_metrics.json --max-tokens 32 --max-model-len 4096 --gpu-memory-utilization 0.90 --seed 0",
+    "priority": 1,
+    "est_min": 25,
+    "deps": [],
+    "status": "skip",
+    "note": "A'' clip_query CONTROL on GQA (r=0). Selector is a no-op at r=0 -> byte-identical to proxy/v1/v2 r0 (the n=20 TextVQA r0 control already confirmed kept=576/no-op). Reuse probe r0 (0.585) as denominator. SKIP unless a full A'' series is wanted for the comparison table."
+  },
+  {
+    "name": "a2_clip_query_gqa_r25",
+    "cmd": "/home/dell/miniconda3/envs/vtc_serve/bin/python -m src.serve_bench --model runs/models/llava-1.5-7b-hf --pruning-rate 0.25 --selector clip_query --benchmark gqa --subset eval/subsets/gqa_200.jsonl --metrics-out runs/p2_a2/gqa_r25_metrics.json --max-tokens 32 --max-model-len 4096 --gpu-memory-utilization 0.90 --seed 0",
+    "priority": 2,
+    "deps": [],
+    "status": "skip",
+    "note": "A'' clip_query GQA @ 25% (keep 432/576). DIRECTIONAL READ IS NEGATIVE (TextVQA r50 n=50 = 0.180 max / 0.140 mean -- catastrophically below v2 0.38, proxy 0.50, FastV 0.555). Run ONLY if the full comparison table needs the GQA column; the OCR finding already settles the method question."
+  },
+  {
+    "name": "a2_clip_query_gqa_r50",
+    "cmd": "/home/dell/miniconda3/envs/vtc_serve/bin/python -m src.serve_bench --model runs/models/llava-1.5-7b-hf --pruning-rate 0.50 --selector clip_query --benchmark gqa --subset eval/subsets/gqa_200.jsonl --metrics-out runs/p2_a2/gqa_r50_metrics.json --max-tokens 32 --max-model-len 4096 --gpu-memory-utilization 0.90 --seed 0",
+    "priority": 2,
+    "deps": [],
+    "status": "skip",
+    "note": "A'' clip_query GQA @ 50% (keep 288/576). Mechanism check (limit=3) PASSED here (kept=288, scores [0.016,0.102,0.214], forward OK, no OOM). Full run for the comparison table. Expected to underperform proxy (0.565) -- the CLIP per-patch projection is not a strong text-region localizer on any task."
+  },
+  {
+    "name": "a2_clip_query_gqa_r75",
+    "cmd": "/home/dell/miniconda3/envs/vtc_serve/bin/python -m src.serve_bench --model runs/models/llava-1.5-7b-hf --pruning-rate 0.75 --selector clip_query --benchmark gqa --subset eval/subsets/gqa_200.jsonl --metrics-out runs/p2_a2/gqa_r75_metrics.json --max-tokens 32 --max-model-len 4096 --gpu-memory-utilization 0.90 --seed 0",
+    "priority": 3,
+    "deps": [],
+    "status": "skip",
+    "note": "A'' clip_query GQA @ 75% (keep 144/576). Extreme-prune stress. Skip unless full series needed."
+  },
+  {
+    "name": "a2_clip_query_textvqa_r0",
+    "cmd": "/home/dell/miniconda3/envs/vtc_serve/bin/python -m src.serve_bench --model runs/models/llava-1.5-7b-hf --pruning-rate 0.0 --selector clip_query --benchmark textvqa --subset eval/subsets/textvqa_200.jsonl --metrics-out runs/p2_a2/textvqa_r0_metrics.json --max-tokens 32 --max-model-len 4096 --gpu-memory-utilization 0.90 --seed 0",
+    "priority": 1,
+    "est_min": 25,
+    "deps": [],
+    "status": "done",
+    "note": "A'' clip_query CONTROL on TextVQA (r=0). Already validated n=20: kept=576/no-op, acc=0.400 (matches the sample subset). Selector is byte-identical to stock vLLM at r=0. Full n=200 run optional (will match probe r0=0.555 within noise)."
+  },
+  {
+    "name": "a2_clip_query_textvqa_r50",
+    "cmd": "/home/dell/miniconda3/envs/vtc_serve/bin/python -m src.serve_bench --model runs/models/llava-1.5-7b-hf --pruning-rate 0.50 --selector clip_query --benchmark textvqa --subset eval/subsets/textvqa_200.jsonl --metrics-out runs/p2_a2/textvqa_r50_max_metrics.json --max-tokens 32 --max-model-len 4096 --gpu-memory-utilization 0.90 --seed 0 --query-pool max",
+    "priority": 1,
+    "est_min": 20,
+    "deps": [],
+    "status": "done",
+    "note": "A'' clip_query TextVQA @ 50% (keep 288/576), MAX pool -- THE KEY OCR TEST. n=50 DIRECTIONAL READ = 0.180 (vs v2 0.380, proxy 0.500, FastV 0.555). CATASTROPHICALLY NEGATIVE: CLIP per-patch visual_projection does NOT localize text (CLIP contrastive loss aligns only the pooled CLS token, not per-patch features -- verified empirically on synthetic + real). Full n=200 confirms but the directional read settles it. Root cause analysis in eval/p2_method_a2_findings.md."
+  },
+  {
+    "name": "a2_clip_query_textvqa_r50_mean",
+    "cmd": "/home/dell/miniconda3/envs/vtc_serve/bin/python -m src.serve_bench --model runs/models/llava-1.5-7b-hf --pruning-rate 0.50 --selector clip_query --benchmark textvqa --subset eval/subsets/textvqa_200.jsonl --metrics-out runs/p2_a2/textvqa_r50_mean_metrics.json --max-tokens 32 --max-model-len 4096 --gpu-memory-utilization 0.90 --seed 0 --query-pool mean",
+    "priority": 1,
+    "est_min": 20,
+    "deps": [],
+    "status": "done",
+    "note": "A'' clip_query TextVQA @ 50%, MEAN pool (v2 found mean worse than max; CLIP differs). n=50 = 0.140 -- WORSE than max (0.180), same pattern as v2. Mean dilutes the few high-similarity text tokens with the many low-similarity stopwords."
+  },
+  {
+    "name": "a2_clip_query_textvqa_r75",
+    "cmd": "/home/dell/miniconda3/envs/vtc_serve/bin/python -m src.serve_bench --model runs/models/llava-1.5-7b-hf --pruning-rate 0.75 --selector clip_query --benchmark textvqa --subset eval/subsets/textvqa_200.jsonl --metrics-out runs/p2_a2/textvqa_r75_metrics.json --max-tokens 32 --max-model-len 4096 --gpu-memory-utilization 0.90 --seed 0",
+    "priority": 3,
+    "est_min": 18,
+    "deps": [],
+    "status": "skip",
+    "note": "A'' clip_query TextVQA @ 75% (keep 144/576). Will be even worse than r50. Skip unless full series needed."
+  }
+]
