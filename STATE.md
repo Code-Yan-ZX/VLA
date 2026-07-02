@@ -4,30 +4,27 @@
 > 最近更新：2026-07-02
 
 ## 当前阶段
-**P2 → 方法 A''（CLIP 边界 selector）实现中**；方向定 A''→D
+**P2 selector 三连败 → pivot 到 D-on-proxy（serving-aware 方法）。先做 2 个测量定 D 范围。**
 
-## ★ 已确立（不变）
-- **provisional GO**：压缩→serving 真实加速（GQA e2e 1.33×@r50）。核心 claim 成立。
-- **3 条 serving 专属发现**：① e2e>prefill（KV-cache/并发）；② prefill 次线性（vision tower 固定→早 prune 杠杆）；③ 加速依赖视觉占比。
-- **served-throughput gap 仍开放**（0/37 OCR-VLM 进 vLLM serving）。
+## ★ 论文脊梁（已确立，不变）
+- **provisional GO**：压缩→serving 真实加速（GQA e2e 1.33×@r50）。核心 claim。
+- **3 条 serving 专属发现**：① e2e>prefill（KV-cache/并发收益）；② prefill 次线性（vision tower 固定开销）；③ 加速依赖视觉占比。
+- **served-throughput gap 仍开放**（0/37 OCR-VLM 进 vLLM serving）——核心差异判据。
 
-## selector 迭代史
-- v1 边界 CLS-attn：TextVQA r50 0.445（vision-tower CLS 不关注文本）❌
-- v2 边界 LLM-embed cosine：TextVQA r50 ~0.38（嵌入空间非对比对齐）❌
-- proxy(hidden-state)：TextVQA r50 0.530（当前最好边界）｜FastV(intra-LLM)：0.555 但 vLLM 不可集成
-- **根因**：边界 training-free 廉价信号打不过 intra-LLM OCR；v2 错在用 LLM 词义空间而非对比空间。
+## selector 三连败（停止追逐）
+v1 边界 CLS-attn 0.445 → v2 LLM-cosine 0.38 → A'' CLIP-对比 0.18（TextVQA r50）。A'' 实证根因：CLIP 只对齐 [CLS] 非 per-patch（MaskCLIP 已知结果）。proxy(hidden-state) 0.530 = 边界最好；FastV(intra-LLM) 0.555 不可集成。**结论：边界 TF 廉价信号结构性打不过 intra-LLM OCR，接受 proxy 级精度。**
 
-## 立即下一步 —— A''（Dev subagent，CLIP 边界 selector）
-- **CLIP 对比对齐**：CLIP text encoder(问题) · CLIP ViT patch 特征 → 选 top-k（对比训练，文本/OCR patch 得分高）= v2 的正确修法。
-- 复用 vision-tower hook 取 CLIP 特征 + projector-output compaction；selector `--selector clip_query`。
-- **关键验证**：limit=50 TextVQA r0.5 → CLIP 对比能否恢复 OCR（目标接近 FastV 0.555 / proxy 0.530，远超 v2 0.38）。
-- A'' + 早 prune 协同：pre-projector 选择 → 既 query-aware 又省编码器/投影器开销（finding #2）。
+## 立即下一步 —— D-on-proxy（先测量、后实现）
+方法 = proxy selector + serving-aware 优化。先跑 2 个测量定范围：
+1. **prefill 拆解**（vision tower vs LLM 占比）→ 定"早 prune / mid-encoder prune"值不值得动 ViT 手术。
+2. **并发 × prune-rate 权衡**（不同 concurrency 下 r0/r50/r75 的 req/s）→ 验**负载自适应 budget** 概念（finding #1 的 serving 专属新意，0/37 碰过）。
+测量结果定 D 实现：若并发自适应显著抬 req/s → D 核心就是 KV-cache/负载自适应 budget（最 novel）；若早 prune 收益大 → 加 mid-encoder prune。
 
-## A'' 通过后 → D（论文方法）
-vLLM 集成 + 早 prune（pre-projector）+ 负载自适应 budget（finding #1）。定位"首个 vLLM 集成、保 OCR 的 training-free 压缩"。基座 LLaVA-1.5-7B，**Qwen3-VL-8B 作泛化行**（Qwen3.5-VL 不存在；32B 不可行；不换基座）。
+## D 之后 → P3
+全基准（MME/MMBench/ScienceQA）× 多压缩比 × {proxy, D-method, FastV(accuracy anchor)}。基座 LLaVA-1.5-7B；Qwen3-VL-8B 泛化行。
 
 ## 关键约束
 - 算力 1× A40 46GB 串行；GPU job 走 `scripts/queue`（driver 连跑需 GPU-settle）。
 - env：`vtc` / `vtc_serve`(vLLM0.10.2 V0) / `fastv`(accuracy-only)。
-- 提交以用户本人名义，禁 AI 署名。
+- 提交以用户本人名义，禁 AI 署名。training-free 优先（1×A40 约束）。
 - 升级找人：凭据 / >6GPU·h / claim 被推翻 / 投稿前。
