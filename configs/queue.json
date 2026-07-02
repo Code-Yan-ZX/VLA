@@ -350,8 +350,10 @@
       "priority": 100,
       "est_min": 6,
       "deps": [],
-      "status": "pending",
-      "note": "ADAPTIVE (num_running signal, conc 0.25/0.75) GQA bursty max-tokens=32. THE refined method config."
+      "status": "done",
+      "note": "ADAPTIVE (num_running signal, conc 0.25/0.75) GQA bursty max-tokens=32. THE refined method config.",
+      "rc": 0,
+      "last_run": 1782965495
     },
     {
       "name": "p3s1_gqa_fixed_r25_bursty_mt32",
@@ -359,8 +361,10 @@
       "priority": 95,
       "est_min": 5,
       "deps": [],
-      "status": "pending",
-      "note": "FIXED r=0.25 GQA bursty max-tokens=32 (accuracy-favoring fixed point)."
+      "status": "done",
+      "note": "FIXED r=0.25 GQA bursty max-tokens=32 (accuracy-favoring fixed point).",
+      "rc": 0,
+      "last_run": 1782965611
     },
     {
       "name": "p3s1_gqa_fixed_r50_bursty_mt32",
@@ -368,8 +372,10 @@
       "priority": 95,
       "est_min": 5,
       "deps": [],
-      "status": "pending",
-      "note": "FIXED r=0.50 GQA bursty max-tokens=32 (throughput-favoring fixed point)."
+      "status": "done",
+      "note": "FIXED r=0.50 GQA bursty max-tokens=32 (throughput-favoring fixed point).",
+      "rc": 0,
+      "last_run": 1782965719
     },
     {
       "name": "p3s1_gqa_adaptive_step_mt32",
@@ -377,8 +383,10 @@
       "priority": 90,
       "est_min": 6,
       "deps": [],
-      "status": "pending",
-      "note": "ADAPTIVE GQA STEP profile max-tokens=32. The controller figure: realized-r should rise to ~r_max in high phase, fall to ~r_min in low phases."
+      "status": "done",
+      "note": "ADAPTIVE GQA STEP profile max-tokens=32. The controller figure: realized-r should rise to ~r_max in high phase, fall to ~r_min in low phases.",
+      "rc": 0,
+      "last_run": 1782965919
     },
     {
       "name": "p3s1_textvqa_adaptive_bursty_mt32",
@@ -386,8 +394,10 @@
       "priority": 85,
       "est_min": 6,
       "deps": [],
-      "status": "pending",
-      "note": "ADAPTIVE TextVQA bursty max-tokens=32. OCR-heavy; r_max=0.50 guardrail."
+      "status": "done",
+      "note": "ADAPTIVE TextVQA bursty max-tokens=32. OCR-heavy; r_max=0.50 guardrail.",
+      "rc": 0,
+      "last_run": 1782966035
     },
     {
       "name": "p3s1_textvqa_fixed_r25_bursty_mt32",
@@ -395,8 +405,10 @@
       "priority": 80,
       "est_min": 6,
       "deps": [],
-      "status": "pending",
-      "note": "FIXED r=0.25 TextVQA bursty max-tokens=32."
+      "status": "done",
+      "note": "FIXED r=0.25 TextVQA bursty max-tokens=32.",
+      "rc": 0,
+      "last_run": 1782966155
     },
     {
       "name": "p3s1_textvqa_fixed_r50_bursty_mt32",
@@ -404,8 +416,10 @@
       "priority": 80,
       "est_min": 6,
       "deps": [],
-      "status": "pending",
-      "note": "FIXED r=0.50 TextVQA bursty max-tokens=32."
+      "status": "done",
+      "note": "FIXED r=0.50 TextVQA bursty max-tokens=32.",
+      "rc": 0,
+      "last_run": 1782966268
     }
   ]
 }
