@@ -1,7 +1,7 @@
 # fastv_gqa_r75
 
-- **status**: failed (rc=1)
-- **ran**: 2026-07-01 17:32 · 68s
+- **status**: done (rc=0)
+- **ran**: 2026-07-01 17:57 · 371s
 - **cmd**: `/home/dell/miniconda3/envs/fastv/bin/python -m src.fastv_bench --model-path /media/disk2/YZX/doct/FastV/llava-v1.5-7b --benchmark gqa --subset eval/subsets/gqa_200.jsonl --keep-tokens 144 --agg-layer 2 --metrics-out runs/fastv_baseline/gqa_r75_metrics.json --max-tokens 32 --device cuda`
 - **est_min**: 25 · **priority**: 3
 - **log**: `runs/fastv_gqa_r75.log`

@@ -1,7 +1,7 @@
 # v1_probe_gqa_r0
 
-- **status**: failed (rc=1)
-- **ran**: 2026-07-01 17:14 · 124s
+- **status**: done (rc=0)
+- **ran**: 2026-07-01 17:41 · 240s
 - **cmd**: `/home/dell/miniconda3/envs/vtc_serve/bin/python -m src.serve_bench --model runs/models/llava-1.5-7b-hf --pruning-rate 0.0 --selector true_cls --benchmark gqa --subset eval/subsets/gqa_200.jsonl --metrics-out runs/p2_probe_v1/gqa_r0_metrics.json --max-tokens 32 --max-model-len 4096 --gpu-memory-utilization 0.90 --seed 0`
 - **est_min**: 25 · **priority**: 1
 - **log**: `runs/v1_probe_gqa_r0.log`

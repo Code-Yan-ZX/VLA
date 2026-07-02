@@ -364,7 +364,7 @@ def build_engine(model: str, args):
         target_k = patch_image_token_count(r_max, full_n=576, k_cell=k_cell)
         print(f"[serve_bench] ADAPTIVE mode ON: controller r in "
               f"[{getattr(args, 'r_min', 0.25)}, {r_max}] "
-              f"(signal={getattr(args, 'load_signal', 'kv_occupancy')}); "
+              f"(signal={getattr(args, 'load_signal', 'num_running')}); "
               f"k_cell init k={k_cell['k']}", flush=True)
     else:
         k_cell = None
@@ -876,17 +876,23 @@ def run(args) -> dict:
             r_max=float(getattr(args, "r_max", args.pruning_rate)),
             occ_lo=float(getattr(args, "occ_lo", 0.40)),
             occ_hi=float(getattr(args, "occ_hi", 0.70)),
+            conc_lo=float(getattr(args, "conc_lo", 0.25)),
+            conc_hi=float(getattr(args, "conc_hi", 0.75)),
             run_lo=int(getattr(args, "run_lo", 4)),
             run_hi=int(getattr(args, "run_hi", 8)),
-            signal=getattr(args, "load_signal", "kv_occupancy"),
+            signal=getattr(args, "load_signal", "num_running"),
         )
         print(f"[serve_bench] controller: {controller}", flush=True)
+
+    # max_num_seqs is stamped onto every LoadReading so the num_running signal
+    # can normalize to a concurrency fraction. Captured once (the engine's cap).
+    _mnseqs = int(getattr(args, "max_num_seqs", 256))
 
     def _decide_and_set_k():
         """Adaptive: read engine load, decide r, update k_cell. Returns r (or None)."""
         if controller is None or k_cell is None:
             return None
-        reading = read_engine_load(llm)
+        reading = read_engine_load(llm, max_num_seqs=_mnseqs)
         r = controller.decide_r(reading)
         k_cell["k"] = max(1, int(round(576 * (1.0 - r))))
         return r
@@ -1026,7 +1032,7 @@ def run(args) -> dict:
                 # sample load every few steps (cheap) and track the peak -- this
                 # is the signal for the NEXT segment's r decision.
                 if adaptive and n_steps % 3 == 1:
-                    rd = read_engine_load(llm)
+                    rd = read_engine_load(llm, max_num_seqs=_mnseqs)
                     occ = rd.kv_occupancy if rd.kv_occupancy is not None else -1
                     nr = rd.num_running if rd.num_running is not None else -1
                     if occ > seg_peak_occ or nr > seg_peak_nr:
@@ -1039,7 +1045,12 @@ def run(args) -> dict:
                     break
             if adaptive and seg_peak_reading is not None:
                 prev_peak_reading = seg_peak_reading
-            # ---- collect this segment's results ----
+            # ---- collect this segment's results (ONCE per request) ----
+            # NOTE: an earlier version had a second result-append inside the
+            # `if gap > 0.0` block below that re-used the loop's last `o`/`s`
+            # and appended a DUPLICATE row each gapped segment (200 samples ->
+            # 249 rows), corrupting accuracy and inflating n. Removed: results
+            # are collected exactly once here; the gap block only sleeps.
             for rid, s in seg_pairs:
                 o = seg_finished.get(rid)
                 if o is None:
@@ -1064,17 +1075,6 @@ def run(args) -> dict:
                 })
             if gap > 0.0:
                 time.sleep(gap)
-                text = o.outputs[0].text.strip()
-                n_out = len(o.outputs[0].token_ids)
-                n_tokens_out += n_out
-                correct = scorer(text, s.gt, s.extra.get("choices"))
-                raw.append({
-                    "id": s.id, "served_tok_s": float("nan"),
-                    "served_req_s": float("nan"), "ttft_ms": float("nan"),
-                    "peak_kv_mb": float("nan"), "correct": correct,
-                    "answer": text, "gt": s.gt,
-                    "segment": seg_idx, "r_used": r_seg,
-                })
         wall = time.perf_counter() - t_submit_start
         # aggregate throughput over the WHOLE profile (the headline req/s metric)
         agg_req_s = len(samples) / wall if wall > 0 else 0.0
@@ -1277,14 +1277,28 @@ def main() -> None:
                     help="KV-occupancy low threshold (below -> r_min).")
     ap.add_argument("--occ-hi", type=float, default=0.70,
                     help="KV-occupancy high threshold (above -> r_max).")
+    ap.add_argument("--conc-lo", type=float, default=0.25,
+                    help="num_running signal: concurrency-FRACTION low threshold "
+                         "(num_running/max_num_seqs below -> r_min). Default 0.25 -> at "
+                         "c12, r_min when <3 concurrent.")
+    ap.add_argument("--conc-hi", type=float, default=0.75,
+                    help="num_running signal: concurrency-FRACTION high threshold "
+                         "(num_running/max_num_seqs above -> r_max). Default 0.75 -> at "
+                         "c12, r_max when >9 concurrent.")
     ap.add_argument("--run-lo", type=int, default=4,
-                    help="num-running low threshold (fallback signal; below -> r_min).")
+                    help="num-running ABSOLUTE low threshold (legacy fallback when "
+                         "max_num_seqs unknown; below -> r_min).")
     ap.add_argument("--run-hi", type=int, default=8,
-                    help="num-running high threshold (fallback signal; above -> r_max).")
-    ap.add_argument("--load-signal", default="kv_occupancy",
+                    help="num-running ABSOLUTE high threshold (legacy fallback when "
+                         "max_num_seqs unknown; above -> r_max).")
+    ap.add_argument("--load-signal", default="num_running",
                     choices=["kv_occupancy", "num_running"],
-                    help="engine-load signal the controller reacts to (KV-occupancy is the "
-                         "primary signal -- the M2 bottleneck is KV-cache pressure).")
+                    help="engine-load signal the controller reacts to. DEFAULT "
+                         "num_running (P3-step-1): concurrency fraction spans the full "
+                         "[0,1] range under c12/short-seq deployment, so realized-r "
+                         "traverses [r_min,r_max]. Use kv_occupancy for long-sequence / "
+                         "high-concurrency regimes where KV pressure is the real "
+                         "bottleneck and occupancy rises into a meaningful range.")
     ap.add_argument("--load-profile", default=None,
                     choices=["constant", "bursty", "step"],
                     help="METHOD D validation: time-varying request-submission profile so "
