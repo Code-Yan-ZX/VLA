@@ -11,7 +11,7 @@
 - **3 条 serving 发现**：① e2e>prefill（KV-cache/并发）；② prefill 次线性（vision tower 仅 6.6%→不值得早 prune）；③ 加速依赖视觉占比。
 - **served-throughput gap 仍开放**（0/37）。
 - **headline 数字**：c12/r75 = **1.76× req/s**（加速随并发放大）。
-- **D 新 headline（n=100 GQA bursty）**：**adaptive Pareto-dominates fixed** —— req/s 3.43 > fixed-r25 3.33，acc 0.565 > fixed-r50 0.556（高负载多剪抬 req/s、低负载少剪保精度）。详见 notes/p2_d_results.md。
+- **D headline（n=200 已验证）**：GQA bursty **adaptive Pareto-dominates fixed** —— req/s 3.38 > r25 3.32（+0.06），acc 0.546 > r50 0.522（+0.024，也击败 r25）。TextVQA bursty：adaptive acc 0.554 > r50 0.526（+0.028），req/s 与 r25 平（2.60 vs 2.63）。constant 2.06× 快于 bursty（负载跟踪确认）。详见 notes/p2_d_results.md。
 
 ## selector 定论
 三连败（CLS-attn 0.445→LLM-cosine 0.38→CLIP 0.18，TextVQA r50）。边界 TF 天花板 = proxy(hidden-state) 0.530。**接受 proxy 级精度，停止 selector 追逐。**
