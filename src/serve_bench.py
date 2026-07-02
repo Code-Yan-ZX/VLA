@@ -940,82 +940,79 @@ def run(args) -> dict:
         n_tokens_out = 0
         seg_idx = 0
         req_counter = 0
-        for batch_samples, gap in segments:
+        # Two-phase streaming submission (the faithful online-server pattern):
+        #  PHASE 1 (submit): for each segment, decide r from the CURRENT load
+        #    (which reflects prior segments' still-in-flight requests), set k_cell
+        #    ONCE for the whole segment, preprocess all segment requests at that k,
+        #    add_request them, then step() a few times to schedule them (allocate
+        #    KV) so the NEXT segment's load read sees them. We do NOT drain between
+        #    segments -> requests accumulate in the engine -> load builds across
+        #    segments -> the controller's r rises over the run.
+        #  PHASE 2 (drain): once all segments submitted, step() until everything
+        #    finishes, collecting outputs.
+        # WHY PER-SEGMENT (not per-request) r: the projector hook reads a SINGLE
+        # shared k_cell at forward time, but vLLM batches multiple image-requests
+        # in one forward. If two in-flight requests had DIFFERENT k (per-request r),
+        # their text-placeholder counts would differ from the hook's single k ->
+        # masked_scatter size mismatch (the CUBLAS/masked_scatter crash). So all
+        # requests IN FLIGHT during a forward must share k. Per-segment r guarantees
+        # this (segment = the unit of simultaneous in-flight requests between drains).
+        all_seg_req_ids = []   # list of (seg_idx, [(rid, sample), ...], r_seg)
+        finished: dict = {}
+        t_submit_start = time.perf_counter()
+        for seg_idx, (batch_samples, gap) in enumerate(segments):
             if not batch_samples:
                 continue
-            # ---- decide this segment's r from the load at segment entry ----
-            # (reflects residual in-flight work from prior segments' decode
-            # overlapping the gap -- the online controller's view). Then we
-            # ALSO re-decide r per-request INSIDE the segment as load rises.
+            # decide THIS segment's r from current load (prior segments' requests
+            # are still in-flight from phase 1 -> load is non-trivial after seg 0)
             if adaptive:
-                r_seg0 = _decide_and_set_k()
+                r_seg = _decide_and_set_k()
             else:
-                r_seg0 = getattr(args, "pruning_rate", 0.0)
+                r_seg = getattr(args, "pruning_rate", 0.0)
                 if k_cell is not None:
-                    k_cell["k"] = max(1, int(round(576 * (1.0 - r_seg0))))
-            # ---- add this segment's requests with INTERLEAVED step() --------
-            # add_request only ENQUEUES (to scheduler.waiting); KV is allocated
-            # and requests move to .running only when step() runs the scheduler.
-            # So to let the load read before request N+1 see request N's KV, we
-            # add ONE request, step() enough to schedule it (allocating KV), then
-            # read load for the next. This is the faithful online loop: each new
-            # request sees the KV-pressure from already-running requests.
-            seg_req_ids = []
-            seg_r_used = {}   # req_id -> r decided for that request
-            seg_finished: dict = {}
-            t_seg_start = time.perf_counter()
-            for si, s in enumerate(batch_samples):
-                # decide r for THIS request from current load (earlier requests
-                # in this segment are already running -> KV-occupancy has risen)
-                if adaptive:
-                    r_req = _decide_and_set_k()
-                else:
-                    r_req = r_seg0
-                    if k_cell is not None:
-                        k_cell["k"] = max(1, int(round(576 * (1.0 - r_req))))
+                    k_cell["k"] = max(1, int(round(576 * (1.0 - r_seg))))
+            seg_pairs = []
+            for s in batch_samples:
                 rid = f"dval_{req_counter}"; req_counter += 1
-                seg_req_ids.append(rid)
-                seg_r_used[rid] = r_req
-                # preprocess THIS request's prompt at its per-request r (the
-                # get_num_image_tokens patch reads k_cell -> correct placeholder
-                # count for this request's r), then enqueue it (non-blocking).
+                # preprocess at this segment's k (k_cell already set above) ->
+                # placeholder count matches the hook's k_cell at forward time.
                 msgs = _build_messages(s)
                 prepped = llm.preprocess_chat(msgs)[0]
                 engine.add_request(rid, prepped, sp)
-                # step() enough to schedule the just-added request so the NEXT
-                # iteration's load read sees its KV allocation. One step schedules
-                # + executes one decode iteration; for the FIRST request of a
-                # segment this also does its prefill. A couple of steps let the
-                # scheduler move it from waiting->running and allocate blocks.
-                for _ in range(2):
-                    if not engine.has_unfinished_requests():
-                        break
-                    step_outs = engine.step()
-                    for o in step_outs:
-                        if o.finished:
-                            seg_finished[o.request_id] = o
-            # ---- drain: step until ALL segment requests finish ----
-            while engine.has_unfinished_requests():
-                step_outs = engine.step()
-                for o in step_outs:
-                    if o.finished:
-                        seg_finished[o.request_id] = o
-                # safety: bound the step loop (avoid infinite loop on pathology)
-                if time.perf_counter() - t_seg_start > 300:
-                    print(f"[serve_bench] WARN: segment {seg_idx} drain >300s, "
-                          f"breaking step loop", flush=True)
+                seg_pairs.append((rid, s))
+            all_seg_req_ids.append((seg_idx, seg_pairs, r_seg))
+            # step() a few times to schedule this segment's requests (move from
+            # waiting->running, allocate KV) so the next segment's load read sees
+            # them. Collect any that finish during these steps.
+            for _ in range(3):
+                if not engine.has_unfinished_requests():
                     break
-            # ---- collect results for this segment ----
-            for s, rid in zip(batch_samples, seg_req_ids):
-                o = seg_finished.get(rid)
+                for o in engine.step():
+                    if o.finished:
+                        finished[o.request_id] = o
+            if gap > 0.0:
+                time.sleep(gap)
+        # ---- PHASE 2: drain all in-flight requests ----
+        t_drain_start = time.perf_counter()
+        while engine.has_unfinished_requests():
+            for o in engine.step():
+                if o.finished:
+                    finished[o.request_id] = o
+            if time.perf_counter() - t_drain_start > 600:
+                print(f"[serve_bench] WARN: drain >600s, breaking step loop",
+                      flush=True)
+                break
+        # ---- collect results (iterate segments in order) ----
+        for seg_idx, seg_pairs, r_seg in all_seg_req_ids:
+            for rid, s in seg_pairs:
+                o = finished.get(rid)
                 if o is None:
-                    # unfinished (timeout) -> record a blank
                     raw.append({
                         "id": s.id, "served_tok_s": float("nan"),
                         "served_req_s": float("nan"), "ttft_ms": float("nan"),
                         "peak_kv_mb": float("nan"), "correct": 0,
                         "answer": "", "gt": s.gt,
-                        "segment": seg_idx, "r_used": seg_r_used.get(rid),
+                        "segment": seg_idx, "r_used": r_seg,
                     })
                     continue
                 text = o.outputs[0].text.strip()
@@ -1027,12 +1024,9 @@ def run(args) -> dict:
                     "served_req_s": float("nan"), "ttft_ms": float("nan"),
                     "peak_kv_mb": float("nan"), "correct": correct,
                     "answer": text, "gt": s.gt,
-                    "segment": seg_idx, "r_used": seg_r_used.get(rid),
+                    "segment": seg_idx, "r_used": r_seg,
                 })
-            seg_idx += 1
-            if gap > 0.0:
-                time.sleep(gap)
-        wall = time.perf_counter() - t_all_start
+        wall = time.perf_counter() - t_submit_start
         # aggregate throughput over the WHOLE profile (the headline req/s metric)
         agg_req_s = len(samples) / wall if wall > 0 else 0.0
         agg_tok_s = n_tokens_out / wall if wall > 0 else 0.0
