@@ -60,6 +60,12 @@ from .compressors import (  # noqa: F401  (re-export)
     text_patch_scores,
     keep_count,
 )
+from .load_controller import (  # noqa: F401  (re-export)
+    LoadAdaptiveController,
+    LoadReading,
+    PROFILES,
+    read_engine_load,
+)
 
 
 # --------------------------------------------------------------------------- #
@@ -224,27 +230,35 @@ SCORERS = {"gqa": score_gqa, "textvqa": score_textvqa}
 # --------------------------------------------------------------------------- #
 # vLLM engine + hook installation (lazy import)
 # --------------------------------------------------------------------------- #
-def patch_image_token_count(pruning_rate: float, full_n: int = 576) -> int:
+def patch_image_token_count(pruning_rate: float, full_n: int = 576,
+                            k_cell: Optional[dict] = None) -> int:
     """Override vLLM's LLaVA image-token count 576 -> k = int((1-r)*576).
 
-    WHY: pruning rate r is FIXED per run, so k is known a priori. vLLM's text
-    sequence carries `[image_token_id] * num_image_tokens` placeholders
-    (llava.py:_get_prompt_updates/get_replacement, which calls
-    `info.get_num_image_tokens`). The pruned projector emits exactly k embeddings.
-    For the LLM forward to get consistent shapes, the placeholder count MUST equal
-    k. Overriding `get_num_image_tokens` -> k makes the sequence GENUINELY k-shorter
-    (contiguous compaction, not keep-sparse) -> real wall-clock win (the gate's
-    premise). The projector hook places its k selected embeddings into those k
-    contiguous slots.
+    WHY: pruning rate r is FIXED per run (or per-request in adaptive mode), so k
+    is known a priori. vLLM's text sequence carries `[image_token_id] *
+    num_image_tokens` placeholders (llava.py:_get_prompt_updates/get_replacement,
+    which calls `info.get_num_image_tokens`). The pruned projector emits exactly k
+    embeddings. For the LLM forward to get consistent shapes, the placeholder
+    count MUST equal k. Overriding `get_num_image_tokens` -> k makes the sequence
+    GENUINELY k-shorter (contiguous compaction, not keep-sparse) -> real wall-clock
+    win (the gate's premise). The projector hook places its k selected embeddings
+    into those k contiguous slots.
 
     full_n=576 = LLaVA-1.5 CLIP grid (24x24) after default feature-select.
-    Returns k (also stashed for the projector hook to read).
+    Returns k.
+
+    ADAPTIVE MODE (P2 method D): when `k_cell` is provided, the patched function
+    reads `k_cell["k"]` on EVERY call instead of closing over a fixed k. This
+    lets run() set k per-request (from the load-adaptive controller) right before
+    llm.chat(), and the placeholder count + projector hook both honor it. The
+    initial k_cell["k"] is set from `pruning_rate` (the r_max for adaptive, or
+    the fixed r otherwise); run() updates it before each submission.
     """
     import vllm.model_executor.models.llava as _llava_mod  # noqa
     k = max(1, int(round(full_n * (1.0 - pruning_rate))))
     InfoCls = _llava_mod.LlavaProcessingInfo
 
-    if pruning_rate == 0.0:
+    if pruning_rate == 0.0 and k_cell is None:
         # restore original (unpatch) so r=0 control is byte-identical to stock vLLM
         if getattr(InfoCls.get_num_image_tokens, "_vtc_patched", False):
             InfoCls.get_num_image_tokens = InfoCls.get_num_image_tokens._vtc_orig
@@ -254,16 +268,25 @@ def patch_image_token_count(pruning_rate: float, full_n: int = 576) -> int:
     if not getattr(InfoCls.get_num_image_tokens, "_vtc_patched", False):
         orig = InfoCls.get_num_image_tokens
 
-        def patched(self, *, image_width, image_height):  # noqa: ANN001
-            # Ignore image dims: fixed k for this run (deterministic compaction).
-            # (Real content-adaptive budgets come AFTER the gate -- method-design §2.)
-            return k
+        if k_cell is not None:
+            # ADAPTIVE: read k from the mutable cell each call (per-request budget).
+            def patched(self, *, image_width, image_height):  # noqa: ANN001
+                return k_cell["k"]
+            patched._vtc_mode = "adaptive"
+            print(f"[serve_bench] patched get_num_image_tokens: ADAPTIVE "
+                  f"(per-request k from controller cell; init r={pruning_rate} "
+                  f"-> k={k_cell['k']})", flush=True)
+        else:
+            # FIXED: closed-over k for the whole run (the original probe path).
+            def patched(self, *, image_width, image_height):  # noqa: ANN001
+                return k
+            patched._vtc_mode = "fixed"
+            print(f"[serve_bench] patched LlavaProcessingInfo.get_num_image_tokens: "
+                  f"{full_n} -> {k} (r={pruning_rate})", flush=True)
 
         patched._vtc_orig = orig
         patched._vtc_patched = True
         InfoCls.get_num_image_tokens = patched
-        print(f"[serve_bench] patched LlavaProcessingInfo.get_num_image_tokens: "
-              f"{full_n} -> {k} (r={pruning_rate})", flush=True)
     return k
 
 
@@ -315,9 +338,31 @@ def build_engine(model: str, args):
           f"vision_tower={type(vision_tower).__name__}", flush=True)
 
     # ---- placeholder-count override: 576 -> k (MUST precede the forward) ----
-    # k is fixed per run; this makes the text sequence carry exactly k image-token
-    # placeholders, matching the k embeddings the projector hook emits.
-    target_k = patch_image_token_count(args.pruning_rate, full_n=576)
+    # k is the (initial) kept-token count; this makes the text sequence carry
+    # exactly k image-token placeholders, matching the k embeddings the projector
+    # hook emits.
+    #
+    # ADAPTIVE MODE (P2 method D): the controller decides r per-request from the
+    # live engine load, so k is NOT fixed -- it varies per request. We patch the
+    # class method to read a MUTABLE k_cell on each call, and run() updates
+    # k_cell["k"] from controller.decide_r(read_engine_load()) before every
+    # submission. The projector hook ALSO reads k_cell so its kept-count matches
+    # the per-request placeholder count exactly.
+    adaptive = bool(getattr(args, "adaptive", False))
+    if adaptive:
+        # init k_cell at r_max (the heavy-load endpoint); run() updates it per-
+        # request. r_max is the controller ceiling (also the per-benchmark
+        # accuracy guardrail).
+        r_max = float(getattr(args, "r_max", args.pruning_rate))
+        k_cell = {"k": max(1, int(round(576 * (1.0 - r_max))))}
+        target_k = patch_image_token_count(r_max, full_n=576, k_cell=k_cell)
+        print(f"[serve_bench] ADAPTIVE mode ON: controller r in "
+              f"[{getattr(args, 'r_min', 0.25)}, {r_max}] "
+              f"(signal={getattr(args, 'load_signal', 'kv_occupancy')}); "
+              f"k_cell init k={k_cell['k']}", flush=True)
+    else:
+        k_cell = None
+        target_k = patch_image_token_count(args.pruning_rate, full_n=576)
 
     # ---- score capture from vision tower (two paths) ----
     # PROXY (probe path, default): hidden-state deviation norm -- a saliency
@@ -472,13 +517,28 @@ def build_engine(model: str, args):
             return captured.get("scores")
 
     # ---- projector post-hook: prune output rows to exactly target_k ----
+    # ADAPTIVE (method D): when k_cell is set, the per-request k is read from it
+    # (run() updates k_cell["k"] from the controller before each submission), and
+    # the per-request r = 1 - k/576 rebuilds the selector so the top-k count and
+    # the placeholder count agree. The kept_counts log then visibly tracks the
+    # controller's adaptation (the headline-validation signal).
     hook_state = {"n_calls": 0, "kept_counts": [], "target_k": target_k,
-                  "selector": selector_kind}
+                  "selector": selector_kind, "adaptive": adaptive}
+
+    def _cur_k() -> int:
+        """Per-request kept-token count: k_cell['k'] if adaptive, else target_k."""
+        return k_cell["k"] if (k_cell is not None) else target_k
+
+    def _cur_r() -> float:
+        """Per-request pruning rate implied by _cur_k() (r = 1 - k/576)."""
+        return 1.0 - (_cur_k() / 576.0)
 
     def _projector_hook(module, inputs, output):  # noqa: ANN001
         import torch  # noqa
         hook_state["n_calls"] += 1
-        if args.pruning_rate == 0.0:
+        ck = _cur_k()
+        cr = _cur_r()
+        if args.pruning_rate == 0.0 and not adaptive:
             hook_state["kept_counts"].append(output.shape[1])
             return None  # control: no-op, but still log full token count
 
@@ -493,20 +553,20 @@ def build_engine(model: str, args):
                    or query_embeds.shape[0] != output.shape[0]
                    or query_embeds.shape[2] != output.shape[2])
             if bad:
-                # shape-mismatch fallback (shouldn't happen): keep first target_k
-                kept = output[:, :target_k, :].contiguous()
-                keep_idx = torch.arange(target_k, device=output.device).unsqueeze(0).expand(
+                # shape-mismatch fallback (shouldn't happen): keep first ck
+                kept = output[:, :ck, :].contiguous()
+                keep_idx = torch.arange(ck, device=output.device).unsqueeze(0).expand(
                     output.shape[0], -1)
             else:
                 sel = QueryAwareSelector(
-                    pruning_rate=args.pruning_rate,
+                    pruning_rate=cr,
                     pool=getattr(args, "query_pool", "max"),
                     sim=getattr(args, "query_sim", "cosine"),
                 )
                 kept, keep_idx = sel.select(output, query_embeds)
-                if kept.shape[1] != target_k:
-                    kept = kept[:, :target_k, :].contiguous()
-                    keep_idx = keep_idx[:, :target_k].contiguous()
+                if kept.shape[1] != ck:
+                    kept = kept[:, :ck, :].contiguous()
+                    keep_idx = keep_idx[:, :ck].contiguous()
                 # one-time log: confirm the selector received the question and
                 # the scores are text<->patch similarities (not CLS-attn)
                 if hook_state["n_calls"] == 1:
@@ -526,7 +586,7 @@ def build_engine(model: str, args):
             if hook_state["n_calls"] <= 5:
                 print(f"[serve_bench] projector hook fire #{hook_state['n_calls']}: "
                       f"in={output.shape[1]} -> kept={kept.shape[1]} "
-                      f"(prune_rate={args.pruning_rate}, selector={selector_kind})",
+                      f"(prune_rate={cr:.3f}, selector={selector_kind})",
                       flush=True)
             return kept
 
@@ -540,8 +600,8 @@ def build_engine(model: str, args):
                    or clip_hs.shape[0] != output.shape[0]
                    or clip_hs.shape[1] - 1 != full_n)
             if bad:
-                kept = output[:, :target_k, :].contiguous()
-                keep_idx = torch.arange(target_k, device=output.device).unsqueeze(0).expand(
+                kept = output[:, :ck, :].contiguous()
+                keep_idx = torch.arange(ck, device=output.device).unsqueeze(0).expand(
                     output.shape[0], -1)
             else:
                 # project vision-tower patch features (skip CLS) into CLIP
@@ -554,14 +614,14 @@ def build_engine(model: str, args):
                     clip_patch_feats = patches_1024 @ wv                   # (B,N,768)
                     qf = query_feats.to(clip_patch_feats.dtype)            # (B,T,768)
                 sel = ClipQuerySelector(
-                    pruning_rate=args.pruning_rate,
+                    pruning_rate=cr,
                     pool=getattr(args, "query_pool", "max"),
                     sim=getattr(args, "query_sim", "cosine"),
                 )
                 kept, keep_idx = sel.select(output, clip_patch_feats, qf)
-                if kept.shape[1] != target_k:
-                    kept = kept[:, :target_k, :].contiguous()
-                    keep_idx = keep_idx[:, :target_k].contiguous()
+                if kept.shape[1] != ck:
+                    kept = kept[:, :ck, :].contiguous()
+                    keep_idx = keep_idx[:, :ck].contiguous()
                 if hook_state["n_calls"] == 1:
                     with torch.no_grad():
                         sc = clip_text_patch_scores(clip_patch_feats, qf,
@@ -579,7 +639,7 @@ def build_engine(model: str, args):
             if hook_state["n_calls"] <= 5:
                 print(f"[serve_bench] projector hook fire #{hook_state['n_calls']}: "
                       f"in={output.shape[1]} -> kept={kept.shape[1]} "
-                      f"(prune_rate={args.pruning_rate}, selector={selector_kind})",
+                      f"(prune_rate={cr:.3f}, selector={selector_kind})",
                       flush=True)
             return kept
 
@@ -594,26 +654,27 @@ def build_engine(model: str, args):
                   f"NOT (B,H,S,S))", flush=True)
         full_n = output.shape[1]
         if scores is None or scores.shape[1] != full_n:
-            # fallback: take the first target_k tokens (keeps shapes valid even
+            # fallback: take the first ck tokens (keeps shapes valid even
             # if the vision hook hasn't captured scores for some reason)
-            kept = output[:, :target_k, :].contiguous()
-            keep_idx = torch.arange(target_k, device=output.device).unsqueeze(0).expand(output.shape[0], -1)
+            kept = output[:, :ck, :].contiguous()
+            keep_idx = torch.arange(ck, device=output.device).unsqueeze(0).expand(output.shape[0], -1)
         else:
             # build the v1 selector (true_cls uses TrueClsAttnSelector with optional
-            # diversity; proxy keeps the probe's ClsAttnSelector for reproducibility)
+            # diversity; proxy keeps the probe's ClsAttnSelector for reproducibility).
+            # ADAPTIVE: prune rate is the per-request cr (from the controller).
             if selector_kind == "true_cls":
                 sel = TrueClsAttnSelector(
-                    pruning_rate=args.pruning_rate,
+                    pruning_rate=cr,
                     diversity_lam=getattr(args, "diversity_lam", 0.0),
                 )
             else:
-                sel = ClsAttnSelector(pruning_rate=args.pruning_rate)
+                sel = ClsAttnSelector(pruning_rate=cr)
             kept, keep_idx = sel.select(output, scores)
-            # guard: if rounding gave k != target_k, trim/pad to target_k so the
+            # guard: if rounding gave k != ck, trim/pad to ck so the
             # count EXACTLY matches the placeholder count from patch_image_token_count
-            if kept.shape[1] != target_k:
-                kept = kept[:, :target_k, :].contiguous()
-                keep_idx = keep_idx[:, :target_k].contiguous()
+            if kept.shape[1] != ck:
+                kept = kept[:, :ck, :].contiguous()
+                keep_idx = keep_idx[:, :ck].contiguous()
         module._vtc_keep_idx = keep_idx         # type: ignore[attr-defined]
         module._vtc_keep_count = kept.shape[1]  # type: ignore[attr-defined]
         hook_state["kept_counts"].append(kept.shape[1])
@@ -624,7 +685,7 @@ def build_engine(model: str, args):
         if hook_state["n_calls"] <= 5:
             print(f"[serve_bench] projector hook fire #{hook_state['n_calls']}: "
                   f"in={output.shape[1]} -> kept={kept.shape[1]} "
-                  f"(prune_rate={args.pruning_rate}, selector={selector_kind})", flush=True)
+                  f"(prune_rate={cr:.3f}, selector={selector_kind})", flush=True)
         return kept
 
     if selector_kind != "true_cls" and vision_tower is not None:
@@ -662,6 +723,7 @@ def build_engine(model: str, args):
     projector._vtc_clip_visual_proj = clip_visual_proj  # type: ignore[attr-defined]
     projector._vtc_clip_tokenizer = clip_tokenizer     # type: ignore[attr-defined]
     projector._vtc_times = _vtc_times  # type: ignore[attr-defined]  (M1 timing)
+    projector._vtc_k_cell = k_cell     # type: ignore[attr-defined]  (adaptive: mutable per-request k)
     return llm, projector
 
 
@@ -765,7 +827,41 @@ def run(args) -> dict:
     #   continuous batching up to max_num_seqs -> real concurrency, real req/s gain
     #   from KV-pressure relief. Per-request TTFT unavailable; served_req_s is
     #   computed as n / wall_time (the aggregate throughput metric M2 needs).
+    # LOAD_PROFILE (method D): submit requests in time-varying bursts/gaps per a
+    #   profile generator (constant|bursty|step) -> engine load swings so the
+    #   adaptive controller has something to react to. Per-batch llm.chat() with
+    #   sleeps between; r decided from live load before EACH batch (adaptive) and
+    #   k_cell updated so the placeholder count + projector hook honor it.
     batch_submit = getattr(args, "batch_submit", False)
+    load_profile = getattr(args, "load_profile", None)
+    adaptive = bool(getattr(args, "adaptive", False))
+    k_cell = getattr(projector, "_vtc_k_cell", None)
+
+    # ---- adaptive controller (method D core) ----
+    # Built once; decide_r() is called before each submission to set the per-
+    # request r (and hence k_cell['k']). realized[] accumulates (r, reading) for
+    #事后 distribution analysis (the adaptation proof).
+    controller: Optional[LoadAdaptiveController] = None
+    if adaptive:
+        controller = LoadAdaptiveController(
+            r_min=float(getattr(args, "r_min", 0.25)),
+            r_max=float(getattr(args, "r_max", args.pruning_rate)),
+            occ_lo=float(getattr(args, "occ_lo", 0.40)),
+            occ_hi=float(getattr(args, "occ_hi", 0.70)),
+            run_lo=int(getattr(args, "run_lo", 4)),
+            run_hi=int(getattr(args, "run_hi", 8)),
+            signal=getattr(args, "load_signal", "kv_occupancy"),
+        )
+        print(f"[serve_bench] controller: {controller}", flush=True)
+
+    def _decide_and_set_k():
+        """Adaptive: read engine load, decide r, update k_cell. Returns r (or None)."""
+        if controller is None or k_cell is None:
+            return None
+        reading = read_engine_load(llm)
+        r = controller.decide_r(reading)
+        k_cell["k"] = max(1, int(round(576 * (1.0 - r))))
+        return r
 
     def _build_messages(s):
         # query-aware: embed the question NOW (cheap) and push to the FIFO so the
@@ -791,9 +887,69 @@ def run(args) -> dict:
             ],
         }]
 
-    if batch_submit:
+    if load_profile is not None:
+        # ---- method D: time-varying load profile ----------------------------
+        # Submit in (batch, gap_seconds) segments per the generator. Before EACH
+        # segment: read load, decide r (adaptive) or use fixed r, set k_cell.
+        # Within a segment the batch is submitted as ONE llm.chat() so vLLM's
+        # continuous batching engages -> concurrency rises during the segment and
+        # falls during the gap -> the controller's r swings r_min<->r_max.
+        gen = PROFILES.get(load_profile)
+        if gen is None:
+            raise ValueError(f"unknown --load-profile {load_profile!r}; "
+                             f"choices={list(PROFILES)}")
+        max_num_seqs = getattr(args, "max_num_seqs", 256)
+        segments = gen(samples, max_num_seqs)
+        t_all_start = time.perf_counter()
+        n_tokens_out = 0
+        seg_idx = 0
+        for batch_samples, gap in segments:
+            if not batch_samples:
+                continue
+            # decide r for THIS segment from the live load (adaptive) or fixed
+            if adaptive:
+                r_seg = _decide_and_set_k()
+            else:
+                r_seg = getattr(args, "pruning_rate", 0.0)
+                if k_cell is not None:
+                    k_cell["k"] = max(1, int(round(576 * (1.0 - r_seg))))
+            seg_msgs = [_build_messages(s) for s in batch_samples]
+            seg_t0 = time.perf_counter()
+            outs = llm.chat(seg_msgs, sp, use_tqdm=False)
+            seg_wall = time.perf_counter() - seg_t0
+            for s, o in zip(batch_samples, outs):
+                text = o.outputs[0].text.strip()
+                n_out = len(o.outputs[0].token_ids)
+                n_tokens_out += n_out
+                correct = scorer(text, s.gt, s.extra.get("choices"))
+                raw.append({
+                    "id": s.id, "served_tok_s": float("nan"),
+                    "served_req_s": float("nan"), "ttft_ms": float("nan"),
+                    "peak_kv_mb": float("nan"), "correct": correct,
+                    "answer": text, "gt": s.gt,
+                    # tag which segment + the r used (for事后 adaptation analysis)
+                    "segment": seg_idx, "r_used": r_seg,
+                })
+            seg_idx += 1
+            if gap > 0.0:
+                time.sleep(gap)
+        wall = time.perf_counter() - t_all_start
+        # aggregate throughput over the WHOLE profile (the headline req/s metric)
+        agg_req_s = len(samples) / wall if wall > 0 else 0.0
+        agg_tok_s = n_tokens_out / wall if wall > 0 else 0.0
+        peak_kv_mb = torch.cuda.max_memory_allocated() / (1024 ** 2)
+        for r in raw:
+            r["served_tok_s"] = agg_tok_s
+            r["served_req_s"] = agg_req_s
+            r["peak_kv_mb"] = peak_kv_mb
+    elif batch_submit:
         # ---- M2 batched path: real continuous batching ----------------------
         # Pre-build all messages (also pre-pushes all query embeddings in order).
+        # ADAPTIVE: decide r ONCE from the (initially empty) load -> r_min typically;
+        # this is the "constant low" sanity case. For constant-high, use --load-profile
+        # constant with adaptive (controller sees occupancy rise -> r_max).
+        if adaptive:
+            _decide_and_set_k()
         all_messages = [_build_messages(s) for s in samples]
         t_all_start = time.perf_counter()
         outs = llm.chat(all_messages, sp, use_tqdm=False)
@@ -828,6 +984,8 @@ def run(args) -> dict:
         # ---- SERIAL path (default): per-request TTFT, M1 prefill breakdown --
         t_all_start = time.perf_counter()
         for s in samples:
+            if adaptive:
+                _decide_and_set_k()   # per-request r from the live load
             messages = _build_messages(s)
             t0 = time.perf_counter()
             outputs = llm.chat(messages, sp, use_tqdm=False)
@@ -909,12 +1067,17 @@ def run(args) -> dict:
         "selector": getattr(args, "selector", "proxy"),
         "diversity_lam": getattr(args, "diversity_lam", 0.0),
         "max_num_seqs": getattr(args, "max_num_seqs", 256),
+        "adaptive": bool(getattr(args, "adaptive", False)),
+        "load_profile": getattr(args, "load_profile", None),
+        "controller": (controller.__dict__ | {"realized_summary": controller.realized_summary()})
+                     if controller is not None else None,
         "n": len(raw), "wall_s": wall, "agg": agg,
         "prefill_breakdown": agg_prefill,
         "prefill_speedup_vs_r0": prefill_speedup, "e2e_speedup_vs_r0": e2e_speedup,
         "hook": {
             "n_projector_calls": hook_state.get("n_calls", 0),
             "kept_counts_head": hook_state.get("kept_counts", [])[:10],
+            "kept_counts_unique": sorted(set(hook_state.get("kept_counts", []))),
         },
         "raw": raw,
     }
@@ -953,6 +1116,42 @@ def main() -> None:
                     help="M2: submit ALL requests in ONE llm.chat() call so vLLM's "
                          "continuous batching actually engages max_num_seqs. Disables "
                          "per-request TTFT (M1 needs serial mode, the default).")
+    # ---- P2 method D: load-adaptive prune-rate controller -------------------
+    ap.add_argument("--adaptive", action="store_true",
+                    help="METHOD D: enable the load-adaptive controller. Per request (or "
+                         "per load-profile segment), read the engine's live load "
+                         "(KV-occupancy / num-running) and set r in [r_min,r_max] -- "
+                         "prune MORE under high load (KV-pressure relief, where M2 showed "
+                         "the req/s speedup is largest: r75 1.26x->1.76x c1->c12), prune "
+                         "LESS under light load (preserve accuracy). Overrides the fixed "
+                         "--pruning-rate (which becomes the r_max initial value).")
+    ap.add_argument("--r-min", type=float, default=0.25,
+                    help="adaptive controller r floor (light-load prune rate).")
+    ap.add_argument("--r-max", type=float, default=0.50,
+                    help="adaptive controller r ceiling (heavy-load prune rate). ALSO the "
+                         "per-benchmark accuracy guardrail (GQA/TextVQA: 0.50, validated "
+                         "to keep the acc drop acceptable).")
+    ap.add_argument("--occ-lo", type=float, default=0.40,
+                    help="KV-occupancy low threshold (below -> r_min).")
+    ap.add_argument("--occ-hi", type=float, default=0.70,
+                    help="KV-occupancy high threshold (above -> r_max).")
+    ap.add_argument("--run-lo", type=int, default=4,
+                    help="num-running low threshold (fallback signal; below -> r_min).")
+    ap.add_argument("--run-hi", type=int, default=8,
+                    help="num-running high threshold (fallback signal; above -> r_max).")
+    ap.add_argument("--load-signal", default="kv_occupancy",
+                    choices=["kv_occupancy", "num_running"],
+                    help="engine-load signal the controller reacts to (KV-occupancy is the "
+                         "primary signal -- the M2 bottleneck is KV-cache pressure).")
+    ap.add_argument("--load-profile", default=None,
+                    choices=["constant", "bursty", "step"],
+                    help="METHOD D validation: time-varying request-submission profile so "
+                         "the engine load swings and the adaptive controller has something "
+                         "to react to. 'constant' = one big batch (M2's constant-high case; "
+                         "controller sits at ~r_max). 'bursty' = small bursts separated by "
+                         "idle gaps (concurrency 0<->burst; r swings r_min<->r_max). "
+                         "'step' = low-rate -> high-rate -> low-rate staircase. Overrides "
+                         "--batch-submit (load-profile implies segmented batch submission).")
     ap.add_argument("--selector", default="proxy",
                     choices=["proxy", "true_cls", "query_aware", "clip_query"],
                     help="score source: 'proxy' = hidden-state-deviation (the P2 probe); "
