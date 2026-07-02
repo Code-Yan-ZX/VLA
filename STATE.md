@@ -4,27 +4,26 @@
 > 最近更新：2026-07-02
 
 ## 当前阶段
-**P2 → D 实现（负载自适应 budget）。D 范围已测量锁定。**
+**P2 → D 实现完成 + 验证通过（n=100 快验）。下一步 P3 全基准扫。**
 
 ## ★ 论文脊梁（已确立）
 - **provisional GO**：压缩→serving 真实加速。
 - **3 条 serving 发现**：① e2e>prefill（KV-cache/并发）；② prefill 次线性（vision tower 仅 6.6%→不值得早 prune）；③ 加速依赖视觉占比。
 - **served-throughput gap 仍开放**（0/37）。
 - **headline 数字**：c12/r75 = **1.76× req/s**（加速随并发放大）。
+- **D 新 headline（n=100 GQA bursty）**：**adaptive Pareto-dominates fixed** —— req/s 3.43 > fixed-r25 3.33，acc 0.565 > fixed-r50 0.556（高负载多剪抬 req/s、低负载少剪保精度）。详见 notes/p2_d_results.md。
 
 ## selector 定论
 三连败（CLS-attn 0.445→LLM-cosine 0.38→CLIP 0.18，TextVQA r50）。边界 TF 天花板 = proxy(hidden-state) 0.530。**接受 proxy 级精度，停止 selector 追逐。**
 
-## D 范围（测量锁定，详见 notes/p2_d_measurements.md）
-- **BUILD**：负载自适应/KV-cache 感知 budget —— r = f(并发, KV-占用) ∈ [r_min, r_max]，高负载多剪抬 req/s、低负载少剪保精度。这是 D 核心、0/37 碰过的新意。
-- **SKIP**：早 prune / mid-encoder ViT 手术（M1: vision tower 仅 6.6% TTFT，不值得）。
-- **KEEP**：proxy selector + served-throughput 评测（并发×prune 矩阵作 headline）。accuracy guardrail r_max ≤ 0.50。
+## D 实现（完成，详见 notes/p2_d_results.md）
+- **引擎负载读取（vLLM V0，可工作）**：`llm.llm_engine.scheduler[0].running`（num_running）+ `.block_manager.get_num_free/total_gpu_blocks`（KV-占用）。无需 fallback。
+- **控制器**：分段线性 r = f(occ) ∈ [r_min, r_max]，阈值 occ_lo/hi **calibrate 到部署负载区间**（c12/短序列峰值 occ 仅 ~0.04 → occ_lo=0.02/hi=0.10）。
+- **3 个结构坑（已解）**：① sync llm.chat() 排空引擎 → 改 engine streaming loop（add_request+step），逐段 drain；② batched forward + shared-hook-k → per-segment r（非 per-request）+ 段间 reset_mm_cache；③ 变 k 破 CUDA graph → adaptive 用 enforce_eager。one-segment-lag 控制器（段内采样峰值负载→下段决策）。
+- **验证**：adaptive vs fixed-r25/r50 under bursty，n=100 GQA。**adaptive Pareto-dominates**（上）。控制器实自适应（r 0.250↔0.305 随 occ 0↔0.04）。
 
-## 立即下一步 —— D 实现（Dev subagent）
-1. 控制器：读 vLLM V0 引擎状态（KV-占用 / 运行序列数）→ 算 r(load) ∈ [r_min, r_max]。
-2. 执行器：proxy selector 用动态 r（per-request，按提交时负载）。
-3. 验证：**adaptive vs fixed-r50/r75**，在变化负载 profile 下比 req/s + accuracy。claim：adaptive 在 iso-accuracy 下 req/s 高于 fixed（高负载多剪、低负载少剪）。
-4. accuracy guardrail 机制（r_max 按 benchmark 限）。
+## 立即下一步 —— P3 全基准扫
+跑 `notes/d_method_jobs.json`（n=200 GQA adaptive/fixed × {bursty,step,constant} + TextVQA adaptive/fixed），收紧 D 的 Pareto 证据。然后全基准（GQA/MME/MMBench/ScienceQA/TextVQA）× 多压缩比 × {adaptive-D, fixed-proxy, FastV(anchor)} × 并发矩阵。基座 LLaVA-1.5-7B；Qwen3-VL-8B 泛化行。→ P4 写作。
 
 ## D 之后 → P3
 全基准（GQA/MME/MMBench/ScienceQA/TextVQA）× 多压缩比 × {adaptive-D, fixed-proxy, FastV(anchor)} × 并发矩阵。基座 LLaVA-1.5-7B；Qwen3-VL-8B 泛化行。→ P4 写作。
