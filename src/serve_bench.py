@@ -319,7 +319,13 @@ def build_engine(model: str, args):
         gpu_memory_utilization=args.gpu_memory_utilization,
         max_model_len=args.max_model_len,
         trust_remote_code=False,
-        enforce_eager=False,
+        # ADAPTIVE mode needs eager execution: varying per-segment k -> varying
+        # sequence lengths -> vLLM's CUDA graph capture (fixed shapes) mismatches
+        # at the image-token masked_scatter when k changes between segments
+        # (device-side 'masked_scatter_size_check' assert). Eager mode handles
+        # dynamic shapes correctly at a small per-step cost. Fixed-r runs keep
+        # graph capture (one k for the whole run -> shapes are static).
+        enforce_eager=bool(getattr(args, "adaptive", False)),
         limit_mm_per_prompt={"image": 1},
         allowed_local_media_path=_repo_root,
         max_num_seqs=getattr(args, "max_num_seqs", 256),  # M2: concurrency control

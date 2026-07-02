@@ -31,6 +31,17 @@ creates time-varying concurrency: bursts of many requests followed by idle
 gaps, or a step profile. The adaptive controller then prunes aggressively
 during the bursts (high KV-pressure) and lightly during the gaps.
 
+== Controller latency (implementation note) ==
+serve_bench's load-profile path drains each segment fully before submitting the
+next (required because vLLM batches multiple image-requests per forward and the
+projector hook reads a SINGLE shared k_cell -- cross-segment batching with
+different r would mismatch placeholder count vs kept count). So the controller
+operates with ONE-SEGMENT LAG: during each segment's drain it samples the peak
+load and uses that to decide the NEXT segment's r. This is a legitimate reactive
+controller (one control-cycle of latency). Under bursty/step profiles, big
+bursts raise the sampled peak -> the next segment prunes more; quiet periods ->
+less. The realized[] log records the per-decision (r, reading) pairs.
+
 CPU-testable (no vLLM import): the controller is pure math given a load value.
 """
 from __future__ import annotations
