@@ -939,7 +939,20 @@ def run(args) -> dict:
             raise ValueError(f"unknown --load-profile {load_profile!r}; "
                              f"choices={list(PROFILES)}")
         max_num_seqs = getattr(args, "max_num_seqs", 256)
-        segments = gen(samples, max_num_seqs)
+        # profile-specific knobs (CLI overrides; let us tune the load swing so
+        # the adaptive controller exercises the full [r_min,r_max] range).
+        if load_profile == "bursty":
+            segments = gen(samples, max_num_seqs,
+                           burst=int(getattr(args, "burst", -1)),
+                           gap=float(getattr(args, "burst_gap", 1.5)))
+        elif load_profile == "step":
+            segments = gen(samples, max_num_seqs,
+                           n_low=int(getattr(args, "step_n_low", 30)),
+                           low_gap=float(getattr(args, "step_low_gap", 0.6)),
+                           n_high=int(getattr(args, "step_n_high", 60)),
+                           high_gap=float(getattr(args, "step_high_gap", 2.0)))
+        else:  # constant
+            segments = gen(samples, max_num_seqs)
         # Preprocess each sample's prompt ONCE (chat template + image data ->
         # TokensPrompt with multi_modal_data). add_request consumes this form.
         # NOTE: get_num_image_tokens (our patch) fires HERE, so k_cell['k'] must
@@ -1308,6 +1321,19 @@ def main() -> None:
                          "idle gaps (concurrency 0<->burst; r swings r_min<->r_max). "
                          "'step' = low-rate -> high-rate -> low-rate staircase. Overrides "
                          "--batch-submit (load-profile implies segmented batch submission).")
+    # profile-tuning knobs (so the load swing exercises the full r-range)
+    ap.add_argument("--burst", type=int, default=-1,
+                    help="bursty profile: requests per burst. -1 (default) = max_num_seqs "
+                         "(saturate the engine each burst -> peak conc ~1.0 -> r_max).")
+    ap.add_argument("--burst-gap", type=float, default=1.5,
+                    help="bursty profile: idle seconds between bursts. Default 1.5s lets "
+                         "the prior burst substantially drain so the controller sees low "
+                         "load at the next burst's start (r_min) then high load mid-burst "
+                         "(r_max) -> the full r swing that lets adaptive beat fixed.")
+    ap.add_argument("--step-n-low", type=int, default=30, help="step profile: # reqs in the low phase (one-at-a-time).")
+    ap.add_argument("--step-low-gap", type=float, default=0.6, help="step profile: gap (s) between low-phase reqs.")
+    ap.add_argument("--step-n-high", type=int, default=60, help="step profile: # reqs in the high phase (one batch up to max_num_seqs).")
+    ap.add_argument("--step-high-gap", type=float, default=2.0, help="step profile: gap (s) after the high-phase batch.")
     ap.add_argument("--selector", default="proxy",
                     choices=["proxy", "true_cls", "query_aware", "clip_query"],
                     help="score source: 'proxy' = hidden-state-deviation (the P2 probe); "

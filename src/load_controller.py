@@ -319,27 +319,57 @@ def gen_constant(samples: list, max_num_seqs: int) -> list:
     return [(samples, 0.0)]
 
 
-def gen_bursty(samples: list, max_num_seqs: int, burst: int = 4,
-               gap: float = 0.3) -> list:
-    """Submit `burst` requests at a time, then `gap`s idle, repeat.
+def gen_bursty(samples: list, max_num_seqs: int, burst: int = -1,
+               gap: float = 1.5) -> list:
+    """Submit requests in ALTERNATING small and large bursts, separated by gaps.
 
-    Concurrency swings between ~0 (after a long gap) and ~burst (during the
-    burst, bounded by max_num_seqs). The gap is kept SHORT (< typical decode
-    time of a burst) so the previous burst's requests are STILL in-flight when
-    the next burst arrives -> the controller sees residual KV-occupancy rising
-    across the first few bursts (the adaptation signal). With a long gap the
-    engine fully drains between bursts and the controller sees low load every
-    time (no adaptation) -- which is itself a valid (if uninteresting) result.
+    The P3-step-1 refinement: a single fixed burst size doesn't exercise the
+    controller's full range under the one-segment-lag design (every segment's
+    mid-drain peak looks the same -> r is constant). ALTERNATING burst sizes
+    makes the per-segment peak load genuinely swing: a small burst (2 reqs ->
+    conc ~0.17 -> r_min) followed by a large burst (max_num_seqs reqs -> conc
+    ~1.0 -> r_max) gives the controller a real signal to react to. This is
+    also more realistic than uniform bursts (real traffic is uneven).
 
-    Default burst=4, gap=0.3s: at c12, 16-token decode takes ~1-2s, so a 0.3s
-    gap leaves the prior burst mid-flight -> occupancy at the next burst's
-    decision point is non-zero and grows.
+    With full per-segment drain, segment N+1's r is decided from segment N's
+    PEAK load. So after a small burst (low peak) the next segment prunes
+    lightly (r_min); after a large burst (high peak) the next prunes hard
+    (r_max). The realized-r time-series then visibly alternates r_min/r_max --
+    the controller-figure evidence and the regime where adaptive beats fixed
+    (it matches the light prune when load was low, the heavy prune when high,
+    while any FIXED r is wrong half the time).
+
+    Args:
+      burst: if >0, a FIXED burst size (legacy/override; no alternation). If
+        -1 (default), alternate small=max(1, max_num_seqs//6) and
+        large=max_num_seqs.
+      gap: idle seconds after each burst (long enough that the engine
+        substantially drains -> the NEXT burst's submission-time load is low).
     """
     out = []
-    for i in range(0, len(samples), burst):
-        batch = samples[i:i + burst]
-        # gap after every burst except the last
-        out.append((batch, gap if i + burst < len(samples) else 0.0))
+    if burst > 0:
+        # fixed burst size (legacy path)
+        for i in range(0, len(samples), burst):
+            batch = samples[i:i + burst]
+            out.append((batch, gap if i + burst < len(samples) else 0.0))
+        return out
+    # P3-step-1: alternating small / large bursts
+    small = max(1, max_num_seqs // 6)   # e.g. c12 -> 2 reqs (conc ~0.17 -> r_min)
+    large = max_num_seqs                # e.g. c12 -> 12 reqs (conc ~1.0 -> r_max)
+    sizes = []
+    i = 0
+    toggle = True  # start with small (light load first)
+    while i < len(samples):
+        sz = small if toggle else large
+        sizes.append(sz)
+        i += sz
+        toggle = not toggle
+    i = 0
+    for k, sz in enumerate(sizes):
+        batch = samples[i:i + sz]
+        i += sz
+        is_last = (k == len(sizes) - 1)
+        out.append((batch, gap if not is_last else 0.0))
     return out
 
 
@@ -436,6 +466,13 @@ def _self_test() -> None:
     assert len(bur) == 9  # 50 / 6 = 8 full + 1 partial
     assert len(bur[0][0]) == 6 and bur[0][1] == 1.0
     assert bur[-1][1] == 0.0  # last has no trailing gap
+    # P3-step-1 default bursty (alternating small/large): c12 -> small=2, large=12.
+    # 50 samples: 2,12,2,12,2,12,2,12 = 56 capacity -> 8 bursts, last partial (2 left).
+    bur_def = gen_bursty(samp, max_num_seqs=12, gap=1.5)
+    sizes_def = [len(b) for b, _ in bur_def]
+    assert sizes_def[0] == 2 and sizes_def[1] == 12, f"alternating small/large, got {sizes_def[:4]}"
+    assert all(g == 1.5 for _, g in bur_def[:-1]) and bur_def[-1][1] == 0.0
+    assert sum(sizes_def) == 50, f"all samples covered, got {sum(sizes_def)}"
     st = gen_step(samp, max_num_seqs=12, n_low=20, n_high=40)
     assert len(st[:20]) == 20 and all(len(b) == 1 for b, _ in st[:20])
     assert len(st[20][0]) == 30
