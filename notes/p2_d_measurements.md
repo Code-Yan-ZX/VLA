@@ -53,19 +53,64 @@ max_num_seqs ∈ {1, 12} × pruning ∈ {r0, r50, r75}, proxy selector.
 **Hypothesis**: the req/s gain from pruning GROWS with concurrency (under high
 load KV pressure is the bottleneck, so pruning relieves it disproportionately).
 
-<!-- M2_RESULTS_TABLE -->
+|  | r0 (576 tok) | r50 (288 tok) | r75 (144 tok) |
+|---|---|---|---|
+| **max_num_seqs=1** (no batching) | 1.815 req/s (55s) [acc .580] | 2.132 (47s) [.550] | 2.294 (44s) [.450] |
+| **max_num_seqs=12** (full batching) | 5.754 req/s (17s) [.580] | 8.181 (12s) [.550] | 10.095 (10s) [.450] |
 
-Artifacts: `runs/p2_d/m2_{c1,c12}_{r0,r50,r75}.json`, `runs/p2_d/m2_matrix.log`.
+**Pruning speedup over r0, split by concurrency (the decisive comparison):**
+| prune | speedup @ c1 (latency-only) | speedup @ c12 (KV-pressure-bound) | delta (concurrency bonus) |
+|---|---|---|---|
+| r50 | **1.17×** | **1.42×** | +0.25 |
+| r75 | **1.26×** | **1.76×** | +0.49 |
 
-### Verdict M2: <!-- M2_VERDICT -->
+Artifacts: `runs/p2_d/m2_{c1,c12}_{r0,r50,r75}.json`, `runs/p2_d/m2_matrix.log`,
+`scripts/analyze_m2.py`.
+
+### Verdict M2: **load-adaptive budget STRONGLY JUSTIFIED.**
+The req/s speedup from pruning GROWS markedly with engine concurrency: r50 goes
+1.17×→1.42× and r75 goes 1.26×→1.76× as concurrency rises 1→12. Under high load,
+KV-cache pressure is the bottleneck and pruning relieves it disproportionately
+(smaller per-request KV → more concurrent requests fit → higher throughput). The
+effect is monotone AND grows with prune depth (r75's concurrency bonus +0.49 is
+~2× r50's +0.25). **This is the most novel serving-specific lever (0/37 papers
+measure it) and M2 confirms it is real and large.** ⇒ D's core should be a
+prune-rate that responds to engine concurrency / KV-cache occupancy, amplifying
+the serving win exactly where the speedup is largest.
 
 ---
 
 ## D-scope recommendation
 
-<!-- D_SCOPE -->
+Based on M1 (vt_frac=6.6%) + M2 (speedup grows with concurrency):
 
-(Based on M1 + M2 verdicts — filled when M2 completes.)
+**BUILD (high value, validated):**
+1. **Load-adaptive / KV-cache-aware budget** — D's CORE. Prune rate r(concurrency,
+   KV-occupancy) rises under high load. M2 shows r75's speedup grows +0.49 (1.26×
+   →1.76×) from c1→c12 — the largest, most novel serving-specific win. Concretely:
+   monitor vLLM's running `max_num_seqs` / KV-cache usage, set r ∈ [r_min, r_max]
+   (e.g. [0.25, 0.75]) adaptively. This is the contribution 0/37 papers make.
+
+**SKIP (low value, validated):**
+2. **Early / mid-encoder ViT prune** — M1 shows the vision tower is only 6.6% of
+   prefill. Surgery on the ViT (drop patches after an early layer) caps the extra
+   prefill win at ~7% and risks breaking the CLIP features the proxy selector
+   relies on. NOT worth it; the win is all LLM-sequence-shortening, already captured.
+
+**KEEP (already working, the evaluation differentiator):**
+3. **Served-throughput reporting** (req/s, tok/s, TTFT) at multiple concurrency
+   levels — the 0/37-papers gap; report the M2-style concurrency×prune matrix as a
+   headline result, not just single-ratio speedups.
+
+**Net D = proxy selector (kept, best boundary accuracy) + load-adaptive budget
+(new core) + concurrency-aware served-throughput eval (new headline).** No ViT
+surgery, no new selector (the 3 boundary selectors all failed on OCR). D's novelty
+is entirely on the SERVING side, which is exactly where the open gap is.
+
+**Accuracy guardrail (from the matrix):** r50 drops GQA acc 0.580→0.550 (−3.0pp),
+r75 drops to 0.450 (−13pp). So the load-adaptive budget's r_max should stay ≤0.50
+for GQA-class tasks (r75 is too lossy); OCR/TextVQA may need an even tighter cap.
+The proxy selector's accuracy (established in v1 comparison) is the floor.
 
 ---
 
