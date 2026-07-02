@@ -3,7 +3,7 @@
 > P4 prep. Every number the paper will cite, organized as paper tables. Each row
 > is tagged with its source file. **Read this doc, not the underlying logs, for
 > paper numbers.** Base: LLaVA-1.5-7B-hf · Engine: vLLM 0.10.2 V0 · 1× A40 46GB.
-> Last updated 2026-07-02.
+> Last updated 2026-07-02 (P3-step-3 n=500 GATE added).
 
 ---
 
@@ -87,8 +87,20 @@ r75 cuts tokens 4× but yields only 1.30× prefill speedup. Cause: pruning is at
 ## Table C — Method Pareto across 5 benchmarks (the supporting method result)
 
 > Frame: **throughput-optimal under a per-benchmark accuracy guardrail** — NOT "Pareto-dominant everywhere" (honest).
-> Controller: num_running/max_num_seqs signal, conc_lo=0.25/conc_hi=0.75, r∈[0.25,0.50], mt64, c12, bursty load, n=200 per benchmark.
-> Sources: `notes/p3s1_pareto.md` (GQA, TextVQA n=200), `notes/p3s2_pareto.md` (MME, MMBench, ScienceQA).
+> Controller: num_running/max_num_seqs signal, conc_lo=0.25/conc_hi=0.75, r∈[0.25,0.50], mt64, c12, bursty load.
+> Sources: `notes/p3s1_pareto.md` (GQA, TextVQA n=200), `notes/p3s2_pareto.md` (MME, MMBench, ScienceQA), **`notes/p3s3_pareto_n500.md` (n=500 tightening — the GATE)**.
+
+> **⚠ P3-step-3 n=500 GATE RESULT (2026-07-02, load-bearing):** re-running the
+> Pareto comparison at n=500 (acc stderr ~±0.022 vs n=200's ~±0.031) REVERSED
+> the two n=200 Pareto-dominate cases. **MME and ScienceQA no longer
+> Pareto-dominate at n=500** (acc margins ±0.014/−0.010 are noise; MME's req/s
+> win over r25 also evaporated to a dead heat). MMBench's strict "Pareto" label
+> at n=500 is a +0.014 acc-margin artifact (|z|=0.49, noise) — honestly a
+> req/s-win + acc-tie. **True clean Pareto-dominate count at n=500 = 0/5.**
+> The method is therefore reframed as "free throughput over r25 at iso-accuracy-
+> to-r25" (NOT a Pareto win). The n=200 sub-tables below are RETAINED for the
+> record but the paper must cite n=500 numbers (Table C-n500). See
+> `notes/p3s3_pareto_n500.md` §5–6 for the full honest interpretation + framing.
 
 ### C1 — GQA (n=200, mt32, bursty)
 | config | req/s | acc | Δreq/s vs r25 | Δacc vs r50 | verdict |
@@ -139,8 +151,11 @@ r75 cuts tokens 4× but yields only 1.30× prefill speedup. Cause: pruning is at
 | fixed r25 | 2.936 | 0.675 | — | — | — |
 | fixed r50 | 3.165 | 0.670 | — | — | — |
 
-### Cross-benchmark summary (the honest pattern)
+### Cross-benchmark summary (the honest pattern) — n=200, SUPERSEDED by n=500 below
 > The discriminator is **per-benchmark r50-acc-cost**, NOT answer density.
+> ⚠ **This n=200 summary is RETAINED FOR THE RECORD ONLY.** The n=500 re-run
+> (Table C-n500) REVERSED MME/ScienceQA — the "2/5 Pareto-dominate" claim does
+> NOT survive the noise gate. Use Table C-n500 for all paper numbers.
 
 | benchmark | r50 acc-costly? | adaptive verdict | req/s win over r25 |
 |---|---|---|---|
@@ -151,6 +166,36 @@ r75 cuts tokens 4× but yields only 1.30× prefill speedup. Cause: pruning is at
 | MMBench | no (r50 0.730 ≥ r25 0.725) | req/s only | +0.072 |
 
 **Robust signal (across ALL 5 benchmarks):** adaptive beats r25 on req/s (+2–7%). The accuracy win over r50 is real ONLY where r50 is accuracy-costly (MME, ScienceQA = 2/5). **This is the paper's honest method claim.**
+
+### Table C-n500 — n=500 Pareto (the GATE; supersedes the n=200 sub-tables above)
+> Source: `notes/p3s3_pareto_n500.md`. All runs c12, bursty, num_running controller,
+> r∈[0.25,0.50], conc-lo 0.25/conc-hi 0.75, seed=0. GQA mt32; MME/MMBench/ScienceQA mt64.
+> acc sig: |Δacc|<0.022=noise (|z|<1); 0.022–0.044=suggestive; ≥0.044=meaningful (n=500).
+
+| benchmark | config | req/s | acc | Δreq/s vs r25 | Δacc vs r50 | acc sig | verdict (n=500) |
+|---|---|---|---|---|---|---|---|
+| **GQA** (mt32) | adaptive | 2.383 | 0.556 | −0.006 (LOSS) | −0.006 (LOSS) | noise (z=−0.19) | dominated (r50 best on both) |
+|  | fixed r25 | 2.389 | 0.556 | — | — | — | — |
+|  | fixed r50 | 2.607 | 0.562 | — | — | — | dominates |
+| **MME** (mt64) | adaptive | 2.588 | 0.766 | −0.002 (tie) | +0.014 (WIN) | **noise (z=+0.52)** | acc-tie + req/s-tie → **REVERSED** (was Pareto at n=200) |
+|  | fixed r25 | 2.590 | 0.758 | — | — | — | — |
+|  | fixed r50 | 2.749 | 0.752 | — | — | — | highest req/s |
+| **MMBench** (mt64) | adaptive | 3.101 | 0.726 | +0.053 (WIN) | +0.014 (WIN) | **noise (z=+0.49)** | req/s-win + acc-tie (strict-Pareto label is a noise artifact) |
+|  | fixed r25 | 3.048 | 0.726 | — | — | — | — |
+|  | fixed r50 | 3.299 | 0.712 | — | — | — | highest req/s |
+| **ScienceQA** (mt64) | adaptive | 3.050 | 0.620 | +0.052 (WIN) | −0.010 (LOSS) | **noise (z=−0.33)** | req/s-win only → **REVERSED** (was Pareto at n=200) |
+|  | fixed r25 | 2.999 | 0.618 | — | — | — | — |
+|  | fixed r50 | 3.229 | 0.630 | — | — | — | highest req/s + acc |
+| **TextVQA** (n=500, mt32) | adaptive | 2.270 | 0.510 | +0.037 (WIN) | −0.016 (LOSS) | noise (z=−0.51) | req/s-win only (unchanged from n=200) |
+|  | fixed r25 | 2.233 | 0.510 | — | — | — | — |
+|  | fixed r50 | 2.390 | 0.526 | — | — | — | dominates |
+
+**★ n=500 GATE verdict (load-bearing):** clean Pareto-dominate count = **0/5** at n=500.
+- **MME, ScienceQA REVERSED** — the n=200 acc Pareto half (±0.015) was noise; MME's n=200 req/s win (+0.045) also collapsed to a dead heat (−0.002).
+- **req/s-over-r25 is NOT uniform**: clean WIN on MMBench (+0.053), ScienceQA (+0.052), TextVQA (+0.037); TIE on GQA (−0.006) and MME (−0.002).
+- **r50 has the highest req/s on 4/5 benchmarks** (GQA, MME, MMBench, ScienceQA) — when the deployer can tolerate r50's acc, fixed-r50 is the throughput winner; adaptive's niche is recovering throughput at the r25 accuracy floor.
+
+**Honest reframed method claim (use this in the paper):** *"a load-adaptive prune-depth controller that delivers a throughput win over the accuracy-favoring fixed point (r25) on the dense/MC benchmarks (MMBench +5.3%, ScienceQA +5.2%, TextVQA +3.7%) at iso-accuracy-to-r25 — a free throughput gain at the r25 floor. It does not beat fixed-r50 on accuracy or throughput; the deployer choosing r50 gets higher throughput still. The method's value is recovering ~half the r25→r50 throughput gap when r25 is the mandated accuracy floor."* This is a supporting (non-Pareto) method result; the measurement contribution carries the paper.
 
 ---
 
@@ -236,14 +281,14 @@ Realized-r is **bimodal** (0.25 or 0.50) because alternating bursts saturate to 
 
 > **Honest risk register.** These are flagged so the paper does not over-claim.
 
-1. **TextVQA: MUST report n=500, NOT n=200.** The n=200 adaptive>r50 acc win (+0.020) reverses at n=500 (−0.016, n.s.). Any table/figure using n=200 TextVQA acc is misleading. ✅ n=500 data already collected (`notes/p3s2_pareto.md` §3).
-2. **GQA acc at n=200 is noisy.** mt32 r25 0.550 / r50 0.565 are within n=200 noise (mt16 had both at 0.522). The *directional* finding (r50 acc-neutral on short-answer GQA) is robust, but the per-cell numbers should be re-run at n=500 or full val for the paper's accuracy table. **Flag: GQA accuracy needs n=500/full-val.**
-3. **MME/MMBench/ScienceQA at n=200.** The Pareto-dominate verdicts (MME, ScienceQA) rest on +0.015 acc margins — within n=200 noise. The req/s wins (+0.045 to +0.070) are robust; the acc claims need n=500/full-val to be defensible. **Flag: 3-benchmark acc needs n=500/full-val.**
+1. **TextVQA: MUST report n=500, NOT n=200.** The n=200 adaptive>r50 acc win (+0.020) reverses at n=500 (−0.016, n.s.). ✅ RESOLVED — n=500 data in `notes/p3s2_pareto.md` §3.
+2. **GQA acc at n=200 is noisy.** ✅ RESOLVED at n=500 (`notes/p3s3_pareto_n500.md`): adaptive 0.556 / r25 0.556 / r50 0.562 — r50 remains acc-neutral/best; adaptive loses. n=200 directional finding holds.
+3. **MME/MMBench/ScienceQA at n=200 — Pareto claims noise-checked.** ✅ RESOLVED at n=500 (`notes/p3s3_pareto_n500.md`): the n=200 Pareto-dominate verdicts (MME, ScienceQA) **REVERSED** at n=500 — acc margins were noise; MME's req/s win also collapsed to a tie. **True clean Pareto-dominate count at n=500 = 0/5.** Method reframed as "free throughput over r25 at iso-acc-to-r25" (NOT a Pareto win). See Table C-n500 above.
 4. **Single base (LLaVA-1.5-7B).** No Qwen3-VL-8B generalization row yet (deferred — see limitations).
 5. **Single concurrency level for Pareto (c12).** Pareto table is at c12 only; c1/c4 Pareto not run (would strengthen the concurrency-amplification story).
 6. **Realized-r is bimodal** (0.25/0.50, no intermediate) because bursts saturate the thresholds. A middle-tier burst would produce intermediate r — cosmetic for the figure, not load-bearing.
 
 **Recommended pre-submission runs (for Main to schedule, NOT this synthesis task):**
-- GQA + 3 new benchmarks at n=500 (or full val) to tighten accuracy.
-- Pareto at c4 (mid-concurrency) to show the amplification curve on the Pareto frontier.
+- ~~GQA + 3 new benchmarks at n=500 (or full val) to tighten accuracy.~~ ✅ DONE 2026-07-02 (P3-step-3).
+- Pareto at c4 (mid-concurrency) to show the amplification curve on the throughput frontier.
 - (Stretch) Qwen3-VL-8B generalization row — reframe compression as redundancy-elimination at high visual budgets.
