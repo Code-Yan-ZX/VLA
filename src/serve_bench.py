@@ -224,7 +224,63 @@ def score_textvqa(pred: str, gt: str, choices: Optional[list[str]] = None) -> in
     return 0
 
 
-SCORERS = {"gqa": score_gqa, "textvqa": score_textvqa}
+def score_yesno(pred: str, gt: str, choices: Optional[list[str]] = None) -> int:
+    """Yes/no scorer for MME (gt in {"yes","no"}).
+
+    Matches the GQA yes/no lead-token rule: correct if the model's LEAD
+    alnum word is the gt yes/no token. Deterministic, no external deps.
+    (signature-compatible with score_gqa's choices arg; unused here.)
+    """
+    if not gt:
+        return 0
+    g = gt.strip().lower()
+    if g not in {"yes", "no"}:
+        return 0
+    p_words = _norm_words(pred)
+    for w in p_words:
+        if w in {"a", "an", "the"}:
+            continue
+        return 1 if w == g else 0
+    return 0
+
+
+def score_mc_letter(pred: str, gt: str, choices: Optional[list[str]] = None) -> int:
+    """Multiple-choice letter scorer for MMBench / ScienceQA.
+
+    Extracts the model's FIRST option letter (A-Z) from the answer and matches
+    it to gt (which must itself be a single letter "A"/"B"/...). Handles common
+    answer phrasings: "A", "A.", "A:", "Option A", "The answer is B", "B. foo".
+    Deterministic, no external deps.
+    """
+    if not gt:
+        return 0
+    g = gt.strip().upper()
+    if not (len(g) == 1 and g.isalpha()):
+        return 0
+    p = pred.strip().upper()
+    if not p:
+        return 0
+    # scan tokens for the first that is exactly a letter (optionally followed by ./:/comma)
+    # word-split on whitespace so "OPTION A" -> "A" is caught, "B. text" -> "B." -> B
+    for tok in p.split():
+        core = tok.rstrip(".,:;)\"'")
+        if len(core) == 1 and core.isalpha():
+            return 1 if core == g else 0
+        # the letter may be glued: "A)foo" -> core "A)FOO" no; rare. Also catch
+        # the standalone-letter-at-start case below if no token was clean.
+    # fallback: first char if it's a letter
+    if p[0].isalpha():
+        return 1 if p[0] == g else 0
+    return 0
+
+
+SCORERS = {
+    "gqa": score_gqa,
+    "textvqa": score_textvqa,
+    "mme": score_yesno,
+    "mmbench": score_mc_letter,
+    "scienceqa": score_mc_letter,
+}
 
 
 # --------------------------------------------------------------------------- #
@@ -1254,7 +1310,8 @@ def main() -> None:
     ap.add_argument("--model", required=True)
     ap.add_argument("--pruning-rate", type=float, default=0.0,
                     help="fraction of visual tokens to DROP (0=control)")
-    ap.add_argument("--benchmark", required=True, choices=["gqa", "textvqa"])
+    ap.add_argument("--benchmark", required=True,
+                    choices=["gqa", "textvqa", "mme", "mmbench", "scienceqa"])
     ap.add_argument("--subset", required=True, help="JSONL subset path")
     ap.add_argument("--metrics-out", required=True)
     ap.add_argument("--max-tokens", type=int, default=32)

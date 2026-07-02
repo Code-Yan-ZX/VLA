@@ -190,7 +190,8 @@ def main() -> None:
     ap.add_argument("--model-path", default="/media/disk2/YZX/doct/FastV/llava-v1.5-7b",
                     help="LLaVA-1.5-7B in original LLaVA format (pytorch_model*.bin)")
     ap.add_argument("--model-base", default=None)
-    ap.add_argument("--benchmark", required=True, choices=["gqa", "textvqa"])
+    ap.add_argument("--benchmark", required=True,
+                    choices=["gqa", "textvqa", "mme", "mmbench", "scienceqa"])
     ap.add_argument("--subset", required=True, help="JSONL subset path (same as serve_bench)")
     ap.add_argument("--metrics-out", required=True)
     ap.add_argument("--keep-tokens", type=int, default=288,
