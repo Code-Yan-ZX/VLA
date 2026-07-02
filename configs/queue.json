@@ -255,6 +255,78 @@
       "note": "FastV @ r50 on TextVQA. OCR-robustness anchor: proxy r50 was 0.530 (-2.5%). FastV is known to degrade on OCR at high prune -- this characterizes whether intra-LLM pruning preserves text-region tokens better than boundary CLS-attn. The OCR comparison (FastV vs v1 true_cls) is a key table row.",
       "rc": 0,
       "last_run": 1782901046
+    },
+    {
+      "name": "d_gqa_adaptive_bursty_n200",
+      "cmd": "/home/dell/miniconda3/envs/vtc_serve/bin/python -m src.serve_bench --model runs/models/llava-1.5-7b-hf --benchmark gqa --subset eval/subsets/gqa_200.jsonl --metrics-out runs/p2_d/gqa_adaptive_bursty_n200.json --max-tokens 16 --max-model-len 4096 --gpu-memory-utilization 0.85 --seed 0 --selector proxy --max-num-seqs 12 --adaptive --r-min 0.25 --r-max 0.50 --occ-lo 0.02 --occ-hi 0.10 --load-signal kv_occupancy --load-profile bursty",
+      "priority": 100,
+      "est_min": 4,
+      "deps": [],
+      "status": "pending",
+      "note": "ADAPTIVE r=[0.25,0.50] under bursty load, GQA n=200. THE method config. Compare req/s+acc vs the two fixed points (d_gqa_fixed_r25_bursty_n200, d_gqa_fixed_r50_bursty_n200). Claim: adaptive Pareto-dominates (higher req/s than r25, higher acc than r50)."
+    },
+    {
+      "name": "d_gqa_fixed_r25_bursty_n200",
+      "cmd": "/home/dell/miniconda3/envs/vtc_serve/bin/python -m src.serve_bench --model runs/models/llava-1.5-7b-hf --benchmark gqa --subset eval/subsets/gqa_200.jsonl --metrics-out runs/p2_d/gqa_fixed_r25_bursty_n200.json --max-tokens 16 --max-model-len 4096 --gpu-memory-utilization 0.85 --seed 0 --selector proxy --max-num-seqs 12 --pruning-rate 0.25 --load-profile bursty",
+      "priority": 95,
+      "est_min": 3,
+      "deps": [],
+      "status": "pending",
+      "note": "FIXED r=0.25 under bursty, GQA n=200. The accuracy-favoring fixed point on the req/s-accuracy frontier."
+    },
+    {
+      "name": "d_gqa_fixed_r50_bursty_n200",
+      "cmd": "/home/dell/miniconda3/envs/vtc_serve/bin/python -m src.serve_bench --model runs/models/llava-1.5-7b-hf --benchmark gqa --subset eval/subsets/gqa_200.jsonl --metrics-out runs/p2_d/gqa_fixed_r50_bursty_n200.json --max-tokens 16 --max-model-len 4096 --gpu-memory-utilization 0.85 --seed 0 --selector proxy --max-num-seqs 12 --pruning-rate 0.50 --load-profile bursty",
+      "priority": 95,
+      "est_min": 3,
+      "deps": [],
+      "status": "pending",
+      "note": "FIXED r=0.50 under bursty, GQA n=200. The throughput-favoring fixed point."
+    },
+    {
+      "name": "d_gqa_adaptive_constant_n200",
+      "cmd": "/home/dell/miniconda3/envs/vtc_serve/bin/python -m src.serve_bench --model runs/models/llava-1.5-7b-hf --benchmark gqa --subset eval/subsets/gqa_200.jsonl --metrics-out runs/p2_d/gqa_adaptive_constant_n200.json --max-tokens 16 --max-model-len 4096 --gpu-memory-utilization 0.85 --seed 0 --selector proxy --max-num-seqs 12 --adaptive --r-min 0.25 --r-max 0.50 --occ-lo 0.02 --occ-hi 0.10 --load-signal kv_occupancy --load-profile constant",
+      "priority": 80,
+      "est_min": 3,
+      "deps": [],
+      "status": "pending",
+      "note": "ADAPTIVE under CONSTANT (max) load. Sanity: controller should sit at ~r_max (heavy load the whole time) -> matches fixed-r50. Validates the controller reacts correctly to sustained load."
+    },
+    {
+      "name": "d_gqa_adaptive_step_n200",
+      "cmd": "/home/dell/miniconda3/envs/vtc_serve/bin/python -m src.serve_bench --model runs/models/llava-1.5-7b-hf --benchmark gqa --subset eval/subsets/gqa_200.jsonl --metrics-out runs/p2_d/gqa_adaptive_step_n200.json --max-tokens 16 --max-model-len 4096 --gpu-memory-utilization 0.85 --seed 0 --selector proxy --max-num-seqs 12 --adaptive --r-min 0.25 --r-max 0.50 --occ-lo 0.02 --occ-hi 0.10 --load-signal kv_occupancy --load-profile step",
+      "priority": 85,
+      "est_min": 4,
+      "deps": [],
+      "status": "pending",
+      "note": "ADAPTIVE under STEP profile (low->high->low staircase). Cleanest visualization of the controller tracking load: r should rise to r_max in the high phase, fall to r_min in the low phases. The realized-r time-series is the figure for the paper."
+    },
+    {
+      "name": "d_textvqa_adaptive_bursty_n200",
+      "cmd": "/home/dell/miniconda3/envs/vtc_serve/bin/python -m src.serve_bench --model runs/models/llava-1.5-7b-hf --benchmark textvqa --subset eval/subsets/textvqa_200.jsonl --metrics-out runs/p2_d/textvqa_adaptive_bursty_n200.json --max-tokens 32 --max-model-len 4096 --gpu-memory-utilization 0.85 --seed 0 --selector proxy --max-num-seqs 12 --adaptive --r-min 0.25 --r-max 0.50 --occ-lo 0.02 --occ-hi 0.10 --load-signal kv_occupancy --load-profile bursty",
+      "priority": 70,
+      "est_min": 5,
+      "deps": [],
+      "status": "pending",
+      "note": "ADAPTIVE on TextVQA (OCR-heavy), r_max=0.50 guardrail. Validate the r_max drop is acceptable on OCR (proxy r50 was -2.5%, within the 5% gate). If TextVQA acc at r_max is too low, tighten r_max for TextVQA (e.g. 0.40) and re-run."
+    },
+    {
+      "name": "d_textvqa_fixed_r25_bursty_n200",
+      "cmd": "/home/dell/miniconda3/envs/vtc_serve/bin/python -m src.serve_bench --model runs/models/llava-1.5-7b-hf --benchmark textvqa --subset eval/subsets/textvqa_200.jsonl --metrics-out runs/p2_d/textvqa_fixed_r25_bursty_n200.json --max-tokens 32 --max-model-len 4096 --gpu-memory-utilization 0.85 --seed 0 --selector proxy --max-num-seqs 12 --pruning-rate 0.25 --load-profile bursty",
+      "priority": 70,
+      "est_min": 5,
+      "deps": [],
+      "status": "pending",
+      "note": "FIXED r=0.25 on TextVQA (bursty). TextVQA accuracy-favoring fixed point."
+    },
+    {
+      "name": "d_textvqa_fixed_r50_bursty_n200",
+      "cmd": "/home/dell/miniconda3/envs/vtc_serve/bin/python -m src.serve_bench --model runs/models/llava-1.5-7b-hf --benchmark textvqa --subset eval/subsets/textvqa_200.jsonl --metrics-out runs/p2_d/textvqa_fixed_r50_bursty_n200.json --max-tokens 32 --max-model-len 4096 --gpu-memory-utilization 0.85 --seed 0 --selector proxy --max-num-seqs 12 --pruning-rate 0.50 --load-profile bursty",
+      "priority": 70,
+      "est_min": 5,
+      "deps": [],
+      "status": "pending",
+      "note": "FIXED r=0.50 on TextVQA (bursty). Validates the r_max guardrail drop on OCR."
     }
   ]
 }
