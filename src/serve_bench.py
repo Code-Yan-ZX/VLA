@@ -858,6 +858,12 @@ def run(args) -> dict:
     load_profile = getattr(args, "load_profile", None)
     adaptive = bool(getattr(args, "adaptive", False))
     k_cell = getattr(projector, "_vtc_k_cell", None)
+    # target_k = the FIXED kept-token count for the run (defined in build_engine;
+    # stashed on hook_state). Used as the non-adaptive fallback in the load-
+    # profile diagnostic log and the projector hook's _cur_k(). For adaptive,
+    # k_cell['k'] is the live value instead.
+    _hs = getattr(projector, "_vtc_hook_state", {})
+    target_k = _hs.get("target_k", max(1, int(round(576 * (1.0 - args.pruning_rate)))))
 
     # ---- adaptive controller (method D core) ----
     # Built once; decide_r() is called before each submission to set the per-
