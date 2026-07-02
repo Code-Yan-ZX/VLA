@@ -953,36 +953,55 @@ def run(args) -> dict:
                 r_seg0 = getattr(args, "pruning_rate", 0.0)
                 if k_cell is not None:
                     k_cell["k"] = max(1, int(round(576 * (1.0 - r_seg0))))
-            # ---- add this segment's requests one-at-a-time (non-blocking) ----
+            # ---- add this segment's requests with INTERLEAVED step() --------
+            # add_request only ENQUEUES (to scheduler.waiting); KV is allocated
+            # and requests move to .running only when step() runs the scheduler.
+            # So to let the load read before request N+1 see request N's KV, we
+            # add ONE request, step() enough to schedule it (allocating KV), then
+            # read load for the next. This is the faithful online loop: each new
+            # request sees the KV-pressure from already-running requests.
             seg_req_ids = []
             seg_r_used = {}   # req_id -> r decided for that request
-            for s in batch_samples:
-                # ADAPTIVE intra-segment: re-read load before each add so later
-                # adds (with earlier ones now queued) see rising occupancy ->
-                # r rises within the segment. This is the faithful online loop.
+            seg_finished: dict = {}
+            t_seg_start = time.perf_counter()
+            for si, s in enumerate(batch_samples):
+                # decide r for THIS request from current load (earlier requests
+                # in this segment are already running -> KV-occupancy has risen)
                 if adaptive:
                     r_req = _decide_and_set_k()
                 else:
                     r_req = r_seg0
+                    if k_cell is not None:
+                        k_cell["k"] = max(1, int(round(576 * (1.0 - r_req))))
                 rid = f"dval_{req_counter}"; req_counter += 1
                 seg_req_ids.append(rid)
                 seg_r_used[rid] = r_req
                 # preprocess THIS request's prompt at its per-request r (the
                 # get_num_image_tokens patch reads k_cell -> correct placeholder
-                # count for this request's r).
+                # count for this request's r), then enqueue it (non-blocking).
                 msgs = _build_messages(s)
                 prepped = llm.preprocess_chat(msgs)[0]
                 engine.add_request(rid, prepped, sp)
-            # ---- step the engine until all segment requests finish ----
-            seg_finished: dict = {}
-            t_seg_drain = time.perf_counter()
+                # step() enough to schedule the just-added request so the NEXT
+                # iteration's load read sees its KV allocation. One step schedules
+                # + executes one decode iteration; for the FIRST request of a
+                # segment this also does its prefill. A couple of steps let the
+                # scheduler move it from waiting->running and allocate blocks.
+                for _ in range(2):
+                    if not engine.has_unfinished_requests():
+                        break
+                    step_outs = engine.step()
+                    for o in step_outs:
+                        if o.finished:
+                            seg_finished[o.request_id] = o
+            # ---- drain: step until ALL segment requests finish ----
             while engine.has_unfinished_requests():
                 step_outs = engine.step()
                 for o in step_outs:
                     if o.finished:
                         seg_finished[o.request_id] = o
                 # safety: bound the step loop (avoid infinite loop on pathology)
-                if time.perf_counter() - t_seg_drain > 300:
+                if time.perf_counter() - t_seg_start > 300:
                     print(f"[serve_bench] WARN: segment {seg_idx} drain >300s, "
                           f"breaking step loop", flush=True)
                     break

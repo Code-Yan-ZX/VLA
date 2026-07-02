@@ -36,8 +36,12 @@ run_one () {
 }
 
 # 1. ADAPTIVE under bursty (the method's headline case)
+# Thresholds CALIBRATED to the engine's achievable occ range at c12/short-seq:
+# peak occ at full saturation (num_running=12) is ~0.11, so occ_lo/occ_hi span
+# 0.02-0.10 to map the observed load swing across r_min->r_max. (With the
+# default 0.40/0.70 the controller never sees enough load to leave r_min.)
 run_one dval_adaptive_bursty --adaptive --r-min 0.25 --r-max 0.50 \
-    --occ-lo 0.40 --occ-hi 0.70 --load-signal kv_occupancy --load-profile bursty
+    --occ-lo 0.02 --occ-hi 0.10 --load-signal kv_occupancy --load-profile bursty
 
 # 2. FIXED r25 under bursty (accuracy-favoring fixed point)
 run_one dval_fixed_r25_bursty --pruning-rate 0.25 --load-profile bursty
@@ -47,6 +51,6 @@ run_one dval_fixed_r50_bursty --pruning-rate 0.50 --load-profile bursty
 
 # 4. ADAPTIVE under constant (sanity: should ~= fixed-r50 at max load)
 run_one dval_adaptive_constant --adaptive --r-min 0.25 --r-max 0.50 \
-    --occ-lo 0.40 --occ-hi 0.70 --load-signal kv_occupancy --load-profile constant
+    --occ-lo 0.02 --occ-hi 0.10 --load-signal kv_occupancy --load-profile constant
 
 echo "[dval] ALL DONE $(date +%H:%M:%S) — analyze with scripts/analyze_d.py"
