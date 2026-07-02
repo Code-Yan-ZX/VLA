@@ -243,3 +243,58 @@ A fixed prune rate `r` is globally suboptimal under continuous batching:
 **Artifacts:** `runs/p2_v2/v2_gqa_r50_limit3_check.json` (mechanism), `runs/p2_v2/v2_textvqa_r50_limit50_check.json` (directional OCR, query_aware), `runs/p2_v2/proxy_textvqa_r50_limit50_control.json` (matched proxy control), `runs/p2_v2/v2_textvqa_r50_limit50_mean.json` (mean pool). Full v2 probe jobs: `notes/v2_probe_jobs.json` (8 jobs, gqa+textvqa × r0/r25/r50/r75, query_aware).
 
 — End Part III. v2-step-1 code in `src/compressors.py` (`QueryAwareSelector`, `text_patch_scores`); wiring in `src/serve_bench.py`; probe jobs in `notes/v2_probe_jobs.json`. —
+
+---
+
+# Part IV — FINAL Method Spec (LOCKED, P4 writing reference)
+
+> Subagent deliverable, 2026-07-02. **This is the authoritative method spec for
+> the paper.** Parts I–III are retained as the selector-history provenance for
+> the paper's Table D (3 boundary failures). Part IV supersedes all prior
+> framing where they conflict.
+> Companion data: `eval/final_results.md` (Tables A–F). Companion outline:
+> `drafts/outline.md`.
+
+## 1. One-line frame (LOCKED)
+
+**A load-adaptive visual-token budget that is *throughput-optimal under a per-benchmark accuracy guardrail* — NOT Pareto-dominant.** The method is the SUPPORTING contribution; the served-throughput measurement (0/37 gap) + 3 serving-specific findings are the MAIN contribution.
+
+## 2. Components (3, all locked)
+
+### 2a. Selector — proxy hidden-state deviation (KEPT, not chased further)
+- **Signal:** post-projector hidden-state deviation norm per patch; top-k by score at the `LlavaMultiModalProjector.forward` output (the vLLM boundary hook, `llava.py:660`).
+- **Why proxy (the locked decision):** 3 distinct training-free boundary selectors all underperform proxy on OCR — v1 true CLS-attn (TextVQA r50 0.445), v2 LLM-embed cosine (~0.38), A'' CLIP contrastive (0.180) vs proxy 0.530. CLIP-contrastive is catastrophic because CLIP's contrastive loss aligns only pooled [CLS], not per-patch features. **The boundary-TF-OCR ceiling is the proxy.** FastV (intra-LLM, 0.555) is more accurate but NOT vLLM-integrable (FlashAttention fuses softmax + V1 subprocess + CUDA-graph-locked decode).
+- **Accept proxy-level accuracy.** A learned component (FlashVLM-style projection head) could break the ceiling — explicitly OUT of scope (training-free constraint + 1× A40).
+
+### 2b. Load-adaptive controller (the core serving-specific novel lever)
+- **Signal (locked):** `num_running / max_num_seqs` (concurrency fraction, spans [0,1]). KV-occupancy peaks at only ~0.04 in the c12/short-seq regime (KV pool of 3085 blocks ≫ 12 short seqs' ~120 blocks) so the controller barely left r_min under the earlier KV-occupancy signal; the concurrency fraction spans the full range and drives realized-r across [r_min, r_max].
+- **Map (locked):** piecewise-linear, `conc_lo = 0.25`, `conc_hi = 0.75` (at c12: r_min below 3 concurrent, r_max above 9). `r ∈ [r_min, r_max] = [0.25, 0.50]`.
+- **Fallback (locked):** KV-occupancy (`get_num_free_gpu_blocks / num_total_gpu_blocks`) for long-sequence regimes; each signal cross-falls back to the other if its reading is None.
+- **Actuation:** the patched `get_num_image_tokens` reads a MUTABLE `k_cell["k"]` per call; `run()` updates `k_cell["k"]` from `controller.decide_r(read_engine_load())` before every segment submission. The projector hook ALSO reads `k_cell` so kept-count matches the per-segment placeholder count exactly.
+
+### 2c. Accuracy guardrail (the mechanism that bounds accuracy loss)
+- **r_max ≤ 0.50** globally (r75 drops GQA acc ~11%, too lossy; r50 ~−2% on GQA, ~−3% on TextVQA OCR).
+- **Per-benchmark r_max tuning** = the guardrail mechanism. Where r50 is acc-costly (MME, ScienceQA), r_max=0.50 lets adaptive capture the throughput gain while pruning less under light load (avoids most of the r50 acc drop). Where r50 is acc-neutral (GQA, MMBench), the guardrail allows r_max but adaptive still loses to fixed-r50 on raw req/s (honest — see final_results.md Table C).
+- **Net honest claim:** adaptive beats fixed-r25 on req/s on ALL 5 benchmarks (+2–7%); beats fixed-r50 on accuracy ONLY where r50 is acc-costly (MME, ScienceQA = 2/5). NOT universally Pareto-dominant.
+
+## 3. vLLM V0 integration (locked — the 3 structural hurdles)
+
+1. **Engine-load read (SOLVED):** `llm.llm_engine.scheduler[0].running` (deque → num running seqs) + `.block_manager.get_num_free_gpu_blocks() / .num_total_gpu_blocks` (→ KV-occupancy). V0 runs the model in-process so the scheduler is reachable; no fallback needed in V0.
+2. **Sync `llm.chat()` drains the engine** ⇒ controller reading load at call boundaries always sees empty engine. Fix: **engine-level streaming loop** (`add_request` + `step`), one segment at a time, draining fully between segments. Load sampled mid-drain (peak), fed to NEXT segment's decision (**one-segment lag** — a legitimate reactive control loop).
+3. **Batched forward + shared projector-hook k** ⇒ all requests in flight during a forward must share the same k (else masked_scatter placeholder/kept-count mismatch). **Per-segment r (not per-request)** guarantees this. PLUS `engine.reset_mm_cache()` between segments (else stale placeholder count reused from mm_processor_cache). PLUS `enforce_eager=True` for adaptive (varying seq length vs CUDA graph capture).
+
+## 4. What the method is NOT (locked, to pre-empt reviewers)
+
+- NOT a new accuracy SOTA — proxy matches FastV-ish, does not beat it.
+- NOT a new selector — 3 boundary TF selectors failed on OCR; proxy is the structural TF-boundary ceiling.
+- NOT universally Pareto-dominant — benchmark-conditional (Pareto-dominate only where r50 is acc-costly).
+- NOT a multi-base study — single base (LLaVA-1.5-7B); Qwen3-VL-8B generalization is future work.
+
+## 5. Code provenance (locked)
+
+- `src/load_controller.py` — controller policy + load profiles (constant/bursty/step) + LoadReading (num_running, kv_occupancy, max_num_seqs, concurrency_fraction).
+- `src/serve_bench.py` — adaptive mode, k_cell plumbing, engine-level streaming loop, per-segment r, reset_mm_cache, enforce_eager.
+- `src/compressors.py` — proxy selector (kept) + the 3 failed selectors (v1/v2/A'', retained for the ablation table).
+- Commits: 58eb900 → 44c416d → 47cec96 → 039d6b5 → a5e7331 → 6227dbe → 2e9e743 → 78ea690 (num_running controller + gap-block bug fix) → 7eb8c54 (alternating bursty).
+
+— End Part IV. This is the FINAL method spec; do not edit without a new DECISIONS.md entry. —
