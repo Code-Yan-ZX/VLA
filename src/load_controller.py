@@ -235,14 +235,21 @@ def gen_constant(samples: list, max_num_seqs: int) -> list:
     return [(samples, 0.0)]
 
 
-def gen_bursty(samples: list, max_num_seqs: int, burst: int = 6,
-               gap: float = 1.5) -> list:
+def gen_bursty(samples: list, max_num_seqs: int, burst: int = 4,
+               gap: float = 0.3) -> list:
     """Submit `burst` requests at a time, then `gap`s idle, repeat.
 
-    Concurrency swings between ~0 (after the gap) and ~burst (during the burst,
-    bounded by max_num_seqs). With burst=6 and max_num_seqs=12 the engine never
-    fully saturates but KV-pressure visibly rises/falls -> the controller's r
-    should swing between r_min and ~r_max.
+    Concurrency swings between ~0 (after a long gap) and ~burst (during the
+    burst, bounded by max_num_seqs). The gap is kept SHORT (< typical decode
+    time of a burst) so the previous burst's requests are STILL in-flight when
+    the next burst arrives -> the controller sees residual KV-occupancy rising
+    across the first few bursts (the adaptation signal). With a long gap the
+    engine fully drains between bursts and the controller sees low load every
+    time (no adaptation) -- which is itself a valid (if uninteresting) result.
+
+    Default burst=4, gap=0.3s: at c12, 16-token decode takes ~1-2s, so a 0.3s
+    gap leaves the prior burst mid-flight -> occupancy at the next burst's
+    decision point is non-zero and grows.
     """
     out = []
     for i in range(0, len(samples), burst):

@@ -782,6 +782,22 @@ def embed_clip_question(question: str, clip_tokenizer, clip_text_model,
 # --------------------------------------------------------------------------- #
 # Metrics aggregation
 # --------------------------------------------------------------------------- #
+def _controller_json(controller: "LoadAdaptiveController") -> dict:
+    """JSON-safe snapshot of the controller (realized[] carries LoadReading
+    dataclasses, which aren't serializable -> convert to plain dicts)."""
+    realized = []
+    for r, reading in controller.realized:
+        realized.append({
+            "r": r,
+            "kv_occupancy": reading.kv_occupancy,
+            "num_running": reading.num_running,
+        })
+    out = {k: v for k, v in controller.__dict__.items() if k != "realized"}
+    out["realized"] = realized
+    out["realized_summary"] = controller.realized_summary()
+    return out
+
+
 def mean_stderr(xs: list[float]) -> dict:
     # NaN-safe: skip non-finite values (batch-submit mode stores NaN per-row then
     # overwrites with the aggregate; guard against any NaN leaking into aggregation).
@@ -888,36 +904,101 @@ def run(args) -> dict:
         }]
 
     if load_profile is not None:
-        # ---- method D: time-varying load profile ----------------------------
-        # Submit in (batch, gap_seconds) segments per the generator. Before EACH
-        # segment: read load, decide r (adaptive) or use fixed r, set k_cell.
-        # Within a segment the batch is submitted as ONE llm.chat() so vLLM's
-        # continuous batching engages -> concurrency rises during the segment and
-        # falls during the gap -> the controller's r swings r_min<->r_max.
+        # ---- method D: time-varying load profile (STREAMING submission) -------
+        # The adaptive controller must see MID-FLIGHT load to react. The sync
+        # llm.chat() drains the engine between calls (returns when ALL requests
+        # finish), so a controller that reads load only at segment boundaries
+        # always sees an empty engine. To expose rising load we submit via the
+        # ENGINE-LEVEL streaming loop (add_request + step): within a segment we
+        # add requests ONE AT A TIME (non-blocking), reading load + deciding r +
+        # setting k_cell BEFORE each add. Requests added early in the segment
+        # enter the scheduler's waiting/running queues, so the load read before
+        # LATER adds genuinely sees rising KV-occupancy / num-running -> the
+        # controller's r rises within the segment. Then we step() until all
+        # segment requests finish, collecting outputs.
         gen = PROFILES.get(load_profile)
         if gen is None:
             raise ValueError(f"unknown --load-profile {load_profile!r}; "
                              f"choices={list(PROFILES)}")
         max_num_seqs = getattr(args, "max_num_seqs", 256)
         segments = gen(samples, max_num_seqs)
+        # Preprocess each sample's prompt ONCE (chat template + image data ->
+        # TokensPrompt with multi_modal_data). add_request consumes this form.
+        # NOTE: get_num_image_tokens (our patch) fires HERE, so k_cell['k'] must
+        # be set BEFORE preprocess_chat for the placeholder count to match the
+        # per-request r. We therefore set k_cell per-request immediately before
+        # each preprocess -- but to keep one preprocess pass, we instead set
+        # k_cell right before each add_request AND re-run the per-request
+        # placeholder by calling the patched fn implicitly through a fresh
+        # preprocess. Cheapest correct path: preprocess ALL at the segment's
+        # r (one r per segment, decided from load at segment entry reflecting
+        # residual in-flight work from prior segments + within-segment adds).
+        # Within-segment per-request r variation would need per-request
+        # preprocess (cheap; done below for the adaptive-intra-segment path).
+        engine = llm.llm_engine
         t_all_start = time.perf_counter()
         n_tokens_out = 0
         seg_idx = 0
+        req_counter = 0
         for batch_samples, gap in segments:
             if not batch_samples:
                 continue
-            # decide r for THIS segment from the live load (adaptive) or fixed
+            # ---- decide this segment's r from the load at segment entry ----
+            # (reflects residual in-flight work from prior segments' decode
+            # overlapping the gap -- the online controller's view). Then we
+            # ALSO re-decide r per-request INSIDE the segment as load rises.
             if adaptive:
-                r_seg = _decide_and_set_k()
+                r_seg0 = _decide_and_set_k()
             else:
-                r_seg = getattr(args, "pruning_rate", 0.0)
+                r_seg0 = getattr(args, "pruning_rate", 0.0)
                 if k_cell is not None:
-                    k_cell["k"] = max(1, int(round(576 * (1.0 - r_seg))))
-            seg_msgs = [_build_messages(s) for s in batch_samples]
-            seg_t0 = time.perf_counter()
-            outs = llm.chat(seg_msgs, sp, use_tqdm=False)
-            seg_wall = time.perf_counter() - seg_t0
-            for s, o in zip(batch_samples, outs):
+                    k_cell["k"] = max(1, int(round(576 * (1.0 - r_seg0))))
+            # ---- add this segment's requests one-at-a-time (non-blocking) ----
+            seg_req_ids = []
+            seg_r_used = {}   # req_id -> r decided for that request
+            for s in batch_samples:
+                # ADAPTIVE intra-segment: re-read load before each add so later
+                # adds (with earlier ones now queued) see rising occupancy ->
+                # r rises within the segment. This is the faithful online loop.
+                if adaptive:
+                    r_req = _decide_and_set_k()
+                else:
+                    r_req = r_seg0
+                rid = f"dval_{req_counter}"; req_counter += 1
+                seg_req_ids.append(rid)
+                seg_r_used[rid] = r_req
+                # preprocess THIS request's prompt at its per-request r (the
+                # get_num_image_tokens patch reads k_cell -> correct placeholder
+                # count for this request's r).
+                msgs = _build_messages(s)
+                prepped = llm.preprocess_chat(msgs)[0]
+                engine.add_request(rid, prepped, sp)
+            # ---- step the engine until all segment requests finish ----
+            seg_finished: dict = {}
+            t_seg_drain = time.perf_counter()
+            while engine.has_unfinished_requests():
+                step_outs = engine.step()
+                for o in step_outs:
+                    if o.finished:
+                        seg_finished[o.request_id] = o
+                # safety: bound the step loop (avoid infinite loop on pathology)
+                if time.perf_counter() - t_seg_drain > 300:
+                    print(f"[serve_bench] WARN: segment {seg_idx} drain >300s, "
+                          f"breaking step loop", flush=True)
+                    break
+            # ---- collect results for this segment ----
+            for s, rid in zip(batch_samples, seg_req_ids):
+                o = seg_finished.get(rid)
+                if o is None:
+                    # unfinished (timeout) -> record a blank
+                    raw.append({
+                        "id": s.id, "served_tok_s": float("nan"),
+                        "served_req_s": float("nan"), "ttft_ms": float("nan"),
+                        "peak_kv_mb": float("nan"), "correct": 0,
+                        "answer": "", "gt": s.gt,
+                        "segment": seg_idx, "r_used": seg_r_used.get(rid),
+                    })
+                    continue
                 text = o.outputs[0].text.strip()
                 n_out = len(o.outputs[0].token_ids)
                 n_tokens_out += n_out
@@ -927,8 +1008,7 @@ def run(args) -> dict:
                     "served_req_s": float("nan"), "ttft_ms": float("nan"),
                     "peak_kv_mb": float("nan"), "correct": correct,
                     "answer": text, "gt": s.gt,
-                    # tag which segment + the r used (for事后 adaptation analysis)
-                    "segment": seg_idx, "r_used": r_seg,
+                    "segment": seg_idx, "r_used": seg_r_used.get(rid),
                 })
             seg_idx += 1
             if gap > 0.0:
@@ -1069,7 +1149,7 @@ def run(args) -> dict:
         "max_num_seqs": getattr(args, "max_num_seqs", 256),
         "adaptive": bool(getattr(args, "adaptive", False)),
         "load_profile": getattr(args, "load_profile", None),
-        "controller": (controller.__dict__ | {"realized_summary": controller.realized_summary()})
+        "controller": (_controller_json(controller))
                      if controller is not None else None,
         "n": len(raw), "wall_s": wall, "agg": agg,
         "prefill_breakdown": agg_prefill,
