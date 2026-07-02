@@ -986,6 +986,18 @@ def run(args) -> dict:
                 if k_cell is not None:
                     k_cell["k"] = max(1, int(round(576 * (1.0 - r_seg))))
             # ---- submit this segment's requests (all share k_cell) ----
+            # reset the multi-modal input cache between segments: the cache keys
+            # on image data, and the placeholder count (from get_num_image_tokens,
+            # which reads k_cell) is part of preprocessing -- a stale cached result
+            # from a prior segment (different k) would bake the WRONG placeholder
+            # count into this segment's requests -> masked_scatter mismatch.
+            try:
+                engine.reset_mm_cache()
+            except Exception:
+                pass
+            if seg_idx < 3:
+                print(f"[serve_bench] seg {seg_idx}: r_seg={r_seg:.3f} "
+                      f"k_cell={k_cell['k'] if k_cell else target_k}", flush=True)
             seg_pairs = []
             for s in batch_samples:
                 rid = f"dval_{req_counter}"; req_counter += 1
