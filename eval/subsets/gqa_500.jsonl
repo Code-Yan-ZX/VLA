@@ -1,0 +1,500 @@
+{"id": "202147765", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202147765.jpg", "question": "Is the chair in the bottom of the image?", "gt": "no"}
+{"id": "201574089", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201574089.jpg", "question": "What is the busy person walking by?", "gt": "traffic light"}
+{"id": "201536489", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201536489.jpg", "question": "Who is sitting?", "gt": "spectators"}
+{"id": "201528182", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201528182.jpg", "question": "What appliance is behind the table?", "gt": "stove"}
+{"id": "201987886", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201987886.jpg", "question": "Is there a red bottle or can?", "gt": "no"}
+{"id": "20182765", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20182765.jpg", "question": "Does the street seem to be narrow?", "gt": "yes"}
+{"id": "201056134", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201056134.jpg", "question": "What is the soccer player in front of the goal watching?", "gt": "ball"}
+{"id": "20182962", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20182962.jpg", "question": "Which color are the shoes?", "gt": "black"}
+{"id": "20709953", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20709953.jpg", "question": "What is the woman carrying?", "gt": "umbrella"}
+{"id": "201889339", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201889339.jpg", "question": "What is the skier riding?", "gt": "mountain side"}
+{"id": "201738830", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201738830.jpg", "question": "Are the baseball mitt and the belt the same color?", "gt": "no"}
+{"id": "201370409", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201370409.jpg", "question": "What are the scissors on?", "gt": "paper"}
+{"id": "20349740", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20349740.jpg", "question": "Is she young?", "gt": "yes"}
+{"id": "202156894", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202156894.jpg", "question": "What are the large animals standing behind of?", "gt": "rocks"}
+{"id": "201752887", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201752887.jpg", "question": "Is the small bag on the left side or on the right?", "gt": "right"}
+{"id": "201639551", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201639551.jpg", "question": "What are the animals that are eating the leaves?", "gt": "giraffes"}
+{"id": "201959873", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201959873.jpg", "question": "Are there any trains near the sign on the grass?", "gt": "no"}
+{"id": "20183434", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20183434.jpg", "question": "Does the vegetable inside the boxes look colorful?", "gt": "yes"}
+{"id": "202243368", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202243368.jpg", "question": "What color is the shirt the woman wears?", "gt": "white"}
+{"id": "201704684", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201704684.jpg", "question": "What animal is in front of the red building?", "gt": "cows"}
+{"id": "201758057", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201758057.jpg", "question": "What is the paper container sitting on top of?", "gt": "table"}
+{"id": "20381182", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20381182.jpg", "question": "Is the picture frame made of the same material as the chair?", "gt": "no"}
+{"id": "201751764", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201751764.jpg", "question": "Who is playing at the ground?", "gt": "lady"}
+{"id": "201393631", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201393631.jpg", "question": "How long is the blond hair?", "gt": "short"}
+{"id": "201663548", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201663548.jpg", "question": "How clean is the appliance underneath the countertop?", "gt": "clean"}
+{"id": "20171164", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20171164.jpg", "question": "Is the baking pan silver and round?", "gt": "yes"}
+{"id": "202023491", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202023491.jpg", "question": "Are there pillows or paper towels in the image?", "gt": "no"}
+{"id": "201947661", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201947661.jpg", "question": "Is the plastic toothbrush to the left or to the right of the mirror?", "gt": "right"}
+{"id": "201987472", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201987472.jpg", "question": "Who is wearing a shirt?", "gt": "driver"}
+{"id": "201185166", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201185166.jpg", "question": "What does the person hold?", "gt": "umbrella"}
+{"id": "201079969", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201079969.jpg", "question": "Are there any beds in the picture that are not dirty?", "gt": "yes"}
+{"id": "201322695", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201322695.jpg", "question": "Is the wide street made of cobblestone?", "gt": "yes"}
+{"id": "201430866", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201430866.jpg", "question": "What is the bag sitting on top of?", "gt": "cabinet"}
+{"id": "201795190", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201795190.jpg", "question": "Is there an elephant to the left of the man?", "gt": "yes"}
+{"id": "201975064", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201975064.jpg", "question": "Does the hat that looks black and white look closed and Adidas?", "gt": "no"}
+{"id": "20210955", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20210955.jpg", "question": "Which kind of baked good is on top of the plate?", "gt": "pie"}
+{"id": "20441870", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20441870.jpg", "question": "What is the name of the item of furniture that is the same color as the door that is not short?", "gt": "bookcase"}
+{"id": "201412501", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201412501.jpg", "question": "How does the skier to the left of the other skier look, tall or short?", "gt": "tall"}
+{"id": "20963696", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20963696.jpg", "question": "Does the toilet look brown?", "gt": "yes"}
+{"id": "201556554", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201556554.jpg", "question": "What do you think is in front of the window?", "gt": "desk"}
+{"id": "201498453", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201498453.jpg", "question": "Which side is the water bottle on?", "gt": "right"}
+{"id": "201576942", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201576942.jpg", "question": "What animal is to the right of the child?", "gt": "goat"}
+{"id": "20361493", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20361493.jpg", "question": "Do the snowpants look black and long?", "gt": "no"}
+{"id": "202218508", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202218508.jpg", "question": "Is the jar made of the same material as the hook?", "gt": "no"}
+{"id": "202258276", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202258276.jpg", "question": "Is the horse behind the man standing against a fence?", "gt": "yes"}
+{"id": "201795286", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201795286.jpg", "question": "Do the baskets that are not empty look colorful?", "gt": "yes"}
+{"id": "201492498", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201492498.jpg", "question": "Is the hat made of cloth?", "gt": "yes"}
+{"id": "201908765", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201908765.jpg", "question": "What is the color of the pants?", "gt": "blue"}
+{"id": "20489632", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20489632.jpg", "question": "What is the color of this bench?", "gt": "beige"}
+{"id": "201511034", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201511034.jpg", "question": "Do the socks look yellow?", "gt": "no"}
+{"id": "201319790", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201319790.jpg", "question": "Does the glass on the table look clear and small?", "gt": "yes"}
+{"id": "20939895", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20939895.jpg", "question": "Are there any cans near the toilet?", "gt": "no"}
+{"id": "201480376", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201480376.jpg", "question": "What is the boy standing on?", "gt": "mound"}
+{"id": "201185172", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201185172.jpg", "question": "What is the person near the wall walking on?", "gt": "ground"}
+{"id": "20306747", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20306747.jpg", "question": "What device is to the left of the television?", "gt": "cell phone"}
+{"id": "201535605", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201535605.jpg", "question": "Is the box different in color than the hat?", "gt": "no"}
+{"id": "201528081", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201528081.jpg", "question": "Who is sitting at the table?", "gt": "girl"}
+{"id": "201227859", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201227859.jpg", "question": "Is the lamp made of the same material as the van?", "gt": "yes"}
+{"id": "20316985", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20316985.jpg", "question": "Do you see a wood door or window?", "gt": "yes"}
+{"id": "201879156", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201879156.jpg", "question": "On which side of the photo is the person, the left or the right?", "gt": "right"}
+{"id": "201400160", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201400160.jpg", "question": "What kind of furniture is made of wood?", "gt": "bookcase"}
+{"id": "202231519", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202231519.jpg", "question": "What is the man standing behind of?", "gt": "trash can"}
+{"id": "201957081", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201957081.jpg", "question": "What does the man used?", "gt": "wii controller"}
+{"id": "20240935", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20240935.jpg", "question": "What is the item of furniture underneath the water bottle?", "gt": "table"}
+{"id": "2066120", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/2066120.jpg", "question": "Who is the man sitting beside?", "gt": "girl"}
+{"id": "201885393", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201885393.jpg", "question": "What is the palm tree inside of?", "gt": "fence"}
+{"id": "20717125", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20717125.jpg", "question": "Which kind of furniture is fluffy?", "gt": "bed"}
+{"id": "201951606", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201951606.jpg", "question": "Are the large tents on the left side?", "gt": "yes"}
+{"id": "201347375", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201347375.jpg", "question": "What is the skateboarder doing?", "gt": "looking up"}
+{"id": "201885418", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201885418.jpg", "question": "What is the palm in front of?", "gt": "plant"}
+{"id": "20691508", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20691508.jpg", "question": "Does the floor look clean and white?", "gt": "no"}
+{"id": "201393423", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201393423.jpg", "question": "Is the floor below a toilet?", "gt": "no"}
+{"id": "201639438", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201639438.jpg", "question": "What animal is in front of the people near the vehicle?", "gt": "zebras"}
+{"id": "20621841", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20621841.jpg", "question": "Are there any bicycles or fences in the photograph?", "gt": "yes"}
+{"id": "20647440", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20647440.jpg", "question": "Who is wearing the pants?", "gt": "man"}
+{"id": "201527400", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201527400.jpg", "question": "What is located on top of the dessert that is on top of the tray?", "gt": "candles"}
+{"id": "201654371", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201654371.jpg", "question": "What animal is to the left of the car?", "gt": "horse"}
+{"id": "202228538", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202228538.jpg", "question": "Are there birds next to the towels?", "gt": "no"}
+{"id": "201951631", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201951631.jpg", "question": "Are the tents to the left of a van?", "gt": "yes"}
+{"id": "201411119", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201411119.jpg", "question": "Which kind of clothing is white?", "gt": "shirt"}
+{"id": "201735396", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201735396.jpg", "question": "What is the turned on laptop to the left of the shelves sitting on top of?", "gt": "desk"}
+{"id": "202042043", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202042043.jpg", "question": "Who is wearing the gun?", "gt": "policeman"}
+{"id": "201175498", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201175498.jpg", "question": "What is this woman behind of, a cat or a dog?", "gt": "cat"}
+{"id": "201497858", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201497858.jpg", "question": "What kind of device is not reflective?", "gt": "phone"}
+{"id": "20711546", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20711546.jpg", "question": "What is the colorful toy in the picture?", "gt": "stuffed bear"}
+{"id": "20241036", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20241036.jpg", "question": "What is the man eating?", "gt": "sandwich"}
+{"id": "20435309", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20435309.jpg", "question": "How clean is that napkin?", "gt": "dirty"}
+{"id": "20978725", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20978725.jpg", "question": "What is the man standing beside of?", "gt": "motorcycle"}
+{"id": "201759349", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201759349.jpg", "question": "Is the window above the table rectangular and black?", "gt": "yes"}
+{"id": "201065645", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201065645.jpg", "question": "Do you see women that are brunette?", "gt": "yes"}
+{"id": "2062343", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/2062343.jpg", "question": "Is the surfboard in the bottom part or in the top of the picture?", "gt": "top"}
+{"id": "20245914", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20245914.jpg", "question": "What color is the skatepark?", "gt": "gray"}
+{"id": "20345101", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20345101.jpg", "question": "Does the racket look metallic and round?", "gt": "yes"}
+{"id": "202049417", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202049417.jpg", "question": "Do you see either a cake or a plate there?", "gt": "yes"}
+{"id": "201639040", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201639040.jpg", "question": "What is the sidewalk made of?", "gt": "concrete"}
+{"id": "201393504", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201393504.jpg", "question": "Do the blinds look thin?", "gt": "yes"}
+{"id": "2076204", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/2076204.jpg", "question": "The street is in front of what?", "gt": "houses"}
+{"id": "201570615", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201570615.jpg", "question": "What is this item of furniture called?", "gt": "cabinet"}
+{"id": "20247659", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20247659.jpg", "question": "What type of clothing is black?", "gt": "dress shirt"}
+{"id": "20878988", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20878988.jpg", "question": "Who is wearing shoes?", "gt": "skater"}
+{"id": "20515123", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20515123.jpg", "question": "What is on the mountains the grass is below?", "gt": "trees"}
+{"id": "20753272", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20753272.jpg", "question": "Which kind of furniture is not short?", "gt": "dresser"}
+{"id": "20258627", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20258627.jpg", "question": "Is the chair wooden and white?", "gt": "yes"}
+{"id": "202228228", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202228228.jpg", "question": "What color is the pepper shaker?", "gt": "brown"}
+{"id": "201996732", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201996732.jpg", "question": "Which kind of aircraft is off?", "gt": "helicopter"}
+{"id": "201704559", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201704559.jpg", "question": "Is there any grass in the picture that is not tall?", "gt": "no"}
+{"id": "201982989", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201982989.jpg", "question": "What is in front of the man that looks happy?", "gt": "coffee table"}
+{"id": "2076582", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/2076582.jpg", "question": "What's the entrance full of?", "gt": "stone"}
+{"id": "202081504", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202081504.jpg", "question": "Is the mouse pad gray and square?", "gt": "yes"}
+{"id": "20247158", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20247158.jpg", "question": "Does the necklace look large?", "gt": "yes"}
+{"id": "201156172", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201156172.jpg", "question": "What makes up the jacket, cloth or leather?", "gt": "cloth"}
+{"id": "20940364", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20940364.jpg", "question": "What is in front of the sink that is below the mirror?", "gt": "mat"}
+{"id": "20381224", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20381224.jpg", "question": "Is that a bed or a desk?", "gt": "desk"}
+{"id": "201576517", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201576517.jpg", "question": "Does the jacket appear to be red?", "gt": "no"}
+{"id": "20262487", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20262487.jpg", "question": "Are there either green boots or skis?", "gt": "yes"}
+{"id": "20412523", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20412523.jpg", "question": "Is the person in the top or in the bottom?", "gt": "top"}
+{"id": "202162379", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202162379.jpg", "question": "Is the bedroom that is not dirty both white and small?", "gt": "yes"}
+{"id": "20982374", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20982374.jpg", "question": "What is located on top of the shirt?", "gt": "collar"}
+{"id": "20361323", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20361323.jpg", "question": "Is the snowboarder wearing goggles?", "gt": "yes"}
+{"id": "201669616", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201669616.jpg", "question": "What is the dessert on the cake stand?", "gt": "cupcake"}
+{"id": "202100465", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202100465.jpg", "question": "Are there any kites?", "gt": "no"}
+{"id": "202101163", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202101163.jpg", "question": "What is the skateboarder that is not female wearing?", "gt": "jeans"}
+{"id": "201616026", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201616026.jpg", "question": "Is the bathroom clean?", "gt": "yes"}
+{"id": "20706086", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20706086.jpg", "question": "Is the keyboard in front of the device that is to the left of the speaker?", "gt": "yes"}
+{"id": "20349947", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20349947.jpg", "question": "Is the black hair long or short?", "gt": "long"}
+{"id": "201902743", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201902743.jpg", "question": "Which kind of device is silver?", "gt": "monitor"}
+{"id": "20609470", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20609470.jpg", "question": "What is the fork made of?", "gt": "metal"}
+{"id": "202122091", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202122091.jpg", "question": "Is the chandelier to the left of the clock made of metal or glass?", "gt": "metal"}
+{"id": "201307350", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201307350.jpg", "question": "What is the person in front of?", "gt": "sky"}
+{"id": "20710046", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20710046.jpg", "question": "Is the car to the left of her?", "gt": "no"}
+{"id": "202126091", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202126091.jpg", "question": "Who is looking up?", "gt": "umpire"}
+{"id": "201064838", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201064838.jpg", "question": "Which color is the sofa, blue or light brown?", "gt": "blue"}
+{"id": "2017435", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/2017435.jpg", "question": "What is the animal to the left of the brown animal?", "gt": "horse"}
+{"id": "201976763", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201976763.jpg", "question": "Is there a black backpack or briefcase?", "gt": "no"}
+{"id": "201947612", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201947612.jpg", "question": "What color is the soap dish?", "gt": "brown"}
+{"id": "201392027", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201392027.jpg", "question": "Do the short shorts look black?", "gt": "no"}
+{"id": "20515108", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20515108.jpg", "question": "What's the fence going through?", "gt": "grass"}
+{"id": "201735551", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201735551.jpg", "question": "What kind of furniture is above the empty bowl?", "gt": "shelves"}
+{"id": "201303373", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201303373.jpg", "question": "Is the old man to the left or to the right of the chair that is to the left of the cups?", "gt": "left"}
+{"id": "201556965", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201556965.jpg", "question": "On which side of the photo is the book?", "gt": "right"}
+{"id": "202107887", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202107887.jpg", "question": "Who is wearing a shoe?", "gt": "boy"}
+{"id": "201983611", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201983611.jpg", "question": "Do you see children in this image?", "gt": "no"}
+{"id": "2066027", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/2066027.jpg", "question": "What is that boy holding?", "gt": "baseball mitt"}
+{"id": "202081877", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202081877.jpg", "question": "What is this cat lying on?", "gt": "mouse pad"}
+{"id": "20330516", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20330516.jpg", "question": "Is the car thin and dark?", "gt": "no"}
+{"id": "201879789", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201879789.jpg", "question": "How large is the bike below the sky?", "gt": "large"}
+{"id": "201068695", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201068695.jpg", "question": "How is the gray clothing item called?", "gt": "dress shirt"}
+{"id": "201510216", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201510216.jpg", "question": "What do both the pear and the table have in common?", "gt": "shape"}
+{"id": "20898809", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20898809.jpg", "question": "Does the bag have black color and large size?", "gt": "no"}
+{"id": "20489800", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20489800.jpg", "question": "What is located on top of the wood shelves?", "gt": "table lamp"}
+{"id": "20287950", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20287950.jpg", "question": "Who is leaning on the dugout?", "gt": "coach"}
+{"id": "201156126", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201156126.jpg", "question": "What does the bag to the left of the boy lie on?", "gt": "field"}
+{"id": "202100821", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202100821.jpg", "question": "What kind of appliance is the bowl sitting on top of?", "gt": "stove"}
+{"id": "201623985", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201623985.jpg", "question": "Are there small doors or windows?", "gt": "no"}
+{"id": "202257439", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202257439.jpg", "question": "Is the bicycle to the left or to the right of the person that is wearing a jacket?", "gt": "right"}
+{"id": "20149600", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20149600.jpg", "question": "What's located on top of the cabinet?", "gt": "sink"}
+{"id": "20361321", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20361321.jpg", "question": "Who is wearing goggles?", "gt": "snowboarder"}
+{"id": "201765949", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201765949.jpg", "question": "Which kind of watercraft is behind the beach?", "gt": "boats"}
+{"id": "202246054", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202246054.jpg", "question": "Are there people to the left of the mouse pad?", "gt": "yes"}
+{"id": "201804102", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201804102.jpg", "question": "What device is to the left of the computer monitor?", "gt": "keyboard"}
+{"id": "201998118", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201998118.jpg", "question": "Are there skateboards or cabinets in the image?", "gt": "no"}
+{"id": "20118967", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20118967.jpg", "question": "Is there a woman in this photo that is walking?", "gt": "yes"}
+{"id": "202101080", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202101080.jpg", "question": "Who rides on the skateboard?", "gt": "skateboarder"}
+{"id": "202037104", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202037104.jpg", "question": "Which kind of food is on the pizza?", "gt": "cheese"}
+{"id": "20716852", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20716852.jpg", "question": "Does the adult person look blond and healthy?", "gt": "yes"}
+{"id": "202119404", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202119404.jpg", "question": "What kind of animal is under the man?", "gt": "elephant"}
+{"id": "20414501", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20414501.jpg", "question": "Who wears the pants?", "gt": "skateboarder"}
+{"id": "201983614", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201983614.jpg", "question": "Who is walking behind the person that is to the right of the safety vest?", "gt": "man"}
+{"id": "201403947", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201403947.jpg", "question": "How's the weather?", "gt": "cloudless"}
+{"id": "202257495", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202257495.jpg", "question": "Is there any smooth sand or snow?", "gt": "no"}
+{"id": "2044518", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/2044518.jpg", "question": "Who is wearing shoes?", "gt": "man"}
+{"id": "201669479", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201669479.jpg", "question": "What is on the cupcake?", "gt": "candle"}
+{"id": "201795014", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201795014.jpg", "question": "What animal is staring?", "gt": "elephant"}
+{"id": "20705833", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20705833.jpg", "question": "How big is the desk made of wood?", "gt": "large"}
+{"id": "201393753", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201393753.jpg", "question": "Is there any large desk or chair?", "gt": "no"}
+{"id": "20515865", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20515865.jpg", "question": "Is there a yellow traffic light or fire hydrant?", "gt": "no"}
+{"id": "201951690", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201951690.jpg", "question": "Is the flag green?", "gt": "yes"}
+{"id": "201859509", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201859509.jpg", "question": "What is in the basket?", "gt": "donut"}
+{"id": "20205093", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20205093.jpg", "question": "What kind of bag is to the right of the chair?", "gt": "backpack"}
+{"id": "20644661", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20644661.jpg", "question": "Is the black cable on the paper?", "gt": "yes"}
+{"id": "202121663", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202121663.jpg", "question": "What kind of furniture is below the chandelier?", "gt": "chairs"}
+{"id": "20468936", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20468936.jpg", "question": "What is the sign on?", "gt": "fence"}
+{"id": "202012702", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202012702.jpg", "question": "Does the remote on top of the television look black and large?", "gt": "no"}
+{"id": "202144374", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202144374.jpg", "question": "Is there food or ice in the photo?", "gt": "yes"}
+{"id": "201143250", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201143250.jpg", "question": "What kind of furniture is underneath the table?", "gt": "chairs"}
+{"id": "201738860", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201738860.jpg", "question": "Is the field both brown and grassy?", "gt": "yes"}
+{"id": "20753265", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20753265.jpg", "question": "Which kind of furniture is not narrow?", "gt": "dresser"}
+{"id": "2066189", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/2066189.jpg", "question": "Which kind of clothing is not white?", "gt": "baseball mitt"}
+{"id": "20427461", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20427461.jpg", "question": "Is the jacket the same color as the dress shirt?", "gt": "yes"}
+{"id": "20427782", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20427782.jpg", "question": "Who is sitting beside the gentleman?", "gt": "man"}
+{"id": "201428430", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201428430.jpg", "question": "Is the shirt long sleeved or sleeveless?", "gt": "long sleeved"}
+{"id": "201065497", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201065497.jpg", "question": "Is the man to the left of the performer brunette or blond?", "gt": "blond"}
+{"id": "201590208", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201590208.jpg", "question": "Where is the person that is standing standing on?", "gt": "field"}
+{"id": "20511406", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20511406.jpg", "question": "What is that aircraft called?", "gt": "helicopter"}
+{"id": "2097650", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/2097650.jpg", "question": "Which side is the monitor on?", "gt": "right"}
+{"id": "202119751", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202119751.jpg", "question": "Is the window made of the same material as the table?", "gt": "no"}
+{"id": "201065472", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201065472.jpg", "question": "Where is the performer?", "gt": "stage"}
+{"id": "20870435", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20870435.jpg", "question": "Who wears a jersey?", "gt": "player"}
+{"id": "201864490", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201864490.jpg", "question": "Is the catcher to the left or to the right of the person in the middle?", "gt": "left"}
+{"id": "201497592", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201497592.jpg", "question": "Does the speaker have the same color as the keyboard?", "gt": "yes"}
+{"id": "20514914", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20514914.jpg", "question": "Are the trees and the mountains the same color?", "gt": "yes"}
+{"id": "202241126", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202241126.jpg", "question": "What is on the shelf?", "gt": "plant"}
+{"id": "2058583", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/2058583.jpg", "question": "Is the door closed or open?", "gt": "closed"}
+{"id": "201047183", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201047183.jpg", "question": "Do the telephone and the suit have a different colors?", "gt": "no"}
+{"id": "20600192", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20600192.jpg", "question": "What are the animals that are above the grass that is not tall?", "gt": "zebras"}
+{"id": "20936228", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20936228.jpg", "question": "What animal is the woman on?", "gt": "elephant"}
+{"id": "202169048", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202169048.jpg", "question": "What is the street made of?", "gt": "concrete"}
+{"id": "20551449", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20551449.jpg", "question": "Are the trees behind a truck?", "gt": "no"}
+{"id": "20978723", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20978723.jpg", "question": "The man is standing beside what?", "gt": "motorcycle"}
+{"id": "20308288", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20308288.jpg", "question": "Is the oven door square and white?", "gt": "no"}
+{"id": "201935905", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201935905.jpg", "question": "What is the item of furniture that is brown called?", "gt": "shelf"}
+{"id": "20609594", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20609594.jpg", "question": "What dessert is the spoon behind of?", "gt": "cake"}
+{"id": "201859565", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201859565.jpg", "question": "What is the cup made of?", "gt": "plastic"}
+{"id": "202285609", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202285609.jpg", "question": "How tall is the cup made of plastic?", "gt": "short"}
+{"id": "201185017", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201185017.jpg", "question": "What do the umbrella and the fence post have in common?", "gt": "material"}
+{"id": "20866437", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20866437.jpg", "question": "What is inside the refrigerator?", "gt": "sour cream"}
+{"id": "201393601", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201393601.jpg", "question": "What type of clothing is not dark, the shirt or the sock?", "gt": "sock"}
+{"id": "20923072", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20923072.jpg", "question": "What vehicle is sturdy?", "gt": "fire truck"}
+{"id": "201711244", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201711244.jpg", "question": "Do you see instruments near the cardboard container?", "gt": "yes"}
+{"id": "20978589", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20978589.jpg", "question": "Does the fence look brown and long?", "gt": "yes"}
+{"id": "201804486", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201804486.jpg", "question": "What is the color of the fireplace the TV is above?", "gt": "black"}
+{"id": "201682208", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201682208.jpg", "question": "Is the racket on the left?", "gt": "no"}
+{"id": "201713313", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201713313.jpg", "question": "Is the small mug in the top or in the bottom of the photo?", "gt": "bottom"}
+{"id": "20863749", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20863749.jpg", "question": "Who is the building in front of?", "gt": "skateboarder"}
+{"id": "20609322", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20609322.jpg", "question": "What is the fruit that is in front of the bowl that is to the right of the cake called?", "gt": "strawberry"}
+{"id": "20412009", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20412009.jpg", "question": "Does the dessert look white?", "gt": "yes"}
+{"id": "20836972", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20836972.jpg", "question": "What are the people who are to the right of the dolls standing behind of?", "gt": "luggage"}
+{"id": "201030621", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201030621.jpg", "question": "What is the boy playing with?", "gt": "wii controller"}
+{"id": "20757218", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20757218.jpg", "question": "What material is the utensil that looks big made of?", "gt": "wood"}
+{"id": "20902667", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20902667.jpg", "question": "What animal is the male person carrying?", "gt": "dog"}
+{"id": "2062416", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/2062416.jpg", "question": "What are the grouped people standing behind of?", "gt": "bleachers"}
+{"id": "202286719", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202286719.jpg", "question": "What animal is the woman looking at?", "gt": "elephant"}
+{"id": "201759360", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201759360.jpg", "question": "Are there round windows in this photo?", "gt": "no"}
+{"id": "201175530", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201175530.jpg", "question": "What is the woman holding onto?", "gt": "camera"}
+{"id": "201711212", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201711212.jpg", "question": "What is the suitcase on?", "gt": "rug"}
+{"id": "20411603", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20411603.jpg", "question": "Does the purple thing above the dessert look small?", "gt": "yes"}
+{"id": "201510378", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201510378.jpg", "question": "Does the fruit on the tray look brown or green?", "gt": "green"}
+{"id": "20177852", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20177852.jpg", "question": "Does the small onion look healthy?", "gt": "yes"}
+{"id": "201947686", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201947686.jpg", "question": "What is she wearing?", "gt": "tank top"}
+{"id": "20797844", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20797844.jpg", "question": "What animal is the man behind of?", "gt": "cat"}
+{"id": "20300566", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20300566.jpg", "question": "Is the grass tall and green?", "gt": "no"}
+{"id": "202262636", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202262636.jpg", "question": "What is the frisbee about to hit?", "gt": "grass"}
+{"id": "20300419", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20300419.jpg", "question": "Which side are the metal cars on?", "gt": "right"}
+{"id": "201616067", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201616067.jpg", "question": "What is in front of the toilet?", "gt": "rug"}
+{"id": "201623740", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201623740.jpg", "question": "What is the appliance to the left of the appliance that is not on?", "gt": "oven"}
+{"id": "201981998", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201981998.jpg", "question": "What type of device is made of the same material as the remote the man is to the left of?", "gt": "phone"}
+{"id": "201056192", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201056192.jpg", "question": "How tall is the grass?", "gt": "short"}
+{"id": "201037065", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201037065.jpg", "question": "The sign behind the girl is of which shape?", "gt": "octagonal"}
+{"id": "20340509", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20340509.jpg", "question": "What is the fence made of?", "gt": "wood"}
+{"id": "20308223", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20308223.jpg", "question": "What pieces of furniture are this?", "gt": "cabinets"}
+{"id": "201175417", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201175417.jpg", "question": "Who is standing?", "gt": "woman"}
+{"id": "202218617", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202218617.jpg", "question": "Where in the picture is the wood picture, on the right or on the left?", "gt": "left"}
+{"id": "202241185", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202241185.jpg", "question": "Is the chair to the left of a lamp?", "gt": "no"}
+{"id": "201883177", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201883177.jpg", "question": "Does the bed in front of the mirror seem to be clean?", "gt": "yes"}
+{"id": "201641237", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201641237.jpg", "question": "Is the shirt short sleeved or long sleeved?", "gt": "long sleeved"}
+{"id": "20511462", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20511462.jpg", "question": "Do the cords look hard?", "gt": "yes"}
+{"id": "20954000", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20954000.jpg", "question": "What is the man doing?", "gt": "talking"}
+{"id": "201879167", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201879167.jpg", "question": "What is the person below the crowd bigger than?", "gt": "sneakers"}
+{"id": "201152989", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201152989.jpg", "question": "Of which color is the forest?", "gt": "brown"}
+{"id": "201879145", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201879145.jpg", "question": "What's larger than the wristband?", "gt": "racket"}
+{"id": "201637219", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201637219.jpg", "question": "Which appliance in this photo is huge?", "gt": "stove"}
+{"id": "20157030", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20157030.jpg", "question": "Is the small utensil on the right side?", "gt": "no"}
+{"id": "20891291", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20891291.jpg", "question": "Is the dress made of cloth?", "gt": "yes"}
+{"id": "202003711", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202003711.jpg", "question": "What are the devices on top of the little desk that is on top of the floor called?", "gt": "laptops"}
+{"id": "201391965", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201391965.jpg", "question": "Is the bald man sitting on a bench?", "gt": "no"}
+{"id": "20883097", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20883097.jpg", "question": "Is the skatepark made of the same material as the obstacle?", "gt": "no"}
+{"id": "201065051", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201065051.jpg", "question": "Do you see a plate to the left of the boy?", "gt": "yes"}
+{"id": "202156924", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202156924.jpg", "question": "What type of animal is in front of the trees that the clouds are above?", "gt": "elephants"}
+{"id": "20411645", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20411645.jpg", "question": "What kind of food is not eating?", "gt": "carrots"}
+{"id": "20342293", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20342293.jpg", "question": "Are the two people of the same gender?", "gt": "yes"}
+{"id": "201235467", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201235467.jpg", "question": "Is the table made of the same material as the earring?", "gt": "no"}
+{"id": "201228160", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201228160.jpg", "question": "What type of vehicle is on top of the road?", "gt": "car"}
+{"id": "201438366", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201438366.jpg", "question": "What is the person to the left of the catcher doing?", "gt": "looking up"}
+{"id": "20456407", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20456407.jpg", "question": "What toy is stuffed?", "gt": "teddy bear"}
+{"id": "201637239", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201637239.jpg", "question": "What is the size of the appliance the countertop is standing against?", "gt": "huge"}
+{"id": "201481607", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201481607.jpg", "question": "Does the umbrella to the left of the man look black?", "gt": "yes"}
+{"id": "201067409", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201067409.jpg", "question": "Do the bag and the laptop have the same color?", "gt": "yes"}
+{"id": "20247720", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20247720.jpg", "question": "What is the ethnicity of the person that the woman is sitting next to?", "gt": "caucasian"}
+{"id": "202081685", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202081685.jpg", "question": "Does the lamp next to the laptop look tall?", "gt": "yes"}
+{"id": "201951790", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201951790.jpg", "question": "What's located on top of the table?", "gt": "machine"}
+{"id": "20953055", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20953055.jpg", "question": "Who is about to hit the tennis ball that is in the top?", "gt": "player"}
+{"id": "201407351", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201407351.jpg", "question": "What does the man hold?", "gt": "racket"}
+{"id": "201756957", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201756957.jpg", "question": "Is the wall behind a kitten?", "gt": "yes"}
+{"id": "20963807", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20963807.jpg", "question": "What is beneath the mirror?", "gt": "faucet"}
+{"id": "20182868", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20182868.jpg", "question": "Is the man that is not young holding the umbrella?", "gt": "yes"}
+{"id": "20169798", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20169798.jpg", "question": "Does this flag look calm?", "gt": "yes"}
+{"id": "20573613", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20573613.jpg", "question": "Is the toilet to the left or to the right of the bottle that is on top of the counter top?", "gt": "left"}
+{"id": "20940347", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20940347.jpg", "question": "Is the white mat on the left or on the right side of the photo?", "gt": "right"}
+{"id": "201444894", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201444894.jpg", "question": "Is the mowed lawn sitting beside the gray gravel?", "gt": "yes"}
+{"id": "20491961", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20491961.jpg", "question": "Does the man that is to the left of the bear look tall and old?", "gt": "yes"}
+{"id": "20461909", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20461909.jpg", "question": "Do you see both gloves and hats in this picture?", "gt": "yes"}
+{"id": "202240305", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202240305.jpg", "question": "Who is standing?", "gt": "girl"}
+{"id": "201889392", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201889392.jpg", "question": "What is the mountain side that looks white covered by?", "gt": "sky"}
+{"id": "20468823", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20468823.jpg", "question": "What is the trailer in front of?", "gt": "trees"}
+{"id": "201571092", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201571092.jpg", "question": "What is the bag to the left of the person next to the suitcase?", "gt": "purse"}
+{"id": "20287386", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20287386.jpg", "question": "Do you see a fence or a bike there?", "gt": "yes"}
+{"id": "20746540", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20746540.jpg", "question": "Are the wildflowers purple?", "gt": "no"}
+{"id": "20636922", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20636922.jpg", "question": "Does the potato look fried and round?", "gt": "no"}
+{"id": "2091259", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/2091259.jpg", "question": "How clean is the white snow?", "gt": "dirty"}
+{"id": "20412437", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20412437.jpg", "question": "Is the glass vase in the top part or in the bottom of the image?", "gt": "bottom"}
+{"id": "20541143", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20541143.jpg", "question": "What color is the striped shirt?", "gt": "white"}
+{"id": "20169578", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20169578.jpg", "question": "Do the hat and the jacket have a different colors?", "gt": "no"}
+{"id": "201935064", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201935064.jpg", "question": "Which side is the metal lamp on?", "gt": "right"}
+{"id": "201467391", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201467391.jpg", "question": "Is it indoors?", "gt": "yes"}
+{"id": "202003712", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202003712.jpg", "question": "Which kind of device is on top of the desk?", "gt": "laptops"}
+{"id": "20178083", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20178083.jpg", "question": "Which kind of fast food is to the right of the plate?", "gt": "fries"}
+{"id": "201765994", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201765994.jpg", "question": "What are the sparse trees growing on?", "gt": "dirt"}
+{"id": "20692443", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20692443.jpg", "question": "Are the towels wet and soft?", "gt": "no"}
+{"id": "201735659", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201735659.jpg", "question": "What is the desk made of?", "gt": "wood"}
+{"id": "20491916", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20491916.jpg", "question": "Where do you think does the bear that is not short stand on?", "gt": "ground"}
+{"id": "201153606", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201153606.jpg", "question": "What is the long animal in front of the forest hanging above?", "gt": "walkway"}
+{"id": "201998276", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201998276.jpg", "question": "What is the name of the item of furniture that is long?", "gt": "table"}
+{"id": "20241115", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20241115.jpg", "question": "Do you think the water is dirty?", "gt": "no"}
+{"id": "201623957", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201623957.jpg", "question": "What cooking utensil is made of the same material as the cooking utensil in the middle?", "gt": "pan"}
+{"id": "202286772", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202286772.jpg", "question": "Where is the woman standing on?", "gt": "ground"}
+{"id": "20896231", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20896231.jpg", "question": "What are the items of furniture that the towel is hanging from called?", "gt": "cabinets"}
+{"id": "202262080", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202262080.jpg", "question": "Which color is the plate that is not small?", "gt": "gold"}
+{"id": "20316943", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20316943.jpg", "question": "What kind of cooking utensil is the same color as the stove top that is made of chrome?", "gt": "coffee pot"}
+{"id": "201447100", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201447100.jpg", "question": "Is this a dirty mirror?", "gt": "yes"}
+{"id": "20667283", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20667283.jpg", "question": "What is the color of the shirt the man is wearing?", "gt": "white"}
+{"id": "201428993", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201428993.jpg", "question": "What is the refrigerator bigger than?", "gt": "stove"}
+{"id": "20724189", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20724189.jpg", "question": "What is the person that is standing doing?", "gt": "riding"}
+{"id": "20414431", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20414431.jpg", "question": "Who is standing?", "gt": "skateboarder"}
+{"id": "202012653", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202012653.jpg", "question": "Which kind of furniture is to the left of the cabinets?", "gt": "shelves"}
+{"id": "202174460", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202174460.jpg", "question": "Is the bench behind the table that looks red?", "gt": "yes"}
+{"id": "202147768", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202147768.jpg", "question": "What item of furniture is to the right of the person that sits in front of the athlete?", "gt": "chair"}
+{"id": "202053207", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202053207.jpg", "question": "Who is wearing the belt?", "gt": "umpire"}
+{"id": "201879725", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201879725.jpg", "question": "How is the weather?", "gt": "cloudy"}
+{"id": "202265950", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202265950.jpg", "question": "What color is the bag?", "gt": "orange"}
+{"id": "20515054", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20515054.jpg", "question": "What is the name of the animals that are standing in the grass that is not short?", "gt": "zebras"}
+{"id": "201570981", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201570981.jpg", "question": "Is the tall person wearing gloves?", "gt": "no"}
+{"id": "201873521", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201873521.jpg", "question": "What is in front of the person in the bottom part of the image?", "gt": "fire truck"}
+{"id": "20427618", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20427618.jpg", "question": "How old is the gentleman?", "gt": "young"}
+{"id": "201956961", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201956961.jpg", "question": "Are the DVDs inside the TV stand open or closed?", "gt": "closed"}
+{"id": "20836971", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20836971.jpg", "question": "Who is standing behind the luggage that looks brown and blue?", "gt": "people"}
+{"id": "201704511", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201704511.jpg", "question": "Is the black and white cow black and white and large?", "gt": "yes"}
+{"id": "20468524", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20468524.jpg", "question": "What is the vehicle that the trees are behind of?", "gt": "trailer"}
+{"id": "20120294", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20120294.jpg", "question": "Do you see balls or fences there?", "gt": "yes"}
+{"id": "201738972", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201738972.jpg", "question": "What is wearing a shirt?", "gt": "pitcher"}
+{"id": "201401714", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201401714.jpg", "question": "How is the weather?", "gt": "cloudy"}
+{"id": "201886889", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201886889.jpg", "question": "Is the small box on the right side?", "gt": "yes"}
+{"id": "201738991", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201738991.jpg", "question": "What is holding the baseball?", "gt": "pitcher"}
+{"id": "20710104", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20710104.jpg", "question": "How is the weather in this scene?", "gt": "cloudy"}
+{"id": "202245898", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202245898.jpg", "question": "On which side are the small glasses?", "gt": "left"}
+{"id": "20480810", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20480810.jpg", "question": "How clean are the books that are not horizontal?", "gt": "clean"}
+{"id": "2062362", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/2062362.jpg", "question": "Does that surf board look hard and blue?", "gt": "no"}
+{"id": "201996668", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201996668.jpg", "question": "Does the device to the left of the telephone have white color?", "gt": "no"}
+{"id": "201752686", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201752686.jpg", "question": "Is the young person to the left or to the right of the bag that is not big?", "gt": "left"}
+{"id": "20317103", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20317103.jpg", "question": "On which side is the microwave, the left or the right?", "gt": "right"}
+{"id": "202000675", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202000675.jpg", "question": "How clean is the concrete sidewalk?", "gt": "dirty"}
+{"id": "201713332", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201713332.jpg", "question": "Is the mug near the woman small or large?", "gt": "small"}
+{"id": "201873677", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201873677.jpg", "question": "Does the flag that is to the left of the bucket have large size and blue color?", "gt": "yes"}
+{"id": "20244652", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20244652.jpg", "question": "What kind of vehicle is sitting beside the building?", "gt": "bus"}
+{"id": "20308162", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20308162.jpg", "question": "Is the microwave oven made of stainless steel silver and rectangular?", "gt": "yes"}
+{"id": "201908777", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201908777.jpg", "question": "On which side are the silver forks?", "gt": "right"}
+{"id": "20862872", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20862872.jpg", "question": "Does the dress made of lace look white and short?", "gt": "no"}
+{"id": "20258892", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20258892.jpg", "question": "What is the name of the device to the right of the chair?", "gt": "phone"}
+{"id": "2075430", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/2075430.jpg", "question": "Are there both horses and deer in the picture?", "gt": "no"}
+{"id": "202125988", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202125988.jpg", "question": "What the items of furniture that are empty are called?", "gt": "chairs"}
+{"id": "20118042", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20118042.jpg", "question": "Is there any elephant on the field?", "gt": "yes"}
+{"id": "20962302", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20962302.jpg", "question": "Which place is it?", "gt": "city"}
+{"id": "20953073", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20953073.jpg", "question": "Is the player wearing a jersey?", "gt": "no"}
+{"id": "20468869", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20468869.jpg", "question": "What's the man wearing?", "gt": "pants"}
+{"id": "202156871", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202156871.jpg", "question": "Are the elephants wet or dry?", "gt": "dry"}
+{"id": "20942174", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20942174.jpg", "question": "What is the young girl holding?", "gt": "surfboard"}
+{"id": "201654232", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201654232.jpg", "question": "Are the cart and the fence made of the same material?", "gt": "yes"}
+{"id": "20412203", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20412203.jpg", "question": "What kind of furniture is pink?", "gt": "tables"}
+{"id": "20652727", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20652727.jpg", "question": "What is in front of the woman?", "gt": "cars"}
+{"id": "201982932", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201982932.jpg", "question": "Is the coffee table large or small?", "gt": "small"}
+{"id": "201482064", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201482064.jpg", "question": "Is the jacket blue?", "gt": "no"}
+{"id": "2046438", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/2046438.jpg", "question": "How old is the happy man?", "gt": "old"}
+{"id": "20340772", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20340772.jpg", "question": "Which kind of furniture is in front of the fence?", "gt": "chair"}
+{"id": "20518372", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20518372.jpg", "question": "Is the towel white and short?", "gt": "yes"}
+{"id": "20285195", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20285195.jpg", "question": "Are the white pillows to the right of the curtain on the left of the photo?", "gt": "yes"}
+{"id": "20887472", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20887472.jpg", "question": "On which side of the image is the large device?", "gt": "right"}
+{"id": "20452097", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20452097.jpg", "question": "What is around the dark picture?", "gt": "picture frame"}
+{"id": "201756771", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201756771.jpg", "question": "Does the yellow fruit look unpeeled and ripe?", "gt": "yes"}
+{"id": "201947514", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201947514.jpg", "question": "What is in front of the bath tub?", "gt": "shower curtain"}
+{"id": "201798392", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201798392.jpg", "question": "Is that a mirror or a sofa?", "gt": "mirror"}
+{"id": "201758211", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201758211.jpg", "question": "Which kind of furniture is to the right of the laptop?", "gt": "chair"}
+{"id": "20489528", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20489528.jpg", "question": "What is the item of furniture that is comfortable?", "gt": "bed"}
+{"id": "201976914", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201976914.jpg", "question": "On which side of the image is the male person?", "gt": "left"}
+{"id": "201957351", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201957351.jpg", "question": "Is the lamp white and tall?", "gt": "yes"}
+{"id": "20349903", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20349903.jpg", "question": "What color do you think the cellphones to the right of the cell phone have?", "gt": "white"}
+{"id": "202147798", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202147798.jpg", "question": "Is the chair that is not full white or black?", "gt": "white"}
+{"id": "2098330", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/2098330.jpg", "question": "Are there either bird cages or wheelchairs in the picture?", "gt": "no"}
+{"id": "20211261", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20211261.jpg", "question": "What is the food that the woman is behind of called?", "gt": "pie"}
+{"id": "201319586", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201319586.jpg", "question": "Which kind of furniture is the soup on?", "gt": "table"}
+{"id": "20385417", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20385417.jpg", "question": "Do you see magazines near the plastic device to the right of the book?", "gt": "yes"}
+{"id": "20978204", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20978204.jpg", "question": "Who seems to be older, the woman or the girl?", "gt": "woman"}
+{"id": "201391886", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201391886.jpg", "question": "Is this a coffee table or a sofa?", "gt": "sofa"}
+{"id": "201935114", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201935114.jpg", "question": "What is in front of the building that is not short?", "gt": "lamp"}
+{"id": "202040263", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202040263.jpg", "question": "Where is the train near the platform parked?", "gt": "train station"}
+{"id": "201156262", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201156262.jpg", "question": "Who is playing with the ball?", "gt": "boy"}
+{"id": "201883217", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201883217.jpg", "question": "What is in front of the mirror that the paintings are to the left of?", "gt": "bed"}
+{"id": "201156138", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201156138.jpg", "question": "Is the field soft and snowy?", "gt": "no"}
+{"id": "20285451", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20285451.jpg", "question": "What is the fan on the ceiling made of?", "gt": "wood"}
+{"id": "202053318", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202053318.jpg", "question": "Is the athletic person in front of the umpire young and female?", "gt": "no"}
+{"id": "201491063", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201491063.jpg", "question": "What animals are it?", "gt": "goats"}
+{"id": "201957240", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201957240.jpg", "question": "Which side of the image is the woman on?", "gt": "right"}
+{"id": "201621315", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201621315.jpg", "question": "Is that picture frame white and high?", "gt": "no"}
+{"id": "20984377", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20984377.jpg", "question": "What color is the hat that is worn on the skater?", "gt": "black"}
+{"id": "201896533", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201896533.jpg", "question": "Where is the lady to the left of the phone sitting?", "gt": "table"}
+{"id": "201763810", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201763810.jpg", "question": "Are there any televisions or curtains in the picture?", "gt": "no"}
+{"id": "20451949", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20451949.jpg", "question": "What shape does the table have?", "gt": "round"}
+{"id": "202036874", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202036874.jpg", "question": "Is the cooked sausage on the right or on the left side?", "gt": "left"}
+{"id": "201439531", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201439531.jpg", "question": "Is the grass green?", "gt": "yes"}
+{"id": "20935943", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20935943.jpg", "question": "Are there either any elephants or giraffes?", "gt": "yes"}
+{"id": "20898658", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20898658.jpg", "question": "Does the store look open and large?", "gt": "yes"}
+{"id": "201879934", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201879934.jpg", "question": "The person in the center of the photo is of what gender?", "gt": "female"}
+{"id": "202169115", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202169115.jpg", "question": "What material is the wide sidewalk, stone or cobblestone?", "gt": "stone"}
+{"id": "20480225", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20480225.jpg", "question": "What is the piece of furniture that is not tall?", "gt": "desk"}
+{"id": "20482140", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20482140.jpg", "question": "Is the long necklace both thin and beautiful?", "gt": "yes"}
+{"id": "20411858", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20411858.jpg", "question": "What is the name of the food that is cut?", "gt": "hot dogs"}
+{"id": "201428852", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201428852.jpg", "question": "What is the sheet made of?", "gt": "plastic"}
+{"id": "20411498", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20411498.jpg", "question": "Is the food container made of the same material as the table?", "gt": "no"}
+{"id": "2013048", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/2013048.jpg", "question": "Is the bottle to the right of the person next to the windows?", "gt": "no"}
+{"id": "20611914", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20611914.jpg", "question": "What is the dessert that is sitting inside the container?", "gt": "brownie"}
+{"id": "202004154", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202004154.jpg", "question": "Who stands on the floor?", "gt": "man"}
+{"id": "201996996", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201996996.jpg", "question": "Who is wearing the shirt?", "gt": "pilot"}
+{"id": "2046530", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/2046530.jpg", "question": "Is there a woman in this picture?", "gt": "yes"}
+{"id": "201498360", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201498360.jpg", "question": "Does the device to the right of the keyboard look smooth and large?", "gt": "no"}
+{"id": "201752840", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201752840.jpg", "question": "What color is the shirt near the shorts?", "gt": "black"}
+{"id": "202126058", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202126058.jpg", "question": "What does the professional person hold?", "gt": "racket"}
+{"id": "201030460", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201030460.jpg", "question": "What kind of furniture is in front of the wall?", "gt": "couch"}
+{"id": "202147825", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202147825.jpg", "question": "What is the person to the right of the chair doing?", "gt": "sleeping"}
+{"id": "20120212", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20120212.jpg", "question": "Who is wearing shorts?", "gt": "athlete"}
+{"id": "202144668", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202144668.jpg", "question": "How is the half full appliance called?", "gt": "blender"}
+{"id": "202121678", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202121678.jpg", "question": "Is the sink dirty and gray?", "gt": "no"}
+{"id": "201896363", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201896363.jpg", "question": "Who is looking down at the cake?", "gt": "lady"}
+{"id": "201264312", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201264312.jpg", "question": "Which side of the image is the brown house on?", "gt": "right"}
+{"id": "20716790", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20716790.jpg", "question": "What do both the door and the mirror have in common?", "gt": "material"}
+{"id": "202036951", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202036951.jpg", "question": "What food is not greasy, the sausage or the pizza?", "gt": "sausage"}
+{"id": "20461875", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20461875.jpg", "question": "Is the hat the same color as the sign?", "gt": "yes"}
+{"id": "20341116", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20341116.jpg", "question": "Does the sculpture made of metal look curved?", "gt": "yes"}
+{"id": "201185941", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201185941.jpg", "question": "Are the trees behind a frisbee?", "gt": "yes"}
+{"id": "202120380", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202120380.jpg", "question": "How clean is the window behind the sign?", "gt": "clean"}
+{"id": "202081002", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202081002.jpg", "question": "What is the house made of?", "gt": "wood"}
+{"id": "202228192", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202228192.jpg", "question": "What type of device is to the right of the speaker?", "gt": "television"}
+{"id": "202144675", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202144675.jpg", "question": "What kind of appliance is electric?", "gt": "blender"}
+{"id": "20656876", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20656876.jpg", "question": "Is the minivan new?", "gt": "yes"}
+{"id": "20953077", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20953077.jpg", "question": "Is the male player swinging a tennis racket?", "gt": "yes"}
+{"id": "20836659", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20836659.jpg", "question": "Do the dolls that are to the left of the people look large and colorful?", "gt": "no"}
+{"id": "20303081", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20303081.jpg", "question": "What is the man to the left of the glasses doing?", "gt": "resting"}
+{"id": "2076720", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/2076720.jpg", "question": "What is taller than the vehicles that look heavy?", "gt": "sign"}
+{"id": "202100348", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202100348.jpg", "question": "What watercraft is floating on the ocean?", "gt": "sailboat"}
+{"id": "201866566", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201866566.jpg", "question": "How large is the traffic sign?", "gt": "huge"}
+{"id": "20978778", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20978778.jpg", "question": "Which side of the image is the blond woman on?", "gt": "left"}
+{"id": "20395096", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20395096.jpg", "question": "Which color are these curtains?", "gt": "red"}
+{"id": "202081384", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202081384.jpg", "question": "What appliance is the paper towel reflected in?", "gt": "toaster"}
+{"id": "20922898", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20922898.jpg", "question": "What is the long wire connected to?", "gt": "telephone pole"}
+{"id": "202246740", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202246740.jpg", "question": "Is there any helmet to the right of the person?", "gt": "no"}
+{"id": "201109669", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201109669.jpg", "question": "Is the traffic signal above the SUV high and yellow?", "gt": "no"}
+{"id": "20940036", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20940036.jpg", "question": "What color does the curtain have?", "gt": "dark"}
+{"id": "202158811", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202158811.jpg", "question": "Which kind of vehicle is black?", "gt": "bus"}
+{"id": "201412361", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201412361.jpg", "question": "Is the backpack large and black?", "gt": "yes"}
+{"id": "202246227", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202246227.jpg", "question": "What kind of device is white?", "gt": "laptop"}
+{"id": "202156833", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202156833.jpg", "question": "Which kind of animal is standing?", "gt": "elephants"}
+{"id": "20757077", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20757077.jpg", "question": "Does the person in front of the plates look short and old?", "gt": "yes"}
+{"id": "2076115", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/2076115.jpg", "question": "How is the sign that is the same color as the chimney called?", "gt": "street sign"}
+{"id": "20468802", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20468802.jpg", "question": "What is covered by the man?", "gt": "helmet"}
+{"id": "20648196", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20648196.jpg", "question": "Who is sitting?", "gt": "policeman"}
+{"id": "20716956", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20716956.jpg", "question": "What is the item of furniture that the cord is on called?", "gt": "bed"}
+{"id": "202179291", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202179291.jpg", "question": "Is the rope different in color than the bike?", "gt": "yes"}
+{"id": "201935220", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201935220.jpg", "question": "Where is the man to the right of the camera skating on?", "gt": "skate park"}
+{"id": "20673057", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20673057.jpg", "question": "In which part of the photo is the empty bag, the bottom or the top?", "gt": "top"}
+{"id": "20541680", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20541680.jpg", "question": "Who is wearing trousers?", "gt": "woman"}
+{"id": "201412269", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201412269.jpg", "question": "Who is wearing the goggles?", "gt": "skier"}
+{"id": "20340565", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20340565.jpg", "question": "Are there chairs below the table?", "gt": "yes"}
+{"id": "20258686", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20258686.jpg", "question": "What kind of furniture is to the left of the phone?", "gt": "chair"}
+{"id": "201247254", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201247254.jpg", "question": "Does the clay flower pot look blue?", "gt": "yes"}
+{"id": "202073305", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202073305.jpg", "question": "What kind of animal is beautiful?", "gt": "deer"}
+{"id": "20295524", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20295524.jpg", "question": "Is this a young woman?", "gt": "yes"}
+{"id": "202023275", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202023275.jpg", "question": "What piece of furniture is closed?", "gt": "closet"}
+{"id": "201047191", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201047191.jpg", "question": "Are the metal glasses clean and black?", "gt": "yes"}
+{"id": "201795846", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201795846.jpg", "question": "Does the man appear to be sitting?", "gt": "no"}
+{"id": "201434219", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201434219.jpg", "question": "Does the device below the airplane have black color?", "gt": "no"}
+{"id": "20836960", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20836960.jpg", "question": "Who is looking down?", "gt": "people"}
+{"id": "201109411", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201109411.jpg", "question": "Does the bright house have small size and blue color?", "gt": "no"}
+{"id": "202227908", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202227908.jpg", "question": "What is the color of that entertainment center?", "gt": "brown"}
+{"id": "2076489", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/2076489.jpg", "question": "Are there fences to the right of the bus in the middle of the picture?", "gt": "yes"}
+{"id": "201110510", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201110510.jpg", "question": "What kind of food is on top of the cake?", "gt": "marshmallow"}
+{"id": "201983984", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201983984.jpg", "question": "What is pulled by the woman that is not sad?", "gt": "luggage cart"}
+{"id": "201207478", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201207478.jpg", "question": "Is that mug full or empty?", "gt": "empty"}
+{"id": "201434055", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201434055.jpg", "question": "Is the color of the airplane different than that of the shirt?", "gt": "yes"}
+{"id": "201663602", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201663602.jpg", "question": "Is the electric dishwasher behind the floor?", "gt": "yes"}
+{"id": "2017224", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/2017224.jpg", "question": "How long do you think is the black hair?", "gt": "short"}
+{"id": "201576611", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201576611.jpg", "question": "Is the person near the goat wearing a hat?", "gt": "no"}
+{"id": "201428998", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201428998.jpg", "question": "Which is smaller, the stove or the refrigerator?", "gt": "stove"}
+{"id": "2013003", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/2013003.jpg", "question": "What's the bottle made of?", "gt": "plastic"}
+{"id": "201576511", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201576511.jpg", "question": "Is the jacket white and open?", "gt": "yes"}
+{"id": "201492367", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201492367.jpg", "question": "Is the tree in front or behind the fence?", "gt": "front"}
+{"id": "201951721", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201951721.jpg", "question": "Which vehicle is this?", "gt": "van"}
+{"id": "20349766", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/20349766.jpg", "question": "Who is looking down?", "gt": "woman"}
+{"id": "201235537", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201235537.jpg", "question": "Which kind of furniture is on top of the floor?", "gt": "shelves"}
+{"id": "201909080", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201909080.jpg", "question": "Which material is the table made of?", "gt": "metal"}
+{"id": "201400023", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201400023.jpg", "question": "Is this a couch or a table?", "gt": "couch"}
+{"id": "202257086", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202257086.jpg", "question": "Which place is it?", "gt": "beach"}
+{"id": "201756930", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/201756930.jpg", "question": "Are there windows or doors that are not closed?", "gt": "no"}
+{"id": "202240690", "image": "/media/disk2/YZX/research/vla/runs/data/gqa/202240690.jpg", "question": "Does the shirt have white color?", "gt": "yes"}
