@@ -1,32 +1,33 @@
 # STATE.md — 当前项目状态（主窗口维护，保持 ≤30 行）
 
 > 项目：VLM 视觉 token 压缩 · 目标 Q1/Q2 SCI · 3–6 月 · 详见 **ORCHESTRATION.md**
-> 最近更新：2026-07-01
+> 最近更新：2026-07-02
 
 ## 当前阶段
-**P2 方法-v1 对比完成 → 方法重定向到 v2（query-aware boundary selector）**
+**P2 → 方法 A''（CLIP 边界 selector）实现中**；方向定 A''→D
 
 ## ★ 已确立（不变）
-- **go/no-go provisional GO**：压缩→serving 真实 wall-clock 加速（proxy probe: GQA e2e 1.33× @ r50）。核心 claim 成立。
-- **3 条 serving 专属发现**：① e2e>prefill（KV-cache/并发收益）；② prefill 次线性（vision tower 固定开销→早 prune 杠杆）；③ 加速依赖视觉 token 占比。
+- **provisional GO**：压缩→serving 真实加速（GQA e2e 1.33×@r50）。核心 claim 成立。
+- **3 条 serving 专属发现**：① e2e>prefill（KV-cache/并发）；② prefill 次线性（vision tower 固定→早 prune 杠杆）；③ 加速依赖视觉占比。
+- **served-throughput gap 仍开放**（0/37 OCR-VLM 进 vLLM serving）。
 
-## P2 方法-v1 结果（proxy vs v1-真CLS vs FastV，详见 `eval/p2_method_v1_comparison.md`）
-- **v1 真 CLS-attn 非赢家**：TextVQA 灾难（r50 0.445 vs proxy 0.530，r75 0.275）—— vision-tower CLS 不关注文本/OCR。GQA 也不优（r50 0.545≤proxy 0.565）。capture 另加吞吐开销。
-- **FastV（intra-LLM）OCR/极端压缩占优**（GQA r75 0.515, TextVQA r50 0.555），但 intra-LLM 在 vLLM 不可集成。
-- **核心约束**：serving 方法必须**边界 prune**（vLLM 可集成），但边界视觉显著性丢 OCR → **需要边界 query-aware selector**。
+## selector 迭代史
+- v1 边界 CLS-attn：TextVQA r50 0.445（vision-tower CLS 不关注文本）❌
+- v2 边界 LLM-embed cosine：TextVQA r50 ~0.38（嵌入空间非对比对齐）❌
+- proxy(hidden-state)：TextVQA r50 0.530（当前最好边界）｜FastV(intra-LLM)：0.555 但 vLLM 不可集成
+- **根因**：边界 training-free 廉价信号打不过 intra-LLM OCR；v2 错在用 LLM 词义空间而非对比空间。
 
-## 立即下一步 —— 方法 v2（Dev subagent）
-1. **边界 query-aware selector**：问题文本 ↔ patch 相关性选 top-k（边界、vLLM 可集成、保任务/文本 patch）。目标：边界恢复 FastV 级 OCR 精度。
-2. **早 prune**（finding #2）：选择点移入 vision tower（V0 eager，可行）→ 编码器少干活 → 更大 prefill 加速。
-3. **KV-cache/batch 感知 budget**（finding #1，v2 sketch）。
-4. served 吞吐为差异判据（0/37 测过）。
+## 立即下一步 —— A''（Dev subagent，CLIP 边界 selector）
+- **CLIP 对比对齐**：CLIP text encoder(问题) · CLIP ViT patch 特征 → 选 top-k（对比训练，文本/OCR patch 得分高）= v2 的正确修法。
+- 复用 vision-tower hook 取 CLIP 特征 + projector-output compaction；selector `--selector clip_query`。
+- **关键验证**：limit=50 TextVQA r0.5 → CLIP 对比能否恢复 OCR（目标接近 FastV 0.555 / proxy 0.530，远超 v2 0.38）。
+- A'' + 早 prune 协同：pre-projector 选择 → 既 query-aware 又省编码器/投影器开销（finding #2）。
 
-## v2 之后
-- P3 全基准（MME/MMBench/ScienceQA 等）× 多压缩比 × {v2, FastV, 早-prune} 基线。
-- 复现 1-2 个 serving-throughput baseline 对比（无现成，自建）。
+## A'' 通过后 → D（论文方法）
+vLLM 集成 + 早 prune（pre-projector）+ 负载自适应 budget（finding #1）。定位"首个 vLLM 集成、保 OCR 的 training-free 压缩"。基座 LLaVA-1.5-7B，**Qwen3-VL-8B 作泛化行**（Qwen3.5-VL 不存在；32B 不可行；不换基座）。
 
 ## 关键约束
-- 算力 1× A40 46GB 串行；GPU job 走 `scripts/queue`（注意：driver 连跑需 GPU-settle，曾出现 stale-vLLM 进程致 OOM）。
-- env：`vtc` / `vtc_serve`(vLLM0.10.2 V0) / `fastv`(FastV accuracy-only)。
+- 算力 1× A40 46GB 串行；GPU job 走 `scripts/queue`（driver 连跑需 GPU-settle）。
+- env：`vtc` / `vtc_serve`(vLLM0.10.2 V0) / `fastv`(accuracy-only)。
 - 提交以用户本人名义，禁 AI 署名。
 - 升级找人：凭据 / >6GPU·h / claim 被推翻 / 投稿前。
