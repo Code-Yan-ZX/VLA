@@ -940,72 +940,84 @@ def run(args) -> dict:
         n_tokens_out = 0
         seg_idx = 0
         req_counter = 0
-        # Two-phase streaming submission (the faithful online-server pattern):
-        #  PHASE 1 (submit): for each segment, decide r from the CURRENT load
-        #    (which reflects prior segments' still-in-flight requests), set k_cell
-        #    ONCE for the whole segment, preprocess all segment requests at that k,
-        #    add_request them, then step() a few times to schedule them (allocate
-        #    KV) so the NEXT segment's load read sees them. We do NOT drain between
-        #    segments -> requests accumulate in the engine -> load builds across
-        #    segments -> the controller's r rises over the run.
-        #  PHASE 2 (drain): once all segments submitted, step() until everything
-        #    finishes, collecting outputs.
-        # WHY PER-SEGMENT (not per-request) r: the projector hook reads a SINGLE
-        # shared k_cell at forward time, but vLLM batches multiple image-requests
-        # in one forward. If two in-flight requests had DIFFERENT k (per-request r),
-        # their text-placeholder counts would differ from the hook's single k ->
-        # masked_scatter size mismatch (the CUBLAS/masked_scatter crash). So all
-        # requests IN FLIGHT during a forward must share k. Per-segment r guarantees
-        # this (segment = the unit of simultaneous in-flight requests between drains).
-        all_seg_req_ids = []   # list of (seg_idx, [(rid, sample), ...], r_seg)
-        finished: dict = {}
+        # Per-segment drain with a ONE-SEGMENT-LAG load controller.
+        # WHY DRAIN-EACH-SEGMENT: the projector hook reads a SINGLE shared k_cell
+        # at forward time, and vLLM batches multiple image-requests per forward.
+        # If two in-flight requests had different k (different r), their text-
+        # placeholder counts would mismatch the hook's single k -> masked_scatter
+        # 'totalElements <= srcSize' crash. So all requests in flight during a
+        # forward MUST share k. Fully draining each segment before submitting the
+        # next guarantees no cross-segment batching -> no mismatch.
+        # WHY ONE-SEGMENT-LAG: with full drain, the load at segment N+1's entry is
+        # always 0 (segment N just finished). So the controller can't react to
+        # instantaneous load. Instead we sample the load ONCE during segment N's
+        # drain (its peak, while requests are mid-decode) and use that to decide
+        # segment N+1's r. This is a legitimate reactive controller (responds to
+        # recently-observed load, one decision cycle of latency -- exactly how a
+        # real online controller with a control loop would behave).
+        # Net behavior: under a bursty/step profile, segment N's peak load (which
+        # scales with burst size) drives segment N+1's r -> r rises after big
+        # bursts, falls after quiet periods. The realized[] log records BOTH the
+        # decision read (segment entry) and the peak read (mid-drain) so the
+        # adaptation is visible either way.
+        prev_peak_reading: Optional[LoadReading] = None
         t_submit_start = time.perf_counter()
         for seg_idx, (batch_samples, gap) in enumerate(segments):
             if not batch_samples:
                 continue
-            # decide THIS segment's r from current load (prior segments' requests
-            # are still in-flight from phase 1 -> load is non-trivial after seg 0)
+            # ---- decide THIS segment's r from the PRIOR segment's peak load ----
+            # (one-segment lag; seg 0 has no prior -> r_min cold start). For a
+            # non-adaptive run, use the fixed --pruning-rate.
             if adaptive:
-                r_seg = _decide_and_set_k()
+                if prev_peak_reading is not None:
+                    r_seg = controller.decide_r(prev_peak_reading)
+                    k_cell["k"] = max(1, int(round(576 * (1.0 - r_seg))))
+                else:
+                    # cold start: read current (empty) load -> records realized[0]
+                    r_seg = _decide_and_set_k()
             else:
                 r_seg = getattr(args, "pruning_rate", 0.0)
                 if k_cell is not None:
                     k_cell["k"] = max(1, int(round(576 * (1.0 - r_seg))))
+            # ---- submit this segment's requests (all share k_cell) ----
             seg_pairs = []
             for s in batch_samples:
                 rid = f"dval_{req_counter}"; req_counter += 1
-                # preprocess at this segment's k (k_cell already set above) ->
-                # placeholder count matches the hook's k_cell at forward time.
                 msgs = _build_messages(s)
                 prepped = llm.preprocess_chat(msgs)[0]
                 engine.add_request(rid, prepped, sp)
                 seg_pairs.append((rid, s))
-            all_seg_req_ids.append((seg_idx, seg_pairs, r_seg))
-            # step() a few times to schedule this segment's requests (move from
-            # waiting->running, allocate KV) so the next segment's load read sees
-            # them. Collect any that finish during these steps.
-            for _ in range(3):
-                if not engine.has_unfinished_requests():
-                    break
+            # ---- drain this segment, sampling peak load mid-decode ----
+            seg_finished: dict = {}
+            seg_peak_occ = -1.0
+            seg_peak_nr = -1
+            seg_peak_reading: Optional[LoadReading] = None
+            t_seg_drain = time.perf_counter()
+            n_steps = 0
+            while engine.has_unfinished_requests():
                 for o in engine.step():
                     if o.finished:
-                        finished[o.request_id] = o
-            if gap > 0.0:
-                time.sleep(gap)
-        # ---- PHASE 2: drain all in-flight requests ----
-        t_drain_start = time.perf_counter()
-        while engine.has_unfinished_requests():
-            for o in engine.step():
-                if o.finished:
-                    finished[o.request_id] = o
-            if time.perf_counter() - t_drain_start > 600:
-                print(f"[serve_bench] WARN: drain >600s, breaking step loop",
-                      flush=True)
-                break
-        # ---- collect results (iterate segments in order) ----
-        for seg_idx, seg_pairs, r_seg in all_seg_req_ids:
+                        seg_finished[o.request_id] = o
+                n_steps += 1
+                # sample load every few steps (cheap) and track the peak -- this
+                # is the signal for the NEXT segment's r decision.
+                if adaptive and n_steps % 3 == 1:
+                    rd = read_engine_load(llm)
+                    occ = rd.kv_occupancy if rd.kv_occupancy is not None else -1
+                    nr = rd.num_running if rd.num_running is not None else -1
+                    if occ > seg_peak_occ or nr > seg_peak_nr:
+                        seg_peak_reading = rd
+                        seg_peak_occ = max(seg_peak_occ, occ)
+                        seg_peak_nr = max(seg_peak_nr, nr)
+                if time.perf_counter() - t_seg_drain > 300:
+                    print(f"[serve_bench] WARN: segment {seg_idx} drain >300s, "
+                          f"breaking", flush=True)
+                    break
+            if adaptive and seg_peak_reading is not None:
+                prev_peak_reading = seg_peak_reading
+            # ---- collect this segment's results ----
             for rid, s in seg_pairs:
-                o = finished.get(rid)
+                o = seg_finished.get(rid)
                 if o is None:
                     raw.append({
                         "id": s.id, "served_tok_s": float("nan"),
@@ -1015,6 +1027,19 @@ def run(args) -> dict:
                         "segment": seg_idx, "r_used": r_seg,
                     })
                     continue
+                text = o.outputs[0].text.strip()
+                n_out = len(o.outputs[0].token_ids)
+                n_tokens_out += n_out
+                correct = scorer(text, s.gt, s.extra.get("choices"))
+                raw.append({
+                    "id": s.id, "served_tok_s": float("nan"),
+                    "served_req_s": float("nan"), "ttft_ms": float("nan"),
+                    "peak_kv_mb": float("nan"), "correct": correct,
+                    "answer": text, "gt": s.gt,
+                    "segment": seg_idx, "r_used": r_seg,
+                })
+            if gap > 0.0:
+                time.sleep(gap)
                 text = o.outputs[0].text.strip()
                 n_out = len(o.outputs[0].token_ids)
                 n_tokens_out += n_out
