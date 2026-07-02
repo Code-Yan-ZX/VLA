@@ -1,0 +1,24 @@
+{
+  "_doc": "P2 method-D scoping measurements (M1 prefill breakdown, M2 concurrency x prune-rate). Run via scripts/queue (entries appended to configs/queue.json) OR directly. GPU-settle sleep 30s between back-to-back vLLM jobs to avoid stale-process OOM. Total budget ~3.5 GPU·h (under 6 GPU·h escalation line). Env: /home/dell/miniconda3/envs/vtc_serve/bin/python (vLLM 0.10.2, V0).",
+  "m1_prefill_breakdown": {
+    "purpose": "Isolate vision-tower forward time from LLM prefill. Decision: vt_frac > 0.30 -> mid-encoder prune worth surgery; < 0.10 -> skip.",
+    "cmd": "/home/dell/miniconda3/envs/vtc_serve/bin/python -m src.serve_bench --model runs/models/llava-1.5-7b-hf --pruning-rate 0.0 --benchmark gqa --subset eval/subsets/gqa_200.jsonl --metrics-out runs/p2_d/m1_r0_n100.json --max-tokens 1 --max-model-len 4096 --gpu-memory-utilization 0.85 --seed 0 --limit 100 --selector proxy",
+    "est_min": 15,
+    "note": "max-tokens=1 makes TTFT ~= pure prefill (no decode). Serial mode (default) for per-request TTFT + vision-tower timing. r0 (no pruning) = the fixed-cost reference."
+  },
+  "m2_matrix": {
+    "purpose": "req/s of {r0,r50,r75} at concurrency {1,12}. Decision: if speedup_at_12 > speedup_at_1, load-adaptive budget justified.",
+    "runs": [
+      {"name": "m2_c1_r0",  "max_num_seqs": 1,  "pruning": 0.0,  "est_min": 20},
+      {"name": "m2_c1_r50", "max_num_seqs": 1,  "pruning": 0.50, "est_min": 18},
+      {"name": "m2_c1_r75", "max_num_seqs": 1,  "pruning": 0.75, "est_min": 15},
+      {"name": "m2_c12_r0", "max_num_seqs": 12, "pruning": 0.0,  "est_min": 25},
+      {"name": "m2_c12_r50","max_num_seqs": 12, "pruning": 0.50, "est_min": 22},
+      {"name": "m2_c12_r75","max_num_seqs": 12, "pruning": 0.75, "est_min": 18}
+    ],
+    "cmd_template": "/home/dell/miniconda3/envs/vtc_serve/bin/python -m src.serve_bench --model runs/models/llava-1.5-7b-hf --pruning-rate {pruning} --benchmark gqa --subset eval/subsets/gqa_200.jsonl --metrics-out runs/p2_d/{name}.json --max-tokens 16 --max-model-len 4096 --gpu-memory-utilization 0.85 --seed 0 --limit 100 --selector proxy --max-num-seqs {max_num_seqs} --batch-submit",
+    "note": "--batch-submit submits all 100 in one llm.chat() so max_num_seqs engages continuous batching. c1 = no batching (isolates per-request latency); c12 = full batching (KV-pressure-bound throughput). max-tokens=16 = realistic short-answer decode."
+  },
+  "run_order": ["m1_prefill_breakdown", "m2_c1_r0", "m2_c1_r50", "m2_c1_r75", "m2_c12_r0", "m2_c12_r50", "m2_c12_r75"],
+  "total_est_min": 133
+}
