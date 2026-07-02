@@ -299,6 +299,7 @@ def build_engine(model: str, args):
         enforce_eager=False,
         limit_mm_per_prompt={"image": 1},
         allowed_local_media_path=_repo_root,
+        max_num_seqs=getattr(args, "max_num_seqs", 256),  # M2: concurrency control
     )
 
     # ---- locate the projector + vision tower on the loaded model (V0 chain) ----
@@ -390,6 +391,37 @@ def build_engine(model: str, args):
               f"{clip_text_proj.weight.shape[0]}). visual_proj "
               f"{tuple(clip_visual_proj.weight.shape)} matches vision tower hidden "
               f"{vt_hidden}. ~0.5GB extra.", flush=True)
+
+    # ---- M1 timing instrumentation (P2 method D scoping) ---------------------
+    # WHY: Finding #2 said prefill is sub-linear because the vision tower processes
+    # ALL 576 tokens regardless of pruning. M1 measures the vision-tower fraction
+    # of prefill (TTFT) to decide if mid-encoder/early ViT prune is worth the
+    # surgery. We wrap BOTH the vision-tower forward AND the projector forward
+    # (vision-tower time is the bulk of the "fixed" cost; projector is the
+    # pruning-relevant boundary; LLM prefill = TTFT - vision_tower - queue).
+    # `_vtc_times` collects per-request wall times (ms) via pre/post hooks keyed
+    # by phase. run() aggregates them into vision_tower_ms / projector_ms /
+    # llm_prefill_ms (estimated) and writes to metrics.
+    _vtc_times: dict = {"vt_pre": [], "vt_post": [], "proj_pre": [], "proj_post": []}
+
+    def _vt_pre(module, inputs):  # noqa: ANN001
+        _vtc_times.setdefault("_stamps", {}).setdefault("stack", []).append(time.perf_counter())
+
+    def _vt_post(module, inputs, outputs):  # noqa: ANN001
+        t1 = time.perf_counter()
+        stack = _vtc_times.setdefault("_stamps", {}).get("stack", [])
+        t0 = stack.pop() if stack else t1
+        _vtc_times["vt_post"].append((t1 - t0) * 1000.0)
+
+    def _proj_pre(module, inputs):  # noqa: ANN001
+        _vtc_times.setdefault("_stamps", {}).get("stack", [])
+        _vtc_times.setdefault("_stamps", {}).setdefault("stack", []).append(time.perf_counter())
+
+    def _proj_post(module, inputs, outputs):  # noqa: ANN001
+        t1 = time.perf_counter()
+        stack = _vtc_times.setdefault("_stamps", {}).get("stack", [])
+        t0 = stack.pop() if stack else t1
+        _vtc_times["proj_post"].append((t1 - t0) * 1000.0)
 
     def _vision_hook_proxy(module, inputs, outputs):  # noqa: ANN001
         import torch  # noqa
@@ -606,6 +638,19 @@ def build_engine(model: str, args):
             inner.register_forward_hook(_vision_hook_proxy)
     projector.register_forward_hook(_projector_hook)
 
+    # ---- M1 timing hooks (always on, for prefill breakdown) ----------------
+    # register_with_pre_hook needs PyTorch >=1.8; forward_pre_hook fires before
+    # the module forward, forward_hook after. The vision_tower.vision_model is
+    # the full CLIPVisionTransformer forward (embeddings + 24 encoder layers) --
+    # exactly the "fixed cost" we want to isolate. The projector forward is the
+    # boundary (cheap linear) -- measured to subtract from TTFT cleanly.
+    if vision_tower is not None:
+        inner = getattr(vision_tower, "vision_model", vision_tower)
+        inner.register_forward_pre_hook(_vt_pre)
+        inner.register_forward_hook(_vt_post)
+    projector.register_forward_pre_hook(_proj_pre)
+    projector.register_forward_hook(_proj_post)
+
     # stash hook_state + cls_capture on the projector for run() to read/clean up
     projector._vtc_hook_state = hook_state  # type: ignore[attr-defined]
     projector._vtc_cls_capture = cls_capture  # type: ignore[attr-defined]
@@ -616,6 +661,7 @@ def build_engine(model: str, args):
     projector._vtc_clip_text_proj = clip_text_proj     # type: ignore[attr-defined]
     projector._vtc_clip_visual_proj = clip_visual_proj  # type: ignore[attr-defined]
     projector._vtc_clip_tokenizer = clip_tokenizer     # type: ignore[attr-defined]
+    projector._vtc_times = _vtc_times  # type: ignore[attr-defined]  (M1 timing)
     return llm, projector
 
 
@@ -675,6 +721,9 @@ def embed_clip_question(question: str, clip_tokenizer, clip_text_model,
 # Metrics aggregation
 # --------------------------------------------------------------------------- #
 def mean_stderr(xs: list[float]) -> dict:
+    # NaN-safe: skip non-finite values (batch-submit mode stores NaN per-row then
+    # overwrites with the aggregate; guard against any NaN leaking into aggregation).
+    xs = [x for x in xs if isinstance(x, (int, float)) and x == x]
     if not xs:
         return {"mean": float("nan"), "stderr": float("nan"), "n": 0}
     m = statistics.fmean(xs)
@@ -709,12 +758,18 @@ def run(args) -> dict:
     device = "cuda" if torch.cuda.is_available() else "cpu"
     torch.cuda.reset_peak_memory_stats()
 
-    t_all_start = time.perf_counter()
-    for s in samples:
+    # ---- request-submission mode -------------------------------------------
+    # SERIAL (default, M1 + accuracy): one llm.chat() per request -> per-request
+    #   TTFT measured, but max_num_seqs has NO throughput effect (only 1 in flight).
+    # BATCH (M2): submit ALL message-lists to ONE llm.chat() -> vLLM runs them with
+    #   continuous batching up to max_num_seqs -> real concurrency, real req/s gain
+    #   from KV-pressure relief. Per-request TTFT unavailable; served_req_s is
+    #   computed as n / wall_time (the aggregate throughput metric M2 needs).
+    batch_submit = getattr(args, "batch_submit", False)
+
+    def _build_messages(s):
         # query-aware: embed the question NOW (cheap) and push to the FIFO so the
         # projector hook pops it during this request's forward.
-        #   * query_aware: LLM embed_tokens (word-semantics space).
-        #   * clip_query : CLIP text tower + projection (contrastive space, A'').
         if do_query_aware:
             assert query_queue is not None
             query_queue.append(embed_question(s.question, projector._vtc_tokenizer,  # type: ignore[attr-defined]
@@ -725,40 +780,101 @@ def run(args) -> dict:
                 s.question,
                 projector._vtc_clip_tokenizer, projector._vtc_clip_text_model,
                 projector._vtc_clip_text_proj, device))
-        # Use llm.chat() with the OpenAI-style message format: the processor
-        # applies the correct chat template and counts exactly one image (raw
-        # "<image>\n..." prompts were double-counted by the multimodal validator
-        # in some vLLM versions; chat() is the robust path, proven in the smoke test).
-        # Local paths must be file:// URLs for vLLM's image loader.
         img_url = s.image
         if os.path.exists(img_url):
             img_url = "file://" + os.path.abspath(img_url)
-        messages = [{
+        return [{
             "role": "user",
             "content": [
                 {"type": "image_url", "image_url": {"url": img_url}},
                 {"type": "text", "text": s.question},
             ],
         }]
-        t0 = time.perf_counter()
-        outputs = llm.chat(messages, sp, use_tqdm=False)
-        t1 = time.perf_counter()
-        text = outputs[0].outputs[0].text.strip()
-        ttft = (t1 - t0) * 1000.0  # ms (approx: prefill-dominated for 1 tok)
-        n_out = len(outputs[0].outputs[0].token_ids)
-        e2e = t1 - t0
-        served_tok_s = (n_out / e2e) if e2e > 0 else 0.0
-        served_req_s = (1.0 / e2e) if e2e > 0 else 0.0
+
+    if batch_submit:
+        # ---- M2 batched path: real continuous batching ----------------------
+        # Pre-build all messages (also pre-pushes all query embeddings in order).
+        all_messages = [_build_messages(s) for s in samples]
+        t_all_start = time.perf_counter()
+        outs = llm.chat(all_messages, sp, use_tqdm=False)
+        wall = time.perf_counter() - t_all_start
+        # aggregate throughput (the M2 metric): req/s over the whole batch.
+        agg_req_s = len(samples) / wall if wall > 0 else 0.0
+        n_tokens_out = 0
+        for s, o in zip(samples, outs):
+            text = o.outputs[0].text.strip()
+            n_out = len(o.outputs[0].token_ids)
+            n_tokens_out += n_out
+            correct = scorer(text, s.gt, s.extra.get("choices"))
+            # per-request req/s in batch mode = meaningless individually; we store
+            # the AGGREGATE in agg below. Keep per-row latencies = NaN to flag.
+            raw.append({
+                "id": s.id, "served_tok_s": float("nan"), "served_req_s": float("nan"),
+                "ttft_ms": float("nan"), "peak_kv_mb": float("nan"),
+                "correct": correct, "answer": text, "gt": s.gt,
+            })
+        # overwrite served metrics with the batched aggregate (the real M2 signal)
+        agg_tok_s = n_tokens_out / wall if wall > 0 else 0.0
         peak_kv_mb = torch.cuda.max_memory_allocated() / (1024 ** 2)
-        correct = scorer(text, s.gt, s.extra.get("choices"))
-        raw.append({
-            "id": s.id, "served_tok_s": served_tok_s, "served_req_s": served_req_s,
-            "ttft_ms": ttft, "peak_kv_mb": peak_kv_mb,
-            "correct": correct, "answer": text, "gt": s.gt,
-        })
-    wall = time.perf_counter() - t_all_start
+        for r in raw:
+            r["served_tok_s"] = agg_tok_s
+            r["served_req_s"] = agg_req_s
+            r["peak_kv_mb"] = peak_kv_mb
+        # batch mode has no per-request TTFT; M1 timing hooks still fired per-
+        # request (vision tower + projector), so the prefill_breakdown remains
+        # valid -- but TTFT itself (the denominator of vt_frac) is undefined.
+        # We report vt_frac against the SERIAL-derived TTFT only if present.
+    else:
+        # ---- SERIAL path (default): per-request TTFT, M1 prefill breakdown --
+        t_all_start = time.perf_counter()
+        for s in samples:
+            messages = _build_messages(s)
+            t0 = time.perf_counter()
+            outputs = llm.chat(messages, sp, use_tqdm=False)
+            t1 = time.perf_counter()
+            text = outputs[0].outputs[0].text.strip()
+            ttft = (t1 - t0) * 1000.0  # ms (approx: prefill-dominated for 1 tok)
+            n_out = len(outputs[0].outputs[0].token_ids)
+            e2e = t1 - t0
+            served_tok_s = (n_out / e2e) if e2e > 0 else 0.0
+            served_req_s = (1.0 / e2e) if e2e > 0 else 0.0
+            peak_kv_mb = torch.cuda.max_memory_allocated() / (1024 ** 2)
+            correct = scorer(text, s.gt, s.extra.get("choices"))
+            raw.append({
+                "id": s.id, "served_tok_s": served_tok_s, "served_req_s": served_req_s,
+                "ttft_ms": ttft, "peak_kv_mb": peak_kv_mb,
+                "correct": correct, "answer": text, "gt": s.gt,
+            })
+        wall = time.perf_counter() - t_all_start
 
     hook_state = getattr(projector, "_vtc_hook_state", {})
+    vtc_times = getattr(projector, "_vtc_times", {})
+
+    # ---- M1: prefill breakdown (vision tower vs LLM prefill) ----------------
+    # vision_tower_ms = full CLIPVisionTransformer forward (embeddings + 24 layers).
+    # projector_ms   = projector linear (boundary, pruning-relevant).
+    # llm_prefill_ms = TTFT - vision_tower - projector (the LLM prefill on the
+    #   image+text sequence; estimated remainder). Same n as TTFT.
+    vt_ms = vtc_times.get("vt_post", [])
+    proj_ms = vtc_times.get("proj_post", [])
+    ttft_serial = [r["ttft_ms"] for r in raw if r["ttft_ms"] == r["ttft_ms"]]  # drop NaN (batch mode)
+    vt_mean = statistics.fmean(vt_ms) if vt_ms else 0.0
+    proj_mean = statistics.fmean(proj_ms) if proj_ms else 0.0
+    # per-request llm prefill estimate (pair by index; clamp >=0); only in serial mode
+    if ttft_serial and not batch_submit:
+        llm_prefill_est = [
+            max(0.0, t - v - p) for t, v, p in zip(
+                ttft_serial,
+                vt_ms + [vt_mean] * (len(ttft_serial) - len(vt_ms)),
+                proj_ms + [proj_mean] * (len(ttft_serial) - len(proj_ms)),
+            )
+        ]
+        ttft_mean = statistics.fmean(ttft_serial)
+        vt_frac = (vt_mean / ttft_mean) if ttft_mean > 0 else float("nan")
+    else:
+        llm_prefill_est = []
+        ttft_mean = float("nan")
+        vt_frac = float("nan")  # batch mode: TTFT undefined, vt_frac N/A
 
     agg = {
         "served_tok_s": mean_stderr([r["served_tok_s"] for r in raw]),
@@ -766,6 +882,14 @@ def run(args) -> dict:
         "ttft_ms": mean_stderr([r["ttft_ms"] for r in raw]),
         "peak_kv_mb": mean_stderr([r["peak_kv_mb"] for r in raw]),
         "accuracy": (sum(r["correct"] for r in raw) / len(raw)) if raw else float("nan"),
+    }
+    agg_prefill = {
+        "vision_tower_ms": {"mean": vt_mean, "n": len(vt_ms)},
+        "projector_ms": {"mean": proj_mean, "n": len(proj_ms)},
+        "llm_prefill_ms_est": mean_stderr(llm_prefill_est),
+        "vision_tower_fraction_of_prefill": vt_frac,
+        "ttft_ms_mean": ttft_mean,
+        "batch_submit": batch_submit,
     }
 
     # speedup vs r0 baseline if present
@@ -784,7 +908,9 @@ def run(args) -> dict:
         "benchmark": args.benchmark, "pruning_rate": args.pruning_rate,
         "selector": getattr(args, "selector", "proxy"),
         "diversity_lam": getattr(args, "diversity_lam", 0.0),
+        "max_num_seqs": getattr(args, "max_num_seqs", 256),
         "n": len(raw), "wall_s": wall, "agg": agg,
+        "prefill_breakdown": agg_prefill,
         "prefill_speedup_vs_r0": prefill_speedup, "e2e_speedup_vs_r0": e2e_speedup,
         "hook": {
             "n_projector_calls": hook_state.get("n_calls", 0),
@@ -819,6 +945,14 @@ def main() -> None:
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--limit", type=int, default=0,
                     help="use only first N subset samples (0=all; for quick validation)")
+    ap.add_argument("--max-num-seqs", type=int, default=256,
+                    help="vLLM engine max_num_seqs (continuous-batching concurrency cap). "
+                         "M2 lever: 1 = no batching (isolates per-request latency), "
+                         "12+ = full continuous batching (KV-pressure-bound throughput).")
+    ap.add_argument("--batch-submit", action="store_true",
+                    help="M2: submit ALL requests in ONE llm.chat() call so vLLM's "
+                         "continuous batching actually engages max_num_seqs. Disables "
+                         "per-request TTFT (M1 needs serial mode, the default).")
     ap.add_argument("--selector", default="proxy",
                     choices=["proxy", "true_cls", "query_aware", "clip_query"],
                     help="score source: 'proxy' = hidden-state-deviation (the P2 probe); "
