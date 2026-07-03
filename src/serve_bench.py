@@ -977,6 +977,12 @@ def run(args) -> dict:
             ],
         }]
 
+    # P3-step-4: global peak KV-occupancy / num_running trackers (regime
+    # evidence). Populated by the load_profile drain loop; left None for the
+    # batch_submit / serial paths (which don't sample mid-decode).
+    run_peak_occ: Optional[float] = None
+    run_peak_nr: Optional[int] = None
+
     if load_profile is not None:
         # ---- method D: time-varying load profile (STREAMING submission) -------
         # The adaptive controller must see MID-FLIGHT load to react. The sync
@@ -1048,6 +1054,8 @@ def run(args) -> dict:
         # decision read (segment entry) and the peak read (mid-drain) so the
         # adaptation is visible either way.
         prev_peak_reading: Optional[LoadReading] = None
+        run_peak_occ = -1.0   # global peak KV-occupancy across all segments (regime evidence)
+        run_peak_nr = -1      # global peak num_running across all segments
         t_submit_start = time.perf_counter()
         for seg_idx, (batch_samples, gap) in enumerate(segments):
             if not batch_samples:
@@ -1087,6 +1095,9 @@ def run(args) -> dict:
                 engine.add_request(rid, prepped, sp)
                 seg_pairs.append((rid, s))
             # ---- drain this segment, sampling peak load mid-decode ----
+            # P3-step-4: sample load for ALL runs (not just adaptive) so the KV-
+            # bound regime is provable for fixed-r too (peak KV-occupancy +
+            # num_running are now logged in load_trace for every config).
             seg_finished: dict = {}
             seg_peak_occ = -1.0
             seg_peak_nr = -1
@@ -1099,8 +1110,9 @@ def run(args) -> dict:
                         seg_finished[o.request_id] = o
                 n_steps += 1
                 # sample load every few steps (cheap) and track the peak -- this
-                # is the signal for the NEXT segment's r decision.
-                if adaptive and n_steps % 3 == 1:
+                # is the signal for the NEXT segment's r decision (adaptive) AND
+                # the regime evidence (all runs).
+                if n_steps % 3 == 1:
                     rd = read_engine_load(llm, max_num_seqs=_mnseqs)
                     occ = rd.kv_occupancy if rd.kv_occupancy is not None else -1
                     nr = rd.num_running if rd.num_running is not None else -1
@@ -1108,8 +1120,13 @@ def run(args) -> dict:
                         seg_peak_reading = rd
                         seg_peak_occ = max(seg_peak_occ, occ)
                         seg_peak_nr = max(seg_peak_nr, nr)
-                if time.perf_counter() - t_seg_drain > 300:
-                    print(f"[serve_bench] WARN: segment {seg_idx} drain >300s, "
+                    # global peak tracker (all runs) for regime evidence
+                    if occ >= 0 and (run_peak_occ is None or occ > run_peak_occ):
+                        run_peak_occ = occ
+                    if nr >= 0 and (run_peak_nr is None or nr > run_peak_nr):
+                        run_peak_nr = nr
+                if time.perf_counter() - t_seg_drain > 600:
+                    print(f"[serve_bench] WARN: segment {seg_idx} drain >600s, "
                           f"breaking", flush=True)
                     break
             if adaptive and seg_peak_reading is not None:
@@ -1282,6 +1299,11 @@ def run(args) -> dict:
         "load_profile": getattr(args, "load_profile", None),
         "controller": (_controller_json(controller))
                      if controller is not None else None,
+        "load_trace": {  # P3-step-4: KV-bound regime evidence (all runs)
+            "peak_kv_occupancy": run_peak_occ,
+            "peak_num_running": run_peak_nr,
+            "max_num_seqs": getattr(args, "max_num_seqs", 256),
+        } if run_peak_occ is not None else None,
         "n": len(raw), "wall_s": wall, "agg": agg,
         "prefill_breakdown": agg_prefill,
         "prefill_speedup_vs_r0": prefill_speedup, "e2e_speedup_vs_r0": e2e_speedup,
