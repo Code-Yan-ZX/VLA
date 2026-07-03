@@ -30,11 +30,11 @@
 |---|---|---|---|---|---|
 | c1  (no batching) | 1.815 | 2.132 | 2.294 | **1.17×** | 1.26× |
 | c4  | 3.436 | 5.022 | — | 1.46× | — |
-| c12 (full batching) | 5.754 | 8.181 | **10.095** | **1.42×** | **1.76×** |
+| c12 (full batching) | 5.754 | 8.181 | **10.095** | **1.42×** | **1.75×** |
 
 ### Headline numbers (the measurement contribution)
-- **c12/r75 = 1.76× served req/s** over c12/r0 — the strongest single speedup.
-- **Concurrency amplification:** the prune speedup *grows* with concurrency: r50 goes 1.17× (c1) → 1.42× (c12); r75 goes 1.26× (c1) → **1.76× (c12)** — a +0.49 concurrency bonus at r75. (M2 verdict.)
+- **c12/r75 = 1.75× served req/s** over c12/r0 — the strongest single speedup.
+- **Concurrency amplification:** the prune speedup *grows* with concurrency: r50 goes 1.17× (c1) → 1.42× (c12); r75 goes 1.26× (c1) → **1.75× (c12)** — a +0.49 concurrency bonus at r75. (M2 verdict.)
 - **Constant-vs-bursty contrast:** GQA adaptive controller, bursty req/s 3.38 vs constant req/s 6.95 = **2.06× faster under sustained high load** (controller prunes at r_max-equivalent throughout). `notes/p2_d_results.md` §"Constant-vs-bursty".
 
 ### Prefill cost breakdown (why prefill is sub-linear)

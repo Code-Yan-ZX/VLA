@@ -2,8 +2,8 @@
 """Fig 2 - Concurrency x prune curve (GQA, served req/s).
 
 req/s (y) vs prune rate (x: 0 / 0.50 / 0.75), three curves for
-max_num_seqs in {1, 4, 12}. Annotates the c12/r75 = 1.76x headline and the
-c1->c12 amplification (r50: 1.17x->1.42x; r75: 1.26x->1.76x).
+max_num_seqs in {1, 4, 12}. Annotates the c12/r75 = 1.75x headline and the
+c1->c12 amplification (r50: 1.17x->1.42x; r75: 1.26x->1.75x).
 
 Concurrency is an ordered magnitude, so curves use a single-hue (blue)
 sequential ramp light->dark (the dataviz sequential rule).
@@ -21,12 +21,12 @@ S.apply_rc(fontsize=9)
 m = D.m2_matrix()
 
 # Speedup annotations: displayed values are the paper-stated figures from
-# eval/final_results.md Table A (1.17/1.42/1.26/1.76). NOTE: the c12/r75 ratio
+# eval/final_results.md Table A (1.17/1.42/1.26/1.75). NOTE: the c12/r75 ratio
 # computed from the raw JSON is 1.7546 -> 1.75x at 2 dp; Table A rounds it to
-# 1.76x. We display Table A's 1.76x so the figure agrees with the paper text;
+# 1.75x. We display Table A's 1.75x so the figure agrees with the paper text;
 # the raw value is logged below for transparency. See digest flag to main.
 STATED = {(1, 0.50): 1.17, (12, 0.50): 1.42,
-          (1, 0.75): 1.26, (12, 0.75): 1.76}
+          (1, 0.75): 1.26, (12, 0.75): 1.75}
 
 PRUNES = [0.0, 0.50, 0.75]
 CONCS = [1, 4, 12]
@@ -44,7 +44,7 @@ for c in CONCS:
             label=f"$c={c}$" if c != 1 else "$c=1$ (no batching)",
             zorder=3 if c == 12 else 2)
 
-# ---- headline annotation: c12/r75 = 1.76x (per Table A) ----
+# ---- headline annotation: c12/r75 = 1.75x (per Table A) ----
 c12_r0 = m[(12, 0.0)]; c12_r75 = m[(12, 0.75)]
 speedup_75 = c12_r75 / c12_r0  # raw: 1.7546
 ax.annotate(f"{STATED[(12, 0.75)]:.2f}$\\times$\nserved req/s",
@@ -83,7 +83,7 @@ fig.subplots_adjust(left=0.15, right=0.97, top=0.90, bottom=0.20)
 out = Path(__file__).resolve().parent / "fig2_concurrency_prune.png"
 fig.savefig(out, dpi=300)
 print(f"wrote {out}")
-print(f"  c12/r75 raw ratio = {speedup_75:.4f}x (Table A states 1.76x; "
+print(f"  c12/r75 raw ratio = {speedup_75:.4f}x (Table A states 1.75x; "
       f"raw rounds to {speedup_75:.2f}x) -- FLAG to main")
 print(f"  displayed (Table A): r50 {s_r50_c1:.2f}->{s_r50_c12:.2f}; "
       f"r75 {s_r75_c1:.2f}->{s_r75_c12:.2f}")

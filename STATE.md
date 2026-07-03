@@ -8,12 +8,12 @@
 
 ## 方向定论（A 路径，measurement-led）
 - **B（KV-admission）已放弃**：1×A40 上 KV-bound regime 压不出（peak KV-occ 仅 0.148，需 >>0.5）；thesis 未验证，user 中途停。详见 DECISIONS 2026-07-03。
-- **回 A**：measurement-led 论文。测量是主轴（0/37 served-throughput + 3 发现 + headline 1.76×/并发放大），方法如实作 supporting（load-adaptive n=500 仅 dominate r25 on 3/5；KV-admission 作 future work）。
+- **回 A**：measurement-led 论文。测量是主轴（0/37 served-throughput + 3 发现 + headline 1.75×/并发放大），方法如实作 supporting（load-adaptive n=500 仅 dominate r25 on 3/5；KV-admission 作 future work）。
 
 ## ★ 论文脊梁（solid，reviewer 推不倒）
 - **首测**：VLM 视觉 token 压缩的 served-throughput 在 serving engine（vLLM）内首测（0/37 论文做过）。
 - **3 发现**：① e2e>prefill（KV-cache/并发收益，非 prefill FLOPs）；② prefill 次线性（vision tower 仅 6.6%）；③ 加速依赖视觉占比。
-- **headline**：c12/r75=1.76× req/s；并发放大（c1→c12 r50/r0 1.17×→1.42×）；constant-vs-bursty 2.06×。
+- **headline**：c12/r75=1.75× req/s；并发放大（c1→c12 r50/r0 1.17×→1.42×）；constant-vs-bursty 2.06×。
 - 目标期刊：**Pattern Recognition**（primary）；Information Sciences / Neurocomputing 备选。
 
 ## 立即下一步 —— P4 写作
