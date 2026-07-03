@@ -28,17 +28,26 @@ be syntax-checked / arg-parsed on CPU). The actual GPU run is a queue job.
 """
 from __future__ import annotations
 
-# === FORCE V0 ENGINE (must run BEFORE any `import vllm`) =====================
-# vLLM 0.10.2 defaults to the V1 engine, which runs the model in a SPAWNED
-# subprocess -- main-process PyTorch forward hooks cannot reach it (the model
-# never exists in the main process). V0 runs the model in-process, so the
-# attribute chain llm_engine.model_executor.driver_worker.model_runner.model
-# resolves and our hooks attach. V0 is still a valid continuous-batching serving
-# engine (PagedAttention); if compression yields no wall-clock gain in V0 it
-# won't in V1 either (V1 is more optimized -> less headroom), so V0 is a sound,
-# slightly-favorable go/no-go testbed.
+# === ENGINE MODE (must run BEFORE any `import vllm`) =========================
+# v2 P0: V1 is the DEFAULT (the v2 migration target). Two env levers:
+#   VLLM_USE_V1            : 1 (default in vllm>=0.8) = V1 engine; 0 = V0 engine.
+#   VLLM_ENABLE_V1_MULTIPROCESSING: 0 = EngineCore in-PROCESS (our measurement
+#       path); 1 (vllm 0.19 default) = EngineCore in a subprocess.
+# WHY multiproc=0: V1's scheduler (chunked prefill, prefix caching) is IDENTICAL
+# in both modes (vllm/v1/core/sched/scheduler.py; only the IPC wrapper differs),
+# but multiproc=0 keeps the model in-process (llm_engine.py:131 path:
+# `model_executor.driver_worker.model_runner.model` resolves) so the V0-style
+# projector forward-hook reaches it. This is the §4.3 measurement-time
+# simplification (verified in runs/v1_probe.py: P1 model in-process, P2 hook
+# fires, P3 processor patch shrinks placeholders 576->k with no shape crash,
+# P4 get_metrics() -> num_requests_running peaks at full concurrency).
+# Roll back to V0 via `--engine v0` (sets VLLM_USE_V1=0; multiproc is irrelevant
+# in V0 since V0 is always in-process).
 import os as _os
-_os.environ.setdefault("VLLM_USE_V1", "0")
+_os.environ.setdefault("VLLM_ENABLE_V1_MULTIPROCESSING", "0")
+# VLLM_USE_V1 is NOT forced here anymore; --engine v0 (parsed in main()) sets it
+# to "0" before vllm import via a re-import guard. For the default (V1) path we
+# leave it unset so vllm's native default (V1) applies.
 
 import argparse
 import json
@@ -65,6 +74,7 @@ from .load_controller import (  # noqa: F401  (re-export)
     LoadReading,
     PROFILES,
     read_engine_load,
+    read_engine_load_v1,
 )
 
 
@@ -347,28 +357,51 @@ def patch_image_token_count(pruning_rate: float, full_n: int = 576,
 
 
 def build_engine(model: str, args):
-    """Construct a vLLM offline LLM (V0 engine, in-process) with the probe
-    compressor hooked in. V0 is forced via VLLM_USE_V1=0 at module top."""
+    """Construct a vLLM offline LLM with the probe compressor hooked in.
+
+    ENGINE MODE (v2 P0):
+      * `--engine v1` (default): V1 engine, EngineCore IN-PROCESS
+        (VLLM_ENABLE_V1_MULTIPROCESSING=0, set at module top). The model is
+        reachable via the SAME attribute chain as V0
+        (llm_engine.model_executor.driver_worker.model_runner.model) so the
+        projector forward-hook + processor patch work unchanged. V1's scheduler
+        (chunked prefill, prefix caching) is the v2 measurement target.
+      * `--engine v0`: legacy V0 engine (VLLM_USE_V1=0, set in main() before
+        vllm import). Kept for rollback / V0-vs-V1 comparison.
+    """
     import torch  # noqa
     import vllm  # noqa
     from vllm import LLM  # noqa  (lazy: CPU-import-safe)
     from vllm.model_executor.models.llava import LlavaMultiModalProjector  # noqa
 
-    # V0 engine check (VLLM_USE_V1=0 set at module top before vllm import)
-    from vllm.envs import VLLM_USE_V1
-    print(f"[serve_bench] vllm={vllm.__version__} VLLM_USE_V1={VLLM_USE_V1} "
-          f"(must be 0 / V0 for in-process hooks)", flush=True)
-    if VLLM_USE_V1:
-        raise RuntimeError(
-            "VLLM_USE_V1 is True -- hooks cannot reach the spawned-subprocess "
-            "model. Set os.environ['VLLM_USE_V1']='0' BEFORE importing vllm.")
+    engine_mode = getattr(args, "engine", "v1")
+    # VLLM_USE_V1 was removed in vllm 0.19 (V0 dropped); read defensively.
+    try:
+        from vllm.envs import VLLM_USE_V1
+    except ImportError:
+        VLLM_USE_V1 = None  # vllm >=0.19 is V1-only
+    try:
+        from vllm.envs import VLLM_ENABLE_V1_MULTIPROCESSING
+    except ImportError:
+        VLLM_ENABLE_V1_MULTIPROCESSING = "<n/a>"
+    print(f"[serve_bench] vllm={vllm.__version__} engine_mode={engine_mode} "
+          f"VLLM_USE_V1={VLLM_USE_V1} "
+          f"VLLM_ENABLE_V1_MULTIPROCESSING={VLLM_ENABLE_V1_MULTIPROCESSING}",
+          flush=True)
+    if engine_mode == "v0":
+        if VLLM_USE_V1 is None:
+            raise RuntimeError(
+                "engine=v0 requested but this vllm (0.19+) removed V0. Use the "
+                "`vtc_serve` env (vllm 0.10.2) for V0 rollback.")
+        if VLLM_USE_V1:
+            raise RuntimeError(
+                "engine=v0 but VLLM_USE_V1 is True -- set os.environ['VLLM_USE_V1']="
+                "'0' BEFORE importing vllm (main() does this from --engine v0).")
 
     # allow loading subset images from local paths (file:// or bare path).
-    # Subset JSONLs reference absolute paths under <repo>/runs/data/{gqa,textvqa}/;
-    # anchor allowed_local_media_path at the repo root so all are covered.
     _repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
 
-    llm = LLM(
+    llm_kwargs = dict(
         model=model,
         dtype="float16",
         tensor_parallel_size=1,
@@ -376,19 +409,27 @@ def build_engine(model: str, args):
         max_model_len=args.max_model_len,
         trust_remote_code=False,
         # ADAPTIVE mode needs eager execution: varying per-segment k -> varying
-        # sequence lengths -> vLLM's CUDA graph capture (fixed shapes) mismatches
-        # at the image-token masked_scatter when k changes between segments
-        # (device-side 'masked_scatter_size_check' assert). Eager mode handles
-        # dynamic shapes correctly at a small per-step cost. Fixed-r runs keep
-        # graph capture (one k for the whole run -> shapes are static).
+        # sequence lengths -> CUDA graph capture mismatches. Fixed-r runs could
+        # keep graphs but we use eager uniformly for cross-cell comparability.
         enforce_eager=bool(getattr(args, "adaptive", False)),
         limit_mm_per_prompt={"image": 1},
         allowed_local_media_path=_repo_root,
         max_num_seqs=getattr(args, "max_num_seqs", 256),  # M2: concurrency control
     )
+    if engine_mode == "v1":
+        # V1-specific: enable get_metrics() (LLM forces disable_log_stats=True by
+        # default at entrypoints/llm.py:272-273) + defeat prefix caching so the
+        # per-request k-patch takes effect cleanly (prefix-cache would serve a
+        # stale k=576 result, bypassing the processor patch -- verified in probe).
+        llm_kwargs.update(
+            disable_log_stats=False,      # enables llm.get_metrics() for the controller
+            enable_prefix_caching=False,  # per-request k must take effect every call
+        )
+    llm = LLM(**llm_kwargs)
 
-    # ---- locate the projector + vision tower on the loaded model (V0 chain) ----
-    # V0 runs the model in-process: llm_engine.model_executor.driver_worker.model_runner.model
+    # ---- locate the projector + vision tower on the loaded model ----
+    # IDENTICAL attribute chain in V0 and V1-in-process (V1 multiproc=0): the
+    # model lives in the main process at model_executor.driver_worker.model_runner.model
     engine_model = llm.llm_engine.model_executor.driver_worker.model_runner.model
     projector: Optional[LlavaMultiModalProjector] = getattr(
         engine_model, "multi_modal_projector", None)
@@ -397,7 +438,8 @@ def build_engine(model: str, args):
         raise RuntimeError(
             "multi_modal_projector not found on engine model -- wrong arch?")
     print(f"[serve_bench] hooks: projector={type(projector).__name__} "
-          f"vision_tower={type(vision_tower).__name__}", flush=True)
+          f"vision_tower={type(vision_tower).__name__} "
+          f"engine_model={type(engine_model).__name__}", flush=True)
 
     # ---- placeholder-count override: 576 -> k (MUST precede the forward) ----
     # k is the (initial) kept-token count; this makes the text sequence carry
@@ -883,6 +925,10 @@ def run(args) -> dict:
     llm, projector = build_engine(args.model, args)
 
     from vllm import SamplingParams  # noqa (lazy)
+    # V1-aware controller read: V1 uses llm.get_metrics() (Prometheus snapshot);
+    # V0 uses the in-process scheduler. Both return a LoadReading.
+    _read_engine_load = (read_engine_load_v1 if getattr(args, "engine", "v1") == "v1"
+                         else read_engine_load)
     sp = SamplingParams(temperature=0.0, max_tokens=args.max_tokens, seed=args.seed)
 
     # query-aware plumbing: pop the per-request question-embedding queue that
@@ -948,7 +994,7 @@ def run(args) -> dict:
         """Adaptive: read engine load, decide r, update k_cell. Returns r (or None)."""
         if controller is None or k_cell is None:
             return None
-        reading = read_engine_load(llm, max_num_seqs=_mnseqs)
+        reading = _read_engine_load(llm, max_num_seqs=_mnseqs)
         r = controller.decide_r(reading)
         k_cell["k"] = max(1, int(round(576 * (1.0 - r))))
         return r
@@ -1113,7 +1159,7 @@ def run(args) -> dict:
                 # is the signal for the NEXT segment's r decision (adaptive) AND
                 # the regime evidence (all runs).
                 if n_steps % 3 == 1:
-                    rd = read_engine_load(llm, max_num_seqs=_mnseqs)
+                    rd = _read_engine_load(llm, max_num_seqs=_mnseqs)
                     occ = rd.kv_occupancy if rd.kv_occupancy is not None else -1
                     nr = rd.num_running if rd.num_running is not None else -1
                     if occ > seg_peak_occ or nr > seg_peak_nr:
@@ -1329,6 +1375,16 @@ def run(args) -> dict:
 
 def main() -> None:
     ap = argparse.ArgumentParser(description="P2 go/no-go vLLM serving benchmark")
+    # ENGINE MODE (v2 P0): V1 (default, the v2 target) vs V0 (legacy rollback).
+    # Parsed BEFORE vllm import so VLLM_USE_V1=0 takes effect for --engine v0.
+    ap.add_argument("--engine", default="v1", choices=["v1", "v0"],
+                    help="vLLM engine generation. v1 (default, v2 target): V1 engine "
+                         "+ in-process EngineCore (VLLM_ENABLE_V1_MULTIPROCESSING=0, set "
+                         "at module top) -> V1 scheduler (chunked prefill) with model "
+                         "reachable for forward-hooks. v0: legacy V0 engine "
+                         "(VLLM_USE_V1=0). The projector hook + processor patch work in "
+                         "BOTH (identical model-access chain); the controller read "
+                         "auto-dispatches (V1=get_metrics, V0=in-process scheduler).")
     ap.add_argument("--model", required=True)
     ap.add_argument("--pruning-rate", type=float, default=0.0,
                     help="fraction of visual tokens to DROP (0=control)")
@@ -1434,6 +1490,15 @@ def main() -> None:
                     help="text<->patch similarity function for query_aware "
                          "(default cosine = L2-normalize both sides first).")
     args = ap.parse_args()
+    # V0 rollback: VLLM_USE_V1 must be set BEFORE the first `import vllm`. The
+    # lazy imports inside build_engine/run() fire on the first call, so setting
+    # it here (after parse, before run) is in time. vllm reads envs at import.
+    if args.engine == "v0":
+        os.environ["VLLM_USE_V1"] = "0"
+        print(f"[serve_bench] engine=v0: set VLLM_USE_V1=0 for legacy V0 path",
+              flush=True)
+    else:
+        os.environ.pop("VLLM_USE_V1", None)  # native V1 default
     run(args)
 
 

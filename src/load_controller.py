@@ -129,6 +129,85 @@ def read_engine_load(llm, max_num_seqs: Optional[int] = None) -> LoadReading:
     return reading
 
 
+def _parse_v1_metrics(metrics_list) -> dict:
+    """Parse a V1 `llm.get_metrics()` snapshot (list[Gauge/Histogram/etc.])
+    into a name->value dict. Robust across metric kinds (Gauge.value,
+    Histogram.sum/last_value, etc.)."""
+    out = {}
+    for m in metrics_list:
+        nm = getattr(m, "name", None) or getattr(m, "prometheus_name", None) \
+            or str(getattr(m, "key", ""))
+        if not nm:
+            continue
+        val = None
+        for f in ("value", "sum_value", "last_value"):
+            v = getattr(m, f, None)
+            if isinstance(v, (int, float)):
+                val = float(v)
+                break
+        out[nm] = val
+    return out
+
+
+def read_engine_load_v1(llm, max_num_seqs: Optional[int] = None) -> LoadReading:
+    """V1 controller signal (the §4.3 replacement for read_engine_load).
+
+    V1 runs EngineCore in a subprocess by default (VLLM_ENABLE_V1_MULTIPROCESSING=1),
+    so the V0 in-process scheduler reads are DEAD. The replacement is the
+    Prometheus snapshot via `llm.get_metrics()` (verified populated under load
+    in runs/v1_probe.py: `vllm:num_requests_running` peaks at the full
+    max_num_seqs). Note: `gpu_cache_usage_perc` requires `kv_cache_metrics=True`
+    (off by default) -- num_running is the primary signal anyway (matches V0's
+    P3-step-1 default).
+
+    With VLLM_ENABLE_V1_MULTIPROCESSING=0 (our measurement path: keeps V1's
+    scheduler in-process so forward-hooks reach the model), the scheduler is
+    ALSO reachable -- but we still use get_metrics() because it is the
+    mode-agnostic V1 API and works identically in both modes.
+
+    Falls back to the V0 in-process read if get_metrics() is unavailable
+    (e.g. log_stats disabled) -- returns all-None if neither path yields.
+    """
+    import time
+    reading = LoadReading(ts=time.perf_counter(), max_num_seqs=max_num_seqs)
+    # --- primary V1 path: Prometheus snapshot ---
+    try:
+        get_metrics = getattr(llm, "get_metrics", None)
+        if get_metrics is None:
+            get_metrics = getattr(getattr(llm, "llm_engine", None),
+                                  "get_metrics", None)
+        if get_metrics is not None:
+            ms = _parse_v1_metrics(get_metrics())
+            nr = ms.get("vllm:num_requests_running")
+            nw = ms.get("vllm:num_requests_waiting")
+            gc = ms.get("vllm:gpu_cache_usage_perc")
+            if nr is not None:
+                reading.num_running = int(nr)
+            if nw is not None:
+                reading.num_waiting = int(nw)
+            if gc is not None:
+                reading.kv_occupancy = gc
+    except Exception:
+        pass
+    # --- fallback: V0 in-process scheduler (works under multiproc=0) ---
+    if reading.num_running is None:
+        try:
+            sched_list = getattr(getattr(llm, "llm_engine", None), "scheduler", None)
+            if sched_list:
+                sched = sched_list[0]
+                running = getattr(sched, "running", None)
+                if running is not None:
+                    reading.num_running = len(running)
+                bm = getattr(sched, "block_manager", None)
+                free = getattr(bm, "get_num_free_gpu_blocks", lambda: None)() if bm else None
+                total = getattr(bm, "num_total_gpu_blocks", None) if bm else None
+                if isinstance(free, (int, float)) and isinstance(total, (int, float)) and total > 0:
+                    reading.kv_occupancy = 1.0 - (free / total)
+        except Exception:
+            pass
+    return reading
+
+
 @dataclass
 class LoadAdaptiveController:
     """Piecewise-linear map engine-load -> prune rate r in [r_min, r_max].
