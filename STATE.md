@@ -4,23 +4,26 @@
 > 最近更新：2026-07-03
 
 ## 当前阶段
-**P3-step-4（用户选 B）：KV-admission 方法赌注——先验 regime-thesis，再投实现**
+**P4 写作（measurement-led）。B 路径已放弃 → 回 A。**
 
-## §6 升级已解决（用户定 B）
-n=500 推翻方法 Pareto claim（0/5）。用户选 **B**：投资更狠方法（KV-admission）而非直接写 measurement-led。测量支柱不受影响（solid）。
+## 方向定论（A 路径，measurement-led）
+- **B（KV-admission）已放弃**：1×A40 上 KV-bound regime 压不出（peak KV-occ 仅 0.148，需 >>0.5）；thesis 未验证，user 中途停。详见 DECISIONS 2026-07-03。
+- **回 A**：measurement-led 论文。测量是主轴（0/37 served-throughput + 3 发现 + headline 1.76×/并发放大），方法如实作 supporting（load-adaptive n=500 仅 dominate r25 on 3/5；KV-admission 作 future work）。
 
-## 方法 thesis（B 路径核心）
-**load-adaptive 的收益是 regime-dependent**：n=500 在 compute-bound/短序列（KV-occ 仅 0.04，admission 不受 KV 约束）→ null。**KV-bound regime**（高并发 + 长输出，KV 是瓶颈）下，pruning 释放 KV → admission 受益 → adaptive 应胜 fixed。方法 = **admission-aware pruning**（prune arriving request 以 fit KV budget，紧耦合于 vLLM scheduler admission，0/37 碰过的杠杆）。
+## ★ 论文脊梁（solid，reviewer 推不倒）
+- **首测**：VLM 视觉 token 压缩的 served-throughput 在 serving engine（vLLM）内首测（0/37 论文做过）。
+- **3 发现**：① e2e>prefill（KV-cache/并发收益，非 prefill FLOPs）；② prefill 次线性（vision tower 仅 6.6%）；③ 加速依赖视觉占比。
+- **headline**：c12/r75=1.76× req/s；并发放大（c1→c12 r50/r0 1.17×→1.42×）；constant-vs-bursty 2.06×。
+- 目标期刊：**Pattern Recognition**（primary）；Information Sciences / Neurocomputing 备选。
 
-## 立即下一步 —— P3-step-4（Dev，先验 thesis，phased）
-1. **确立 KV-bound regime**（1×A40）：高 max_num_seqs(24+) + 长 max-tokens(128-256) + 可能缩 KV pool(gpu_mem 0.7)→让 KV 成瓶颈。验证此处 pruning(r50) 的 req/s 增益 > 短序列 c12（甜区）。
-2. **该 regime 跑 adaptive vs fixed-r25/r50**（GQA + 一个长输出基准）→ **adaptive 是否在此胜 fixed**（c12/短序列没胜处）？
-3. **thesis 成立 →** 实现 admission-aware pruning + 验证胜 fixed（KV-bound 下）。
-4. **仍不胜 →** thesis 死，回 A（measurement-led 写作）。
+## 立即下一步 —— P4 写作
+1. **起草各章** → `drafts/paper_v1.md`（按 `drafts/outline.md`，7 章，measurement-led，诚实方法段）。源：eval/final_results.md + notes/{positioning,lit-survey,method-design} + p3s2/p3s3/d measurements。
+2. nature-figure 出 4 图（served-throughput gap、并发×prune 曲线、controller 跟踪、Pareto 前沿）。
+3. nature-citation 补 CNS/领域引用；nature-polishing 润色。
+→ P5 投稿前**强制升级找人**。
 
-## ★ 论文脊梁（不变）
-- served-throughput 首测（0/37）+ 3 发现（e2e>prefill/KV-cache-并发、prefill 次线性、视觉占比依赖）+ headline（1.76×、并发放大）。**measurement-led，solid。**
-- D load-adaptive：n=500 仅 dominate r25 on 3/5（modest）—— B 旨在强化。
+## 已完成
+P0 env/基建；P1 37 法 survey + Gap A 定位；P2 probe（gate 过）+ selector 三连败（CLS/cosine/CLIP）→ proxy 天花板；D load-adaptive 实现 + n=200/n=500 验证（modest）；P3 5 基准 + 并发矩阵 + FastV anchor。
 
 ## 关键约束
 - 算力 1× A40 46GB 串行；env：vtc/vtc_serve(vLLM0.10.2 V0)/fastv。training-free。
