@@ -1,35 +1,26 @@
 # STATE.md — 当前项目状态（主窗口维护，保持 ≤30 行）
 
 > 项目：VLM 视觉 token 压缩 · 目标 Q1/Q2 SCI · 3–6 月 · 详见 **ORCHESTRATION.md**
-> 最近更新：2026-07-02
+> 最近更新：2026-07-03
 
 ## 当前阶段
-**P3 评测基本完成（5 基准 + 并发矩阵 + FastV anchor）→ P4 写作。方法 framing 已定。**
+**P3-step-4（用户选 B）：KV-admission 方法赌注——先验 regime-thesis，再投实现**
 
-## ★ 论文脊梁（measurement-led，已确立）
-- **provisional GO**：压缩→serving 真实加速。
-- **测量主贡献**：served-throughput（0/37 测过）+ 3 发现（e2e>prefill/KV-cache-并发、prefill 次线性、视觉占比依赖）。headline：c12/r75=**1.76×**、constant-vs-bursty=**2.06×**、并发放大（c1→c12 r50/r0 1.17×→1.42×）。
-- **方法（supporting）**：load-adaptive budget = **throughput-optimal under per-benchmark acc guardrail**。robust：全部 5 基准 req/s 胜 r25（+2-7%）；acc 胜 r50 仅在 r50-costly 基准（**MME、ScienceQA** Pareto-dominate；GQA/MMBench/TextVQA 则否）。
+## §6 升级已解决（用户定 B）
+n=500 推翻方法 Pareto claim（0/5）。用户选 **B**：投资更狠方法（KV-admission）而非直接写 measurement-led。测量支柱不受影响（solid）。
 
-## selector 定论
-三连败（CLS-attn/LLM-cosine/CLIP-对比）。边界 TF 天花板=proxy(hidden-state)。**接受 proxy 级精度。** FastV(intra-LLM) accuracy 可比但跑不进 vLLM。
+## 方法 thesis（B 路径核心）
+**load-adaptive 的收益是 regime-dependent**：n=500 在 compute-bound/短序列（KV-occ 仅 0.04，admission 不受 KV 约束）→ null。**KV-bound regime**（高并发 + 长输出，KV 是瓶颈）下，pruning 释放 KV → admission 受益 → adaptive 应胜 fixed。方法 = **admission-aware pruning**（prune arriving request 以 fit KV budget，紧耦合于 vLLM scheduler admission，0/37 碰过的杠杆）。
 
-## D 方法（完成）
-控制器 r=f(num_running/max_num_seqs)∈[r_min,r_max]，conc_lo=0.25/conc_hi=0.75，realized r 全范围跑。proxy selector 动态 r。engine streaming loop + per-segment r + enforce_eager。
+## 立即下一步 —— P3-step-4（Dev，先验 thesis，phased）
+1. **确立 KV-bound regime**（1×A40）：高 max_num_seqs(24+) + 长 max-tokens(128-256) + 可能缩 KV pool(gpu_mem 0.7)→让 KV 成瓶颈。验证此处 pruning(r50) 的 req/s 增益 > 短序列 c12（甜区）。
+2. **该 regime 跑 adaptive vs fixed-r25/r50**（GQA + 一个长输出基准）→ **adaptive 是否在此胜 fixed**（c12/短序列没胜处）？
+3. **thesis 成立 →** 实现 admission-aware pruning + 验证胜 fixed（KV-bound 下）。
+4. **仍不胜 →** thesis 死，回 A（measurement-led 写作）。
 
-## P3 关键数据（详见 notes/p3s2_pareto.md, notes/p3s1_pareto.md, notes/p2_d_results.md）
-- MME/ScienceQA：adaptive Pareto-dominate（acc-sensitive 任务）。
-- GQA/MMBench：r50 acc-中性→fixed-r50 占优。
-- TextVQA n=500：adaptive acc ≈ r50（n=200 的胜是噪声）。
-- FastV anchor：accuracy 可比，不可 serving。
-- 并发矩阵：压缩收益随并发放大（M2 确认）。
-
-## 立即下一步 —— P4 写作
-1. **整合结果** → `eval/final_results.md`（论文表格/图数据：5 基准×configs、并发矩阵、3 发现、controller 跟踪图）。
-2. **锁定 method-design**（最终 D + throughput-optimal-under-guardrail framing）。
-3. **nature-writing 起草各章**（intro/related/method/exp/discussion），measurement-led 定位。目标期刊：Pattern Recognition / Information Sciences / Neurocomputing。
-4. nature-figure 出投稿级图；nature-citation 补引用；nature-polishing 润色。
-→ P5 投稿前**强制升级找人**。
+## ★ 论文脊梁（不变）
+- served-throughput 首测（0/37）+ 3 发现（e2e>prefill/KV-cache-并发、prefill 次线性、视觉占比依赖）+ headline（1.76×、并发放大）。**measurement-led，solid。**
+- D load-adaptive：n=500 仅 dominate r25 on 3/5（modest）—— B 旨在强化。
 
 ## 关键约束
 - 算力 1× A40 46GB 串行；env：vtc/vtc_serve(vLLM0.10.2 V0)/fastv。training-free。
