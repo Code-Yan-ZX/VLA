@@ -913,6 +913,35 @@ def mean_stderr(xs: list[float]) -> dict:
     return {"mean": m, "stderr": se, "n": len(xs)}
 
 
+def percentile(xs: list[float], p: float) -> float:
+    """Nearest-rank percentile (NaN-safe). p in [0,100].
+
+    Serving-paper-standard tail metric (p50/p99). Nearest-rank (not linear
+    interpolation) so p99 of n=200 is the 198th-ranked value -- the conventional
+    "1% worst" tail, matching vLLM/mooncake goodput-benchmark convention.
+    """
+    xs = sorted(x for x in xs if isinstance(x, (int, float)) and x == x)
+    if not xs:
+        return float("nan")
+    k = int(math.ceil(p / 100.0 * len(xs))) - 1
+    k = max(0, min(len(xs) - 1, k))
+    return xs[k]
+
+
+def goodput(xs: list[float], slo_ms: float, wall_s: float) -> dict:
+    """Goodput = req/s meeting an SLO (the deployment metric). xs = per-request
+    latencies (ms); a request 'meets' if its latency <= slo_ms. Returns req/s
+    meeting SLO + raw counts. This is the throughput-vs-latency Pareto metric:
+    compression's value is raising req/s WITHOUT blowing the SLO."""
+    n_met = sum(1 for x in xs if isinstance(x, (int, float)) and x == x and x <= slo_ms)
+    n = len(xs)
+    return {
+        "req_s": (n_met / wall_s) if wall_s > 0 else 0.0,
+        "n_met": n_met, "n": n, "slo_ms": slo_ms,
+        "frac_met": (n_met / n) if n else 0.0,
+    }
+
+
 # --------------------------------------------------------------------------- #
 # Main
 # --------------------------------------------------------------------------- #
@@ -1189,6 +1218,7 @@ def run(args) -> dict:
                     raw.append({
                         "id": s.id, "served_tok_s": float("nan"),
                         "served_req_s": float("nan"), "ttft_ms": float("nan"),
+                        "e2e_ms": float("nan"),
                         "peak_kv_mb": float("nan"), "correct": 0,
                         "answer": "", "gt": s.gt,
                         "segment": seg_idx, "r_used": r_seg,
@@ -1201,6 +1231,7 @@ def run(args) -> dict:
                 raw.append({
                     "id": s.id, "served_tok_s": float("nan"),
                     "served_req_s": float("nan"), "ttft_ms": float("nan"),
+                    "e2e_ms": float("nan"),
                     "peak_kv_mb": float("nan"), "correct": correct,
                     "answer": text, "gt": s.gt,
                     "segment": seg_idx, "r_used": r_seg,
@@ -1218,30 +1249,89 @@ def run(args) -> dict:
             r["peak_kv_mb"] = peak_kv_mb
     elif batch_submit:
         # ---- M2 batched path: real continuous batching ----------------------
-        # Pre-build all messages (also pre-pushes all query embeddings in order).
+        # v2 P2: STREAMING add_request + engine.step loop (NOT one llm.chat) so we
+        # capture PER-REQUEST TTFT + e2e latency under real concurrency -- the
+        # serving-paper-standard p50/p99 + goodput metrics. We submit ALL requests
+        # up front (one add_request each, no sleep) so the engine schedules up to
+        # max_num_seqs at once (same concurrency regime as llm.chat -- verified by
+        # the load_trace peak num_running), then drain via step(). Per-request:
+        #   ttft_ms = o.metrics.first_token_latency * 1000  (vLLM's own
+        #             arrival->first-token, wall-clock, includes queue+prefill --
+        #             the deployer's TTFT; needs disable_log_stats=False, set in
+        #             build_engine for V1).
+        #   e2e_ms  = (now - submit_ts) * 1000  (our perf_counter submit->finish;
+        #             the deployer's per-request latency).
+        # Aggregate req/s = n/wall (unchanged from the old llm.chat path -> P0/P1
+        # throughput comparability preserved).
         # ADAPTIVE: decide r ONCE from the (initially empty) load -> r_min typically;
         # this is the "constant low" sanity case. For constant-high, use --load-profile
         # constant with adaptive (controller sees occupancy rise -> r_max).
         if adaptive:
             _decide_and_set_k()
         all_messages = [_build_messages(s) for s in samples]
+        # Mirror llm.chat() internals: render one conversation then add immediately
+        # so the engine can start while the next is being rendered (vLLM recommends
+        # generator-style over pre-render-all). We call _preprocess_chat_one (the V1
+        # per-conversation renderer, same as LLM._run_chat) so the placeholder-count
+        # patch (get_num_image_tokens) fires inside preprocess. We then add via the
+        # ENGINE-level add_request (NOT LLM._add_request): the latter returns a
+        # uuid-suffixed id "N-xxxxxxxx" while step() emits the BASE id we passed,
+        # so keying submit_ts by our own id keeps the round-trip exact.
+        # output_kind=FINAL_ONLY -> step() emits an output only when a request
+        # finishes (matches LLM._add_request's behavior; cheaper than CUMULATIVE).
+        try:
+            from vllm.sampling_params import RequestOutputKind  # vllm >=0.8
+            sp.output_kind = RequestOutputKind.FINAL_ONLY
+        except Exception:
+            pass  # older vllm: CUMULATIVE default; the `if o.finished` guard still works
+        engine = llm.llm_engine
+        submit_ts: dict[str, float] = {}
+        rids_in_order: list[str] = []
         t_all_start = time.perf_counter()
-        outs = llm.chat(all_messages, sp, use_tqdm=False)
+        for i, conv in enumerate(all_messages):
+            prompt = llm._preprocess_chat_one(conv)
+            rid = f"p2_{i}"
+            engine.add_request(rid, prompt, sp)
+            submit_ts[rid] = time.perf_counter()
+            rids_in_order.append(rid)
+        ttft_by_rid: dict[str, float] = {}
+        e2e_by_rid: dict[str, float] = {}
+        out_by_rid: dict = {}
+        t_drain_guard = time.perf_counter()
+        while engine.has_unfinished_requests():
+            for o in engine.step():
+                if getattr(o, "finished", False):
+                    rid = o.request_id
+                    e2e_by_rid[rid] = (time.perf_counter() - submit_ts[rid]) * 1000.0
+                    m = getattr(o, "metrics", None)
+                    ftl = getattr(m, "first_token_latency", 0.0) if m else 0.0
+                    ttft_by_rid[rid] = (ftl * 1000.0) if ftl and ftl > 0 else float("nan")
+                    out_by_rid[rid] = o
+            if time.perf_counter() - t_drain_guard > 1800:
+                print("[serve_bench] WARN: batch drain >1800s, breaking", flush=True)
+                break
         wall = time.perf_counter() - t_all_start
-        # aggregate throughput (the M2 metric): req/s over the whole batch.
         agg_req_s = len(samples) / wall if wall > 0 else 0.0
         n_tokens_out = 0
-        for s, o in zip(samples, outs):
+        for i, s in enumerate(samples):
+            rid = rids_in_order[i]
+            o = out_by_rid.get(rid)
+            if o is None:
+                raw.append({
+                    "id": s.id, "served_tok_s": float("nan"), "served_req_s": float("nan"),
+                    "ttft_ms": float("nan"), "e2e_ms": float("nan"),
+                    "peak_kv_mb": float("nan"), "correct": 0, "answer": "", "gt": s.gt,
+                })
+                continue
             text = o.outputs[0].text.strip()
             n_out = len(o.outputs[0].token_ids)
             n_tokens_out += n_out
             correct = scorer(text, s.gt, s.extra.get("choices"))
-            # per-request req/s in batch mode = meaningless individually; we store
-            # the AGGREGATE in agg below. Keep per-row latencies = NaN to flag.
             raw.append({
                 "id": s.id, "served_tok_s": float("nan"), "served_req_s": float("nan"),
-                "ttft_ms": float("nan"), "peak_kv_mb": float("nan"),
-                "correct": correct, "answer": text, "gt": s.gt,
+                "ttft_ms": ttft_by_rid.get(rid, float("nan")),
+                "e2e_ms": e2e_by_rid.get(rid, float("nan")),
+                "peak_kv_mb": float("nan"), "correct": correct, "answer": text, "gt": s.gt,
             })
         # overwrite served metrics with the batched aggregate (the real M2 signal)
         agg_tok_s = n_tokens_out / wall if wall > 0 else 0.0
@@ -1250,10 +1340,6 @@ def run(args) -> dict:
             r["served_tok_s"] = agg_tok_s
             r["served_req_s"] = agg_req_s
             r["peak_kv_mb"] = peak_kv_mb
-        # batch mode has no per-request TTFT; M1 timing hooks still fired per-
-        # request (vision tower + projector), so the prefill_breakdown remains
-        # valid -- but TTFT itself (the denominator of vt_frac) is undefined.
-        # We report vt_frac against the SERIAL-derived TTFT only if present.
     else:
         # ---- SERIAL path (default): per-request TTFT, M1 prefill breakdown --
         t_all_start = time.perf_counter()
@@ -1274,7 +1360,7 @@ def run(args) -> dict:
             correct = scorer(text, s.gt, s.extra.get("choices"))
             raw.append({
                 "id": s.id, "served_tok_s": served_tok_s, "served_req_s": served_req_s,
-                "ttft_ms": ttft, "peak_kv_mb": peak_kv_mb,
+                "ttft_ms": ttft, "e2e_ms": e2e * 1000.0, "peak_kv_mb": peak_kv_mb,
                 "correct": correct, "answer": text, "gt": s.gt,
             })
         wall = time.perf_counter() - t_all_start
@@ -1315,6 +1401,24 @@ def run(args) -> dict:
         "peak_kv_mb": mean_stderr([r["peak_kv_mb"] for r in raw]),
         "accuracy": (sum(r["correct"] for r in raw) / len(raw)) if raw else float("nan"),
     }
+    # ---- v2 P2: serving-paper-standard tail-latency + goodput ----------------
+    # These are the metrics the v1 paper was criticized for MISSING. p50/p99 of
+    # TTFT (deployer's tail latency) and e2e; goodput = req/s meeting an SLO
+    # (throughput-vs-latency Pareto -- compression's deployment value).
+    # In batch/closed-loop submit (the P2 scale regime), TTFT/e2e include queueing
+    # (requests arrive near-simultaneously); the r-comparison at iso-c is still
+    # fair (same n, same c). Serial c1 gives queue-free single-request latency.
+    _ttfts = [r["ttft_ms"] for r in raw]
+    _e2es = [r["e2e_ms"] for r in raw]
+    agg["ttft_ms_p50"] = percentile(_ttfts, 50)
+    agg["ttft_ms_p99"] = percentile(_ttfts, 99)
+    agg["e2e_ms_p50"] = percentile(_e2es, 50)
+    agg["e2e_ms_p99"] = percentile(_e2es, 99)
+    # goodput under two SLOs (the deployment-relevant metrics):
+    #   ttft <= 500ms  (interactive responsiveness; deployer's TTFT SLO)
+    #   e2e  <= 1000ms (full request latency SLO)
+    agg["goodput_ttft_500ms"] = goodput(_ttfts, 500.0, wall)
+    agg["goodput_e2e_1000ms"] = goodput(_e2es, 1000.0, wall)
     agg_prefill = {
         "vision_tower_ms": {"mean": vt_mean, "n": len(vt_ms)},
         "projector_ms": {"mean": proj_mean, "n": len(proj_ms)},
