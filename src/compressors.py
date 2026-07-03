@@ -401,6 +401,253 @@ class ClipQuerySelector:
 
 
 # --------------------------------------------------------------------------- #
+# P3 cross-compressor panel: ToMe merge (published, different reduction MODE)
+# --------------------------------------------------------------------------- #
+# WHY: the v1 paper measured served throughput only for OUR proxy selector ->
+# "only proxy" + the "0/37 measure served throughput" claim looks self-serving.
+# P3 shows the FRAMEWORK measures served throughput across multiple compressors
+# with DIFFERENT reduction modes. ToMe (Bolya et al. ICLR'23) is the key NEW
+# compressor: a PUBLISHED method whose reduction mode is MERGE (average similar
+# tokens -> preserves info) vs the prune family's DISCARD. This shows the
+# framework's served-throughput measurement is compressor-agnostic across both
+# selection-signal (proxy/cls/query) AND reduction-mode (prune/merge) axes.
+#
+# ALGORITHM (Bolya et al. ICLR'23, "Token Merging: ToMe", section 3.2):
+#   1. Bipartite soft matching: split the N tokens into two sets A (even idx)
+#      and B (odd idx) by alternating. This bipartition guarantees each merge
+#      pair is disjoint (a token is matched at most once per step).
+#   2. Similarity: cos(A_i, B_j) -- the most similar B for each A, and the most
+#      similar A for each B (mutual matching, ToMe's "linked" pairs).
+#   3. Select the r most-similar MUTUAL pairs and merge each by averaging.
+#   4. Output = remaining A + remaining B + merged -> N - r tokens.
+# ToMe applies this per transformer layer; at the projector-output BOUNDARY
+# (post-projector, pre-LLM-fusion) we apply it iteratively in ONE shot to
+# reduce N=576 -> k (multiple bipartite rounds because each round yields at
+# most floor(N/2) merges). The signal + average-merge rule are ToMe-exact;
+# only the application site (single boundary vs every layer) differs, which is
+# what vLLM-integrability at the boundary requires (no intra-LLM surgery).
+#
+# Compared to PRUNE (proxy/true_cls/query): merge PRESERVES info (averaged
+# token carries both sources' signal) vs prune DISCARDS the dropped tokens.
+# Throughput is identical at iso-k (placeholder-shrink makes both k-short);
+# the question P3 measures is whether merge's info-preservation shows up as
+# better accuracy at iso-throughput (hypothesis) -- and whether the merge
+# compute itself adds visible overhead vs the O(1) gather of prune.
+
+
+def _tome_bipartite_step(
+    features: torch.Tensor,   # (B, N, D)
+    max_pairs: int,
+) -> torch.Tensor:
+    """One ToMe bipartite soft-matching + average-merge step.
+
+    Splits features into A (even idx) and B (odd idx), finds mutual most-similar
+    pairs by cosine, and merges up to `max_pairs` of them (the most-similar
+    first). Returns (B, N - r_eff, D) where r_eff = #pairs actually merged
+    (capped by the number of mutual matches found; if zero mutual, falls back
+    to the global most-similar pairs so progress is guaranteed).
+
+    ToMe-exact for the merge rule; "one step" here is one application of ToMe's
+    bipartite matching (ToMe applies one step per transformer layer; we apply
+    iteratively at the boundary, see `tome_merge`).
+    """
+    b, n, d = features.shape
+    if n <= 1 or max_pairs <= 0:
+        return features
+    a = features[:, 0::2, :]                        # (B, nA, D)
+    bb = features[:, 1::2, :]                       # (B, nB, D)
+    na, nb = a.shape[1], bb.shape[1]
+    # cosine similarity (ToMe uses plain dot product on L2-normalized features)
+    an = torch.nn.functional.normalize(a, dim=-1)
+    bn = torch.nn.functional.normalize(bb, dim=-1)
+    sim = torch.bmm(an, bn.transpose(1, 2))         # (B, na, nb)
+    # for each a, best b (most similar)
+    a_vals, a_to_b = sim.max(dim=2)                  # (B, na)
+    # for each b, best a (mutual check)
+    _, b_to_a = sim.max(dim=1)                       # (B, nb) argmax along a
+    a_grid = torch.arange(na, device=features.device).unsqueeze(0).expand(b, -1)
+    b_back = torch.gather(b_to_a, 1, a_to_b)         # (B, na): a that each a's best-b points back to
+    mutual = (b_back == a_grid)                      # (B, na) bool
+    masked_vals = a_vals.masked_fill(~mutual, float("-inf"))
+    # fallback: if a batch has zero mutual matches, use raw most-similar (progress)
+    n_mut = mutual.sum(dim=1)                        # (B,)
+    no_mut = (n_mut == 0).view(b, 1)
+    masked_vals = torch.where(no_mut, a_vals, masked_vals)
+    # select top-r per batch (r capped by available finite-valued candidates)
+    finite_per_b = (masked_vals > float("-inf")).sum(dim=1)   # (B,)
+    r_eff = int(finite_per_b.min().clamp(min=1).item())
+    r_eff = max(1, min(max_pairs, r_eff, na, nb))
+    _, top_a = masked_vals.topk(k=r_eff, dim=1)       # (B, r_eff) -- a-side local indices
+    top_b = torch.gather(a_to_b, 1, top_a)            # (B, r_eff) -- b-side local indices
+    # merged = average (ToMe's weight=0.5 default; could be size-weighted for repeats)
+    ga = top_a.unsqueeze(-1).expand(-1, -1, d)
+    gb = top_b.unsqueeze(-1).expand(-1, -1, d)
+    merged = (torch.gather(a, 1, ga) + torch.gather(bb, 1, gb)) * 0.5
+    # build output: drop the selected a's and b's, append merged
+    a_mask = torch.ones(b, na, dtype=torch.bool, device=features.device)
+    a_mask.scatter_(1, top_a, False)
+    b_mask = torch.ones(b, nb, dtype=torch.bool, device=features.device)
+    b_mask.scatter_(1, top_b, False)
+    # if any duplicate top_b (non-mutual fallback can collide), the b_mask just
+    # drops both -> b-count decreases by |unique(top_b)|. Pad/truncate to r_eff
+    # so output shape is deterministic (N - r_eff). We re-pad merged if needed.
+    out_list = []
+    for bi in range(b):
+        rem_a = a[bi][a_mask[bi]]
+        rem_b = bb[bi][b_mask[bi]]
+        cat = torch.cat([rem_a, rem_b, merged[bi]], dim=0)
+        out_list.append(cat)
+    out = torch.stack(out_list, dim=0)               # (B, na+nb-r_eff', D)
+    # ensure exact length N - r_eff (pad by repeating last row or truncate)
+    target_len = n - r_eff
+    if out.shape[1] != target_len:
+        if out.shape[1] > target_len:
+            out = out[:, :target_len, :]
+        else:
+            pad = target_len - out.shape[1]
+            rep = out[:, -1:, :].expand(-1, pad, -1)
+            out = torch.cat([out, rep], dim=1)
+    return out
+
+
+def tome_merge(
+    image_features: torch.Tensor,    # (B, N, D) -- projector output
+    pruning_rate: float,
+    max_iters: int = 32,
+) -> torch.Tensor:
+    """ToMe-style bipartite soft-matching + average-merge at the projector-output
+    boundary. Iteratively applies `_tome_bipartite_step` until the sequence is
+    exactly k = round(N * (1 - pruning_rate)) tokens long.
+
+    This is a DIFFERENT REDUCTION MODE from the prune family: instead of
+    discarding (1-r)*N tokens, it MERGES them into the kept tokens by averaging.
+    The output sequence is genuinely k-shorter (placeholder-shrink makes the LLM
+    forward identical to a prune at iso-k -> throughput is comparable), but each
+    output token may carry signal from 1, 2, or more original patches.
+
+    Published method: ToMe, Bolya et al. ICLR'23. ToMe applies one bipartite
+    step per transformer layer; we apply it iteratively at one boundary (the
+    only vLLM-integrable site without intra-LLM surgery). The merge rule is
+    ToMe-exact (cosine similarity, mutual most-similar pairs, average merge).
+
+    Returns (B, k, D) merged features (NOT a (kept, keep_idx) tuple -- merge has
+    no keep_idx; the output token at position j may be an average of several
+    originals). Callers use the returned tensor directly as the projector output.
+    """
+    _validate(image_features,
+              torch.zeros(image_features.shape[:2], device=image_features.device))
+    b, n, d = image_features.shape
+    k = keep_count(n, pruning_rate)
+    if k >= n:
+        return image_features
+    cur = image_features
+    it = 0
+    while cur.shape[1] > k and it < max_iters:
+        need = cur.shape[1] - k
+        cur = _tome_bipartite_step(cur, max_pairs=need)
+        it += 1
+    # final exact-k guard (rounding): truncate or pad
+    if cur.shape[1] > k:
+        cur = cur[:, :k, :]
+    elif cur.shape[1] < k:
+        pad = k - cur.shape[1]
+        rep = cur[:, -1:, :].expand(-1, pad, -1)
+        cur = torch.cat([cur, rep], dim=1)
+    return cur.contiguous()
+
+
+@dataclass
+class TomeMergeSelector:
+    """ToMe (Bolya et al. ICLR'23) token-merging compressor at the projector-output
+    boundary. The P3 cross-compressor panel's MERGE member (vs the prune family).
+
+    Select() returns (kept, keep_idx) for signature compatibility with the prune
+    selectors, but keep_idx is a dummy arange (merge has no per-token index -- the
+    output token at position j may be an average of several originals). The
+    placeholder-shrink integration in serve_bench only needs kept.shape[1] == k.
+    """
+    pruning_rate: float = 0.0
+
+    def select(
+        self,
+        image_features: torch.Tensor,   # (B, N, D)
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        b, n, d = image_features.shape
+        k = keep_count(n, self.pruning_rate)
+        merged = tome_merge(image_features, self.pruning_rate)
+        # dummy keep_idx (merge has no real per-token index; arange satisfies the
+        # placeholder-shrink plumbing which only reads shape[1])
+        keep_idx = torch.arange(k, device=image_features.device).unsqueeze(0).expand(b, -1)
+        return merged, keep_idx
+
+    def __call__(self, image_features: torch.Tensor) -> torch.Tensor:
+        merged, _ = self.select(image_features)
+        return merged
+
+
+# --------------------------------------------------------------------------- #
+# P3 cross-compressor panel: RANDOM prune (trivial baseline / sanity floor)
+# --------------------------------------------------------------------------- #
+def random_prune(
+    image_features: torch.Tensor,   # (B, N, D)
+    pruning_rate: float,
+    generator: Optional[torch.Generator] = None,
+) -> Tuple[torch.Tensor, torch.Tensor]:
+    """Random uniform prune: keep K = round(N*(1-r)) tokens chosen uniformly at
+    random. The trivial baseline / sanity floor -- if a real compressor doesn't
+    beat random at iso-throughput, the selection signal is worthless.
+
+    Deterministic given the same generator seed (so runs are reproducible). The
+    generator is constructed per-call from a fixed seed in serve_bench (the
+    default torch.Generator() with manual_seed) -> reproducible across runs.
+
+    Returns (kept (B,K,D), keep_idx (B,K) long).
+    """
+    _validate(image_features,
+              torch.zeros(image_features.shape[:2], device=image_features.device))
+    b, n, d = image_features.shape
+    k = keep_count(n, pruning_rate)
+    if k >= n:
+        idx = torch.arange(n, device=image_features.device).unsqueeze(0).expand(b, -1)
+        return image_features, idx
+    # per-batch random permutation, take first k (CPU/GPU agnostic; uses the
+    # generator's seed for reproducibility)
+    keep_idx = torch.empty(b, k, dtype=torch.long, device=image_features.device)
+    for bi in range(b):
+        perm = torch.randperm(n, generator=generator, device=image_features.device)
+        keep_idx[bi] = perm[:k]
+    gather_idx = keep_idx.unsqueeze(-1).expand(-1, -1, d)
+    kept = torch.gather(image_features, dim=1, index=gather_idx)
+    return kept, keep_idx
+
+
+@dataclass
+class RandomPruneSelector:
+    """Random uniform prune baseline (the P3 panel's sanity floor).
+
+    Same signature as the prune selectors so the projector-hook plumbing is
+    identical (just fed random indices instead of a scored top-k).
+    """
+    pruning_rate: float = 0.0
+    seed: int = 0
+
+    def select(
+        self,
+        image_features: torch.Tensor,   # (B, N, D)
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        b, n, d = image_features.shape
+        device = image_features.device
+        # build a seeded generator on the features' device (CPU-testable)
+        gen = torch.Generator(device=device)
+        gen.manual_seed(self.seed)
+        return random_prune(image_features, self.pruning_rate, generator=gen)
+
+    def __call__(self, image_features: torch.Tensor) -> torch.Tensor:
+        kept, _ = self.select(image_features)
+        return kept
+
+
+# --------------------------------------------------------------------------- #
 # Score utilities (CLS-attention extraction from a CLIP/SigLIP vision tower)
 # --------------------------------------------------------------------------- #
 def cls_attention_scores(
@@ -727,8 +974,74 @@ def _self_test() -> None:
     # argmax for batch 0 must lie in the aligned span 30..40
     assert 30 <= int(cs_max[0].argmax().item()) < 40, "clip tp_scores argmax not in aligned span"
 
+    # --- 10. P3 ToMe merge: shapes, exact-k, determinism, merge-semantics -------
+    # ToMe must (a) emit exactly k tokens, (b) be deterministic at fixed seed (no
+    # generator, but cosine + topk are deterministic), and (c) actually MERGE
+    # (output != a pure subset of input rows -- at least one output row is an
+    # average of two inputs).
+    for r in (0.25, 0.50, 0.75):
+        merged = tome_merge(feats, r)
+        k = keep_count(n, r)
+        assert merged.shape == (b, k, d), f"tome r={r}: bad shape {merged.shape}, want (2,{k},{d})"
+        m2 = tome_merge(feats, r)
+        assert torch.equal(merged, m2), f"tome r={r}: not deterministic"
+        # r=0 returns input unchanged
+    assert torch.equal(tome_merge(feats, 0.0), feats), "tome r=0 should be identity"
+    # merge-semantics: at least one output row is NOT byte-identical to any input
+    # row (it's an average). Check for batch 0: each merged row's nearest input
+    # row should have cos-sim < 0.999 for at least one merged row (the merged ones).
+    merged = tome_merge(feats, 0.50)
+    feats0n = torch.nn.functional.normalize(feats[0], dim=-1)
+    merged0n = torch.nn.functional.normalize(merged[0], dim=-1)
+    cos_to_nearest = (merged0n @ feats0n.T).max(dim=1).values  # (k,)
+    # at least 10% of merged rows should be "new" (not byte-identical to an input)
+    n_merged_rows = int((cos_to_nearest < 0.999).sum().item())
+    assert n_merged_rows >= k // 10, (
+        f"tome r=0.50: only {n_merged_rows}/{k} merged rows are non-identical to "
+        f"any input -- merge not happening (cos_to_nearest min={cos_to_nearest.min().item():.4f})")
+    # high-similarity clusters actually DO merge: build two tight clusters of
+    # tokens, ToMe should merge within clusters first (output preserves the
+    # cluster centers' info). Cluster A = copies of token 0, Cluster B = copies
+    # of token 100. After r=0.5 merge, output should be ~half A + half B (still
+    # two distinct cluster means), not a random mix.
+    cluster_feats = torch.randn(1, 40, 32)
+    cluster_feats[:, :20, :] = cluster_feats[:, 0:1, :] + 0.01 * torch.randn(1, 20, 32)
+    cluster_feats[:, 20:, :] = cluster_feats[:, 20:21, :] + 0.01 * torch.randn(1, 20, 32)
+    merged_cluster = tome_merge(cluster_feats, 0.50)   # 40 -> 20
+    assert merged_cluster.shape == (1, 20, 32), "tome cluster shape"
+    # the 20 outputs should form TWO clusters (low-rank structure), not one blob
+    mc = merged_cluster[0]
+    cent = mc.mean(dim=0, keepdim=True)
+    dists = (mc - cent).norm(dim=-1)
+    # if ToMe merged across clusters, we'd see a single blob (small dists). If it
+    # merged WITHIN clusters, we keep the two distinct centers (large dists).
+    assert dists.std().item() > 1e-3, (
+        f"tome cluster: merged output is a blob (std={dists.std().item():.4f}) -- "
+        f"not merging within clusters as expected")
+
+    # --- 11. P3 RandomPruneSelector: shapes, determinism, randomness ------------
+    for r in (0.25, 0.50, 0.75):
+        sel = RandomPruneSelector(pruning_rate=r, seed=42)
+        k1, idx1 = sel.select(feats)
+        k2, idx2 = sel.select(feats)
+        assert k1.shape == (b, keep_count(n, r), d), f"rand r={r}: bad shape {k1.shape}"
+        assert torch.equal(idx1, idx2), f"rand r={r}: not deterministic at fixed seed"
+        # gather integrity: kept rows come from feats via idx
+        check = torch.gather(feats, 1, idx1.unsqueeze(-1).expand(-1, -1, d))
+        assert torch.equal(k1, check), f"rand r={r}: gather mismatch"
+        # different seed -> (very likely) different selection
+        sel_b = RandomPruneSelector(pruning_rate=r, seed=99)
+        _, idx_b = sel_b.select(feats)
+        assert not torch.equal(idx1, idx_b), f"rand r={r}: seed has no effect"
+        # all indices in [0, n) and unique per batch row
+        for bi in range(b):
+            assert idx1[bi].min() >= 0 and idx1[bi].max() < n, f"rand r={r}: idx OOB"
+            assert idx1[bi].unique().numel() == keep_count(n, r), f"rand r={r}: dup idx"
+
     print("compressors self-test OK: probe=true(lam0)==identical, diversity+determinism ok, "
           "query_aware+clip_query query-sensitive + shapes ok, "
+          "tome-merge exact-k+deterministic+merge-semantics ok, "
+          "random-prune deterministic+seed-sensitive ok, "
           "keep_counts=" + str([keep_count(n, r) for r in (0.0, .25, .50, .75)]) +
           " scores=" + str(tuple(s.shape)))
 

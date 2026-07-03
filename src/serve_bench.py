@@ -63,6 +63,10 @@ from .compressors import (  # noqa: F401  (re-export)
     TrueClsAttnSelector,
     QueryAwareSelector,
     ClipQuerySelector,
+    TomeMergeSelector,
+    RandomPruneSelector,
+    tome_merge,
+    random_prune,
     clip_text_patch_scores,
     ClsAttnCapture,
     cls_attention_scores,
@@ -646,6 +650,49 @@ def build_engine(model: str, args):
             hook_state["kept_counts"].append(output.shape[1])
             return None  # control: no-op, but still log full token count
 
+        # ---- P3 tome_merge path: bipartite soft-matching + average-merge ----
+        # DIFFERENT REDUCTION MODE: doesn't discard, MERGES (avg) similar tokens.
+        # No score provider needed (operates purely on projector output). The
+        # output sequence is k-shorter (placeholder-shrink makes the LLM forward
+        # identical to a prune at iso-k -> throughput comparable). keep_idx is a
+        # dummy arange (merge has no per-token index). ToMe (Bolya et al. ICLR'23)
+        # is the P3 panel's PUBLISHED merge member vs the prune family.
+        if selector_kind == "tome_merge":
+            full_n = output.shape[1]
+            kept = tome_merge(output, cr)
+            if kept.shape[1] != ck:
+                kept = kept[:, :ck, :].contiguous()
+            keep_idx = torch.arange(kept.shape[1], device=output.device).unsqueeze(0).expand(
+                output.shape[0], -1)
+            module._vtc_keep_idx = keep_idx         # type: ignore[attr-defined]
+            module._vtc_keep_count = kept.shape[1]  # type: ignore[attr-defined]
+            hook_state["kept_counts"].append(kept.shape[1])
+            if hook_state["n_calls"] <= 5:
+                print(f"[serve_bench] projector hook fire #{hook_state['n_calls']}: "
+                      f"in={output.shape[1]} -> merged={kept.shape[1]} "
+                      f"(prune_rate={cr:.3f}, selector=tome_merge)", flush=True)
+            return kept
+
+        # ---- P3 random prune path: uniform random k-of-N (sanity floor) ----
+        # No score provider; deterministic at fixed seed. The trivial baseline
+        # for the cross-compressor panel: any signal-based selector should beat
+        # this at iso-throughput.
+        if selector_kind == "random":
+            full_n = output.shape[1]
+            sel = RandomPruneSelector(pruning_rate=cr, seed=getattr(args, "rand_seed", 0))
+            kept, keep_idx = sel.select(output)
+            if kept.shape[1] != ck:
+                kept = kept[:, :ck, :].contiguous()
+                keep_idx = keep_idx[:, :ck].contiguous()
+            module._vtc_keep_idx = keep_idx         # type: ignore[attr-defined]
+            module._vtc_keep_count = kept.shape[1]  # type: ignore[attr-defined]
+            hook_state["kept_counts"].append(kept.shape[1])
+            if hook_state["n_calls"] <= 5:
+                print(f"[serve_bench] projector hook fire #{hook_state['n_calls']}: "
+                      f"in={output.shape[1]} -> kept={kept.shape[1]} "
+                      f"(prune_rate={cr:.3f}, selector=random)", flush=True)
+            return kept
+
         # ---- v2 query-aware path: pop the pre-computed question embeddings ----
         if selector_kind == "query_aware":
             query_embeds = query_queue.pop(0) if query_queue else None
@@ -792,10 +839,11 @@ def build_engine(model: str, args):
                   f"(prune_rate={cr:.3f}, selector={selector_kind})", flush=True)
         return kept
 
-    if selector_kind != "true_cls" and vision_tower is not None:
-        # PROXY path needs the vision-tower saliency hook; clip_query needs the
-        # pre-projector patch-feature stash. Both are forward-hooks on the inner
-        # CLIPVisionTransformer (skip the wrapper's .vision_tower delegation).
+    # PROXY needs the vision-tower saliency hook; clip_query needs the pre-projector
+    # patch-feature stash; true_cls uses ClsAttnCapture (its own patch). tome_merge
+    # and random need NO vision-tower signal (they operate purely on the projector
+    # output) -> skip the vision-tower hook entirely for them.
+    if selector_kind not in ("true_cls", "tome_merge", "random") and vision_tower is not None:
         inner = getattr(vision_tower, "vision_model", vision_tower)
         if selector_kind == "clip_query":
             inner.register_forward_hook(_vision_hook_clip)
@@ -1574,16 +1622,22 @@ def main() -> None:
     ap.add_argument("--step-n-high", type=int, default=60, help="step profile: # reqs in the high phase (one batch up to max_num_seqs).")
     ap.add_argument("--step-high-gap", type=float, default=2.0, help="step profile: gap (s) after the high-phase batch.")
     ap.add_argument("--selector", default="proxy",
-                    choices=["proxy", "true_cls", "query_aware", "clip_query"],
-                    help="score source: 'proxy' = hidden-state-deviation (the P2 probe); "
-                         "'true_cls' = real [CLS]->patch softmax attention (v1 method, "
-                         "via ClsAttnCapture on the last vision-tower layer); "
-                         "'query_aware' = text<->patch similarity in the LLM "
-                         "embed_tokens space (v2-step-1, SparseVLM-style text-guided "
-                         "selection -- OCR failed); "
-                         "'clip_query' = CLIP CONTRASTIVE text<->patch similarity (A'', "
-                         "the v2 fix: question via CLIP text tower, patches via CLIP "
-                         "visual_projection, scored in CLIP's aligned 768-d space).")
+                    choices=["proxy", "true_cls", "query_aware", "clip_query",
+                             "tome_merge", "random"],
+                    help="compressor (P3 cross-compressor panel): "
+                         "'proxy' = hidden-state-deviation prune (the v1/P2 selector); "
+                         "'true_cls' = real [CLS]->patch softmax attention prune "
+                         "(VisionZip/FasterVLM family, via ClsAttnCapture on the last "
+                         "vision-tower layer); "
+                         "'query_aware' = text<->patch similarity prune in the LLM "
+                         "embed_tokens space (SparseVLM-style, OCR failed); "
+                         "'clip_query' = CLIP CONTRASTIVE text<->patch similarity prune "
+                         "(A''); "
+                         "'tome_merge' = ToMe bipartite soft-matching + average-MERGE "
+                         "(Bolya et al. ICLR'23; DIFFERENT REDUCTION MODE -- merges "
+                         "instead of discards; published-method row); "
+                         "'random' = uniform random prune (sanity floor; seeded by "
+                         "--rand-seed).")
     ap.add_argument("--diversity-lam", type=float, default=0.0,
                     help="PRUNESID-style diversity weight (only with --selector true_cls); "
                          "0.0 = pure top-k by CLS-attn (v1 default)")
@@ -1593,6 +1647,8 @@ def main() -> None:
     ap.add_argument("--query-sim", default="cosine", choices=["cosine", "dot"],
                     help="text<->patch similarity function for query_aware "
                          "(default cosine = L2-normalize both sides first).")
+    ap.add_argument("--rand-seed", type=int, default=0,
+                    help="seed for the 'random' selector (P3 sanity floor). 0=default.")
     args = ap.parse_args()
     # V0 rollback: VLLM_USE_V1 must be set BEFORE the first `import vllm`. The
     # lazy imports inside build_engine/run() fire on the first call, so setting
