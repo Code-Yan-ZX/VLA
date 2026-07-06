@@ -409,6 +409,114 @@ def _resolve_k_policy(args) -> str:
     return "fixed"
 
 
+def _pixel_fingerprint(pixel_values_row) -> tuple:
+    """Cheap content hash of one image's pixel_values (a 3D tensor: C,H,W).
+    Returns a (sum, sum_sq) tuple — collision-safe for distinct normalized
+    images (different content → different sums with overwhelming probability).
+    Computed on GPU, ONE .item() sync per batch (batched via .sum(dim=...)).
+    """
+    import torch  # noqa
+    s = float(pixel_values_row.float().sum().item())
+    s2 = float((pixel_values_row.float() ** 2).sum().item())
+    # Round to nearest 10 — robust to float16↔float32 conversion noise between
+    # preprocess (float32) and forward (float16 on GPU, back-converted). The
+    # dtype error accumulates to ~4-40 over C*H*W≈150k elements; rounding to 10
+    # absorbs it while keeping collision probability negligible for distinct imgs.
+    return (round(s, -1), round(s2, -1))
+
+
+def _install_embed_mm_patch(engine_model, ev_state: dict) -> None:
+    """Monkey-patch ``engine_model.embed_multimodal`` to populate
+    ``ev_state["cur_batch_k"]`` (a list of per-row k_i) via pixel-value
+    fingerprinting — ORDER-INDEPENDENT (no FIFO queue).
+
+    The patch computes a (sum, sum_sq) fingerprint per pixel_values row and
+    matches it to the ``ev_state["fp_to_k"]`` map (built at preprocess time
+    when rid and k_i are both in scope). The projector hook then reads
+    ``cur_batch_k`` to do per-row top-k_i gather.
+
+    Falls back to k=576 (max, no prune) for fingerprint misses (shouldn't
+    happen in normal operation — all images are fingerprinted at preprocess).
+    """
+    import torch  # noqa
+    orig_embed_mm = engine_model.embed_multimodal
+
+    def patched_embed_multimodal(*args, **kwargs):  # noqa: ANN002
+        # Try to extract pixel_values from kwargs (vLLM passes them as a kwarg).
+        pv = kwargs.get("pixel_values")
+        if pv is not None and isinstance(pv, torch.Tensor) and pv.dim() == 4:
+            B = pv.shape[0]
+            ev_state["n_embed_calls"] += 1
+            # Batch fingerprint: sum and sum_sq over (C,H,W) per row.
+            pv_f = pv.float()
+            sums = pv_f.sum(dim=[1, 2, 3]).tolist()
+            sums_sq = (pv_f ** 2).sum(dim=[1, 2, 3]).tolist()
+            fp_to_k = ev_state["fp_to_k"]
+            batch_k = []
+            for i in range(B):
+                fp = (round(sums[i], -1), round(sums_sq[i], -1))
+                ki = fp_to_k.get(fp)
+                if ki is not None:
+                    ev_state["n_fp_hits"] += 1
+                else:
+                    ev_state["n_fp_miss"] += 1
+                    ki = ev_state.get("cur_k", 576)  # serial-mode fallback
+                batch_k.append(ki)
+            ev_state["cur_batch_k"] = batch_k
+            if ev_state["n_embed_calls"] <= 5:
+                print(f"[serve_bench] EV embed_multimodal #{ev_state['n_embed_calls']}: "
+                      f"B={B} fp-matched k={batch_k}", flush=True)
+        else:
+            ev_state["cur_batch_k"] = None
+        return orig_embed_mm(*args, **kwargs)
+
+    engine_model.embed_multimodal = patched_embed_multimodal
+    print(f"[serve_bench] EV: monkey-patched embed_multimodal for per-row "
+          f"fingerprint→k matching (order-independent)", flush=True)
+
+
+def _extract_pixel_values(prompt) -> "Optional[object]":
+    """Extract the pixel_values tensor from a preprocessed V1 prompt.
+
+    Tries multiple access patterns (V1's EngineInput format varies across
+    vLLM versions): dict key, attribute, nested MultiModalDataDict. Returns
+    a (C,H,W) or (1,C,H,W) tensor, or None if not found.
+    """
+    import torch  # noqa
+    mmd = None
+    # Try dict access
+    if isinstance(prompt, dict):
+        mmd = prompt.get("multi_modal_data") or prompt.get("mm_data")
+    else:
+        mmd = getattr(prompt, "multi_modal_data", None)
+    if mmd is None:
+        return None
+    # mmd may be a dict or a MultiModalKwargsItems (UserDict)
+    candidates = []
+    if isinstance(mmd, dict):
+        for k in ("pixel_values", "image"):
+            v = mmd.get(k)
+            if v is not None:
+                candidates.append(v)
+    # try direct attribute / items()
+    for k in ("pixel_values", "image"):
+        v = getattr(mmd, k, None) if not isinstance(mmd, dict) else None
+        if v is not None:
+            candidates.append(v)
+    # unwrap common wrappers
+    for v in candidates:
+        if isinstance(v, torch.Tensor):
+            return v
+        if isinstance(v, (list, tuple)) and len(v) > 0:
+            inner = v[0]
+            if isinstance(inner, torch.Tensor):
+                return inner
+            if isinstance(inner, (list, tuple)) and len(inner) > 0 \
+                    and isinstance(inner[0], torch.Tensor):
+                return inner[0]
+    return None
+
+
 def build_engine(model: str, args):
     """Construct a vLLM offline LLM with the probe compressor hooked in.
 
@@ -517,15 +625,20 @@ def build_engine(model: str, args):
         # ELASTICVIS (EV-1): per-request k via ev_state. No shared k_cell —
         # each request gets its own k_i from the LiveGreedyAllocator (or debug
         # assignment). ev_state["cur_k"] is the value get_num_image_tokens
-        # returns (set per-request right before preprocess); ev_state["k_fifo"]
-        # is consumed by the projector hook (B k values per batched forward).
-        ev_state = {"cur_k": 576, "k_fifo": [], "k_by_rid": {},
+        # returns (set per-request right before preprocess). The projector hook
+        # reads ev_state["cur_batch_k"] (a list of per-row k_i set by the
+        # embed_multimodal monkey-patch, which matches pixel_values rows to
+        # pre-computed fingerprints — ORDER-INDEPENDENT, robust to scheduler
+        # reordering under continuous batching + chunked prefill).
+        ev_state = {"cur_k": 576, "k_by_rid": {}, "fp_to_k": {},
+                    "cur_batch_k": None, "n_embed_calls": 0,
+                    "n_fp_hits": 0, "n_fp_miss": 0,
                     "debug_k": getattr(args, "ev_debug_k", None)}
         k_cell = None
         target_k = patch_image_token_count(args.pruning_rate, full_n=576,
                                            ev_state=ev_state)
         print(f"[serve_bench] ELASTICVIS mode ON: per-request k_i via "
-              f"LiveGreedyAllocator (slo={getattr(args,'slo_ms',5000)}ms "
+              f"LiveGreedyAllocator (slo={getattr(args,'slo_ms',10000)}ms "
               f"type={getattr(args,'slo_type','e2e')}); "
               f"ev_state init cur_k={ev_state['cur_k']}", flush=True)
     elif adaptive:
@@ -717,29 +830,28 @@ def build_engine(model: str, args):
         import torch  # noqa
         hook_state["n_calls"] += 1
 
-        # ---- ELASTICVIS (EV-1): per-request k via k_fifo, per-row gather ----
-        # BREAKS the "all in-flight MUST share k" constraint (serve_bench.py
-        # :1160-1166 legacy comment): each image in this batched forward gets
-        # its OWN k_i. We pop B k-values from ev_state["k_fifo"] (populated at
-        # preprocess time, one per request, FIFO matches scheduler prefill
-        # order), select top-k_i per row via the SAME score_provider used by the
-        # scalar-k paths, and return a LIST of per-image 2D tensors [(k_i, D)].
-        # vLLM V1 fully supports this: sanity_check_mm_encoder_outputs accepts a
-        # list of 2D tensors; encoder_runner.extend() splits per-image; the
-        # masked_scatter places each image's k_i embeddings into its k_i text
-        # placeholders. No vLLM fork required.
-        if elasticvis and ev_state is not None and ev_state["k_fifo"]:
+        # ---- ELASTICVIS (EV-1b): per-request k via fingerprint-matched rows ----
+        # BREAKS the "all in-flight MUST share k" constraint: each image in this
+        # batched forward gets its OWN k_i. The embed_multimodal monkey-patch
+        # already computed per-row k_i via pixel-value fingerprinting and stashed
+        # them in ev_state["cur_batch_k"] (ORDER-INDEPENDENT — no FIFO queue, so
+        # scheduler reordering under continuous batching + chunked prefill is
+        # safe). We select top-k_i per row via the SAME score_provider used by
+        # the scalar-k paths and return a LIST of per-image 2D tensors [(k_i,D)].
+        # vLLM V1 fully supports list returns: sanity_check_mm_encoder_outputs
+        # accepts lists; encoder_runner.extend() splits per-image; the scatter
+        # places each image's k_i embeddings into its k_i text placeholders.
+        if elasticvis and ev_state is not None and ev_state.get("cur_batch_k"):
             B, N = output.shape[0], output.shape[1]
-            # pop B k-values (defensive: pad with cur_k if fifo underflows —
-            # shouldn't happen since every request is preprocessed before forward)
-            ks = []
-            for _ in range(B):
-                ks.append(ev_state["k_fifo"].pop(0) if ev_state["k_fifo"]
-                          else int(ev_state["cur_k"]))
+            ks_raw = ev_state["cur_batch_k"]
+            # align k list to actual batch size B (defensive: pad/truncate)
+            if len(ks_raw) < B:
+                ks_raw = ks_raw + [576] * (B - len(ks_raw))
+            ks = [max(1, min(int(k), N)) for k in ks_raw[:B]]
             scores = score_provider()
             results = []
             for i in range(B):
-                ki = max(1, min(int(ks[i]), N))
+                ki = ks[i]
                 if (scores is not None and scores.dim() == 2
                         and scores.shape[0] == B and scores.shape[1] == N):
                     _, idx = torch.topk(scores[i], ki)
@@ -753,7 +865,7 @@ def build_engine(model: str, args):
             hook_state["ev_per_batch_k"].append(list(ks))
             module._vtc_keep_count = sum(ks)  # type: ignore[attr-defined]
             if hook_state["n_calls"] <= 8:
-                print(f"[serve_bench] EV1 projector hook #{hook_state['n_calls']}: "
+                print(f"[serve_bench] EV1b projector hook #{hook_state['n_calls']}: "
                       f"B={B} in={N} per-row-k={ks} "
                       f"(list-return {len(results)}x 2D; scatter by vLLM)",
                       flush=True)
@@ -992,6 +1104,21 @@ def build_engine(model: str, args):
     projector._vtc_times = _vtc_times  # type: ignore[attr-defined]  (M1 timing)
     projector._vtc_k_cell = k_cell     # type: ignore[attr-defined]  (adaptive: mutable per-request k)
     projector._vtc_ev_state = ev_state if elasticvis else None  # type: ignore[attr-defined]
+
+    # ---- ELASTICVIS: monkey-patch embed_multimodal for per-row k matching ----
+    # WHY: the projector hook fires inside embed_multimodal with (B, 576, D) but
+    # has NO access to which request each row belongs to. Under continuous
+    # batching + chunked prefill, the scheduler's row order ≠ submission order.
+    # A FIFO k_queue (the EV-1a approach) CRASHES at c≥16 because a row gets the
+    # wrong k_i → placeholder/embedding count mismatch → masked_scatter assert.
+    #
+    # FIX (EV-1b): compute a per-row FINGERPRINT of pixel_values inside
+    # embed_multimodal, match it to a fingerprint→k_i map built at preprocess
+    # time (when rid and k_i are both in scope). This is ORDER-INDEPENDENT —
+    # each row is identified by its pixel content, not its position in a queue.
+    if elasticvis and ev_state is not None:
+        _install_embed_mm_patch(engine_model, ev_state)
+
     return llm, projector
 
 
@@ -1250,11 +1377,17 @@ def run(args) -> dict:
 
     def _ev_resolve_k(rid: str, req_idx: int) -> int:
         """ElasticVis: compute k_i for this request from live load + SLO, store
-        in ev_state, set cur_k, push to k_fifo. Returns k_i.
+        in ev_state, set cur_k (for get_num_image_tokens). Returns k_i.
 
         Debug mode (--ev-debug-k '576,144,576'): assigns k round-robin from the
         spec (smoke test; bypasses the allocator). Otherwise: reads live engine
-        load via get_metrics, runs the queue-aware greedy gate."""
+        load via get_metrics, runs the queue-aware greedy gate.
+
+        NOTE: the per-row k→image matching is done at FORWARD time via pixel-
+        value fingerprinting (see _install_embed_mm_patch). This function only
+        sets cur_k (for the placeholder count) and k_by_rid (for logging).
+        The fingerprint→k map is populated by _ev_register_fp after preprocess.
+        """
         if ev_state is None:
             return 576
         dbg = ev_state.get("debug_k")
@@ -1270,8 +1403,19 @@ def run(args) -> dict:
         k_i = max(1, min(int(k_i), 576))
         ev_state["k_by_rid"][rid] = k_i
         ev_state["cur_k"] = k_i           # get_num_image_tokens reads THIS
-        ev_state["k_fifo"].append(k_i)    # projector hook pops B per forward
         return k_i
+
+    def _ev_register_fp(prompt, k_i: int) -> None:
+        """After preprocess, extract pixel_values from the prompt and register a
+        fingerprint→k_i mapping. Called once per request, right after preprocess.
+        The embed_multimodal monkey-patch uses this map at forward time to match
+        pixel_values rows to k_i — ORDER-INDEPENDENT (no FIFO queue)."""
+        if ev_state is None or k_i is None:
+            return
+        pv = _extract_pixel_values(prompt)
+        if pv is not None:
+            fp = _pixel_fingerprint(pv)
+            ev_state["fp_to_k"][fp] = k_i
 
     def _ev_slo_ms(req_idx: int) -> float:
         """Per-request SLO deadline (ms). --ev-mixed-slo '3500,15000' alternates
@@ -1429,10 +1573,13 @@ def run(args) -> dict:
             seg_pairs = []
             for s in batch_samples:
                 rid = f"dval_{req_counter}"; req_counter += 1
+                ev_ki = None
                 if ev_state is not None:
-                    _ev_resolve_k(rid, req_counter - 1)
+                    ev_ki = _ev_resolve_k(rid, req_counter - 1)
                 msgs = _build_messages(s)
                 prepped = llm.preprocess_chat(msgs)[0]
+                if ev_state is not None:
+                    _ev_register_fp(prepped, ev_ki)
                 engine.add_request(rid, prepped, sp)
                 seg_pairs.append((rid, s))
             # ---- drain this segment, sampling peak load mid-decode ----
@@ -1557,8 +1704,10 @@ def run(args) -> dict:
         for i, conv in enumerate(all_messages):
             rid = f"p2_{i}"
             if ev_state is not None:
-                _ev_resolve_k(rid, i)  # sets ev_state["cur_k"] + k_fifo BEFORE preprocess
+                k_i = _ev_resolve_k(rid, i)  # sets ev_state["cur_k"] BEFORE preprocess
             prompt = llm._preprocess_chat_one(conv)
+            if ev_state is not None:
+                _ev_register_fp(prompt, k_i)  # fp→k map for forward-time matching
             engine.add_request(rid, prompt, sp)
             submit_ts[rid] = time.perf_counter()
             rids_in_order.append(rid)
@@ -1767,6 +1916,10 @@ def run(args) -> dict:
             "ev_per_batch_k_head": hook_state.get("ev_per_batch_k", [])[:10],
             "allocator_realized_summary": (ev_allocator.realized_summary()
                                            if ev_allocator is not None else None),
+            "n_fp_to_k_entries": len(ev_state.get("fp_to_k", {})),
+            "n_embed_calls": ev_state.get("n_embed_calls", 0),
+            "n_fp_hits": ev_state.get("n_fp_hits", 0),
+            "n_fp_miss": ev_state.get("n_fp_miss", 0),
             "slo_ms": getattr(args, "slo_ms", None),
             "slo_type": getattr(args, "slo_type", None),
             "ev_mixed_slo": getattr(args, "ev_mixed_slo", None),
