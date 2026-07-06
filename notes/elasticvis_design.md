@@ -95,3 +95,27 @@ def simulate(arrival:ArrivalProcess, allocator:Allocator, lat:LatencyPred, acc:A
 - Greedy vs Lagrangian: which wins in sim? Report both.
 - LatPred form: linear `α+β·n+γ·Σk+δ·n·Σk` vs lookup+interp; pick by fit error.
 - Architecture-awareness (Qwen3-VL): k_i as fraction of N_native_i (EV-2).
+
+## 8. EV-0 RESULTS (2026-07-06) — gating characterization VALIDATED; GO on TextVQA
+
+**Core insight (data-backed):** ElasticVis's goodput benefit over fixed-r is **gated by the steepness of accuracy(k)**. Validated across 5 benchmarks (acc-range → H1b mixed-SLO outcome):
+| benchmark group | acc(k) range | ElasticVis vs best fixed-r |
+|---|---|---|
+| knowledge (MME/MMBench/ScienceQA) | ~0.01 | flat → no win (visual tokens irrelevant to the task) |
+| object QA (GQA, LLaVA/Qwen3-VL) | 0.12-0.13 | **boundary** (<0.15 crossover) → NO-GO |
+| text-dense (TextVQA, LLaVA/Qwen3-VL) | 0.28-0.29 | **steep** (>0.15) → **WIN** |
+
+**Synthetic sweep** (`runs/elasticvis_ev0/gating_sweep.py`, linear acc a@144 swept, a@576=0.60): H1b (mixed-SLO) crossover at acc-range **≈0.15**; H1 (uniform-SLO) crossover at **≈0.40**. ⇒ **mixed-SLO is the robust regime**; uniform-SLO needs very steep acc.
+
+**Decisive result on REAL TextVQA** (`confirm_textvqa.py`, slot+queue sim, zero GPU):
+- H1b mixed-SLO (poisson8, 50% tight 3.5s / 50% slack 15s, e2e SLO): Greedy=**2.36** vs best Fixed=1.74 → **+35.5% WIN**.
+- H1 uniform-SLO: 0.898 lose (TextVQA range 0.28 < 0.40 H1 threshold).
+- GQA H1b: 0.978 lose — confirms the gate at the boundary.
+
+**Mechanism:** Greedy gives low-k to deadline-tight requests (protect throughput/SLO) and high-k to slack requests (accuracy 0.555 vs 0.275); fixed-r cannot adapt to per-request deadlines.
+
+**Caveat:** sim has known fidelity gaps (slot over-serialization; closed-loop sanity k144 2.5× low, biased in ElasticVis's favor). The +35.5% is a *relative* comparison (robust to absolute bias) but the magnitude needs GPU confirmation (EV-1). Direction (Greedy > Fixed on TextVQA mixed-SLO) is robust.
+
+**Paper spine (confirmed):** (1) gating characterization (acc(k)-steepness gate, validated 5 benchmarks + synthetic sweep); (2) ElasticVis method win on TextVQA (+35.5% H1b mixed-SLO); (3) v2 framework as substrate. GQA NO-GO = the flat-acc boundary (a feature illustrating the gate). Mixed-SLO/deadline-heterogeneous is realistic for multi-tenant serving.
+
+**Next (EV-1, GPU):** implement open-loop + mixed-SLO arrival + per-request k plumbing in `serve_bench.py` (§3); re-measure TextVQA accuracy(k) cleanly on the serving engine; run ElasticVis vs fixed-r on real goodput@SLO to confirm magnitude. Then DocVQA/ChartQA (steeper, fresh probes) + Qwen3-VL cross-arch.

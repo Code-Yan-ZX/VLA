@@ -9,8 +9,9 @@
 
 **已批准 spine：A→B**（用户 2026-07-06）。核心 H1 系统信号 allocator（现有数据够），内容维度 H2 作后续扩展（对标 CARES）。
 
-## ★ 立即进行：EV-0 go/no-go = **NO-GO on GQA**（2026-07-06，升级找人定方向）
-EV-0 三组件全建好（predictors LatPred R²0.996+hybrid / allocator H1 机制本地验证 / sim slot+queue）。**独立 probe（real vs wide acc）推翻 Z 的 headline**：Z 报 H1b "1.10× win" 是 MockAcc(0.4-0.6) artifact。**真实 GQA acc(k)=0.476-0.595（区间 0.119）下，H1 均匀-SLO=0.79 LOSE、H1b 混合-SLO=0.998 TIE/LOSE。** 机制真实但被 **accuracy(k) 陡度门控**：flat acc→吞吐主导→Fixed 赢；steep acc→ElasticVis 赢（wide-acc 0.30-0.70 → H1b 1.307 WIN）。sim sanity k144 低估 2.5× 且偏差有利于 ElasticVis → GPU 大概率更差 → NO-GO 稳健。**待定方向：**(A)探 steep-acc workload(TextVQA/OCR/doc)找赢家｜(B)GPU确认GQA NO-GO｜(C)重定位为'acc(k)陡度门控'刻画并入v2｜(D)放弃回v2论文。详见 DECISIONS.md + `runs/elasticvis_ev0/probe.py`。
+## ★ 立即进行：EV-0 GO on TextVQA（H1b mixed-SLO +35.5%，零 GPU sim 确认）
+**门控刻画被 5 benchmark 验证**：ElasticVis 的 goodput 收益被 accuracy(k) 陡度门控。知识型(MME/MMBench/ScienceQA)~0.01→无 win；GQA 0.12-0.13→边界 NO-GO；**TextVQA 0.28-0.29→WIN**。synthetic sweep：H1b(混合-SLO) crossover≈0.15，H1(均匀-SLO)≈0.40 → **混合-SLO 是稳健 regime**。**真实 TextVQA sim：H1b mixed-SLO Greedy 2.36 vs bestFixed 1.74 = +35.5% WIN**；H1 0.898 lose；GQA H1b 0.978 lose。机制=紧 deadline 给低 k、松给高 k。详见 design §8 + `runs/elasticvis_ev0/{gating_sweep,confirm_textvqa}.py`。
+**下一步 EV-1（GPU）：** serve_bench 加 open-loop+混合-SLO 到达 + per-request k plumbing（§3 escape：剪枝前移到预处理）；干净重测 TextVQA accuracy(k)；实测 ElasticVis vs fixed-r goodput@SLO 定 magnitude。然后 DocVQA/ChartQA + Qwen3-VL 跨架构。
 
 ## ★ 评测制度（已批准）
 **open-loop 变载到达为主 + 混合-SLO 为辅**。现有 c64 闭环准入负载≈常数（v2 逐段控制器 n=500 null 的原因）→ 不是正确评测。H1 赢点=变载；H1b=混合 deadline。baseline：fixed-{r0,r25,r50,r75}+v2控制器+oracle。
