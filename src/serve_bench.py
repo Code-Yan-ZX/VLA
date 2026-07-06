@@ -80,6 +80,10 @@ from .load_controller import (  # noqa: F401  (re-export)
     read_engine_load,
     read_engine_load_v1,
 )
+from .elasticvis.live_allocator import (  # noqa: F401  (EV-1 re-export)
+    LiveGreedyAllocator,
+    assign_debug_k,
+)
 
 
 # --------------------------------------------------------------------------- #
@@ -301,7 +305,8 @@ SCORERS = {
 # vLLM engine + hook installation (lazy import)
 # --------------------------------------------------------------------------- #
 def patch_image_token_count(pruning_rate: float, full_n: int = 576,
-                            k_cell: Optional[dict] = None) -> int:
+                            k_cell: Optional[dict] = None,
+                            ev_state: Optional[dict] = None) -> int:
     """Override vLLM's LLaVA image-token count 576 -> k = int((1-r)*576).
 
     WHY: pruning rate r is FIXED per run (or per-request in adaptive mode), so k
@@ -323,10 +328,34 @@ def patch_image_token_count(pruning_rate: float, full_n: int = 576,
     llm.chat(), and the placeholder count + projector hook both honor it. The
     initial k_cell["k"] is set from `pruning_rate` (the r_max for adaptive, or
     the fixed r otherwise); run() updates it before each submission.
+
+    ELASTICVIS MODE (EV-1): when `ev_state` is provided, the patched function
+    reads `ev_state["cur_k"]` on EVERY call (set per-request by run() right
+    before preprocess_chat). This breaks the "all in-flight requests share k"
+    constraint: each request's placeholder count is k_i, and the projector hook
+    returns a LIST of per-image 2D tensors (different k_i per row) that vLLM's
+    scatter consumes per-image (sanity_check_mm_encoder_outputs accepts lists;
+    encoder_runner.extend() splits them; the placeholder-scatter matches).
     """
     import vllm.model_executor.models.llava as _llava_mod  # noqa
     k = max(1, int(round(full_n * (1.0 - pruning_rate))))
     InfoCls = _llava_mod.LlavaProcessingInfo
+
+    # ---- ELASTICVIS (EV-1): per-request k via ev_state["cur_k"] ----
+    if ev_state is not None:
+        if not getattr(InfoCls.get_num_image_tokens, "_vtc_patched", False):
+            orig = InfoCls.get_num_image_tokens
+
+            def patched_ev(self, *, image_width, image_height):  # noqa: ANN001
+                return ev_state["cur_k"]
+            patched_ev._vtc_mode = "elasticvis"
+            patched_ev._vtc_orig = orig
+            patched_ev._vtc_patched = True
+            InfoCls.get_num_image_tokens = patched_ev
+            print(f"[serve_bench] patched get_num_image_tokens: ELASTICVIS "
+                  f"(per-request k from ev_state['cur_k']; init k="
+                  f"{ev_state['cur_k']})", flush=True)
+        return int(ev_state["cur_k"])
 
     if pruning_rate == 0.0 and k_cell is None:
         # restore original (unpatch) so r=0 control is byte-identical to stock vLLM
@@ -358,6 +387,26 @@ def patch_image_token_count(pruning_rate: float, full_n: int = 576,
         patched._vtc_patched = True
         InfoCls.get_num_image_tokens = patched
     return k
+
+
+def _resolve_k_policy(args) -> str:
+    """Determine the k-policy (additive: existing flags map to existing modes).
+
+    - ``--k-policy elasticvis`` -> "elasticvis" (EV-1 per-request allocator).
+    - ``--k-policy segment`` or ``--adaptive`` -> "segment" (v2 per-segment
+      LoadAdaptiveController; the existing method-D path, unchanged).
+    - ``--k-policy fixed`` or none -> "fixed" (scalar --pruning-rate; default).
+
+    Existing v2 commands that pass ``--adaptive`` (no ``--k-policy``) still map
+    to "segment" and behave identically. Commands with neither flag default to
+    "fixed" (byte-identical to pre-EV-1 behavior).
+    """
+    kp = getattr(args, "k_policy", None)
+    if kp is not None:
+        return kp
+    if bool(getattr(args, "adaptive", False)):
+        return "segment"
+    return "fixed"
 
 
 def build_engine(model: str, args):
@@ -412,10 +461,14 @@ def build_engine(model: str, args):
         gpu_memory_utilization=args.gpu_memory_utilization,
         max_model_len=args.max_model_len,
         trust_remote_code=False,
-        # ADAPTIVE mode needs eager execution: varying per-segment k -> varying
-        # sequence lengths -> CUDA graph capture mismatches. Fixed-r runs could
-        # keep graphs but we use eager uniformly for cross-cell comparability.
-        enforce_eager=bool(getattr(args, "adaptive", False)),
+        # ADAPTIVE/ELASTICVIS modes need eager execution: varying per-request k
+        # -> varying sequence lengths -> CUDA graph capture mismatches. Fixed-r
+        # runs could keep graphs but we use eager uniformly for cross-cell
+        # comparability. ELASTICVIS additionally returns a LIST of per-image
+        # tensors (variable k_i) from the projector hook — CUDA graphs cannot
+        # capture dynamic-shape list returns.
+        enforce_eager=bool(getattr(args, "adaptive", False)
+                           or _resolve_k_policy(args) == "elasticvis"),
         limit_mm_per_prompt={"image": 1},
         allowed_local_media_path=_repo_root,
         max_num_seqs=getattr(args, "max_num_seqs", 256),  # M2: concurrency control
@@ -457,7 +510,25 @@ def build_engine(model: str, args):
     # submission. The projector hook ALSO reads k_cell so its kept-count matches
     # the per-request placeholder count exactly.
     adaptive = bool(getattr(args, "adaptive", False))
-    if adaptive:
+    k_policy = _resolve_k_policy(args)
+    elasticvis = (k_policy == "elasticvis")
+    ev_state = None
+    if elasticvis:
+        # ELASTICVIS (EV-1): per-request k via ev_state. No shared k_cell —
+        # each request gets its own k_i from the LiveGreedyAllocator (or debug
+        # assignment). ev_state["cur_k"] is the value get_num_image_tokens
+        # returns (set per-request right before preprocess); ev_state["k_fifo"]
+        # is consumed by the projector hook (B k values per batched forward).
+        ev_state = {"cur_k": 576, "k_fifo": [], "k_by_rid": {},
+                    "debug_k": getattr(args, "ev_debug_k", None)}
+        k_cell = None
+        target_k = patch_image_token_count(args.pruning_rate, full_n=576,
+                                           ev_state=ev_state)
+        print(f"[serve_bench] ELASTICVIS mode ON: per-request k_i via "
+              f"LiveGreedyAllocator (slo={getattr(args,'slo_ms',5000)}ms "
+              f"type={getattr(args,'slo_type','e2e')}); "
+              f"ev_state init cur_k={ev_state['cur_k']}", flush=True)
+    elif adaptive:
         # init k_cell at r_max (the heavy-load endpoint); run() updates it per-
         # request. r_max is the controller ceiling (also the per-benchmark
         # accuracy guardrail).
@@ -631,7 +702,8 @@ def build_engine(model: str, args):
     # the placeholder count agree. The kept_counts log then visibly tracks the
     # controller's adaptation (the headline-validation signal).
     hook_state = {"n_calls": 0, "kept_counts": [], "target_k": target_k,
-                  "selector": selector_kind, "adaptive": adaptive}
+                  "selector": selector_kind, "adaptive": adaptive,
+                  "elasticvis": elasticvis, "ev_per_batch_k": []}
 
     def _cur_k() -> int:
         """Per-request kept-token count: k_cell['k'] if adaptive, else target_k."""
@@ -644,6 +716,49 @@ def build_engine(model: str, args):
     def _projector_hook(module, inputs, output):  # noqa: ANN001
         import torch  # noqa
         hook_state["n_calls"] += 1
+
+        # ---- ELASTICVIS (EV-1): per-request k via k_fifo, per-row gather ----
+        # BREAKS the "all in-flight MUST share k" constraint (serve_bench.py
+        # :1160-1166 legacy comment): each image in this batched forward gets
+        # its OWN k_i. We pop B k-values from ev_state["k_fifo"] (populated at
+        # preprocess time, one per request, FIFO matches scheduler prefill
+        # order), select top-k_i per row via the SAME score_provider used by the
+        # scalar-k paths, and return a LIST of per-image 2D tensors [(k_i, D)].
+        # vLLM V1 fully supports this: sanity_check_mm_encoder_outputs accepts a
+        # list of 2D tensors; encoder_runner.extend() splits per-image; the
+        # masked_scatter places each image's k_i embeddings into its k_i text
+        # placeholders. No vLLM fork required.
+        if elasticvis and ev_state is not None and ev_state["k_fifo"]:
+            B, N = output.shape[0], output.shape[1]
+            # pop B k-values (defensive: pad with cur_k if fifo underflows —
+            # shouldn't happen since every request is preprocessed before forward)
+            ks = []
+            for _ in range(B):
+                ks.append(ev_state["k_fifo"].pop(0) if ev_state["k_fifo"]
+                          else int(ev_state["cur_k"]))
+            scores = score_provider()
+            results = []
+            for i in range(B):
+                ki = max(1, min(int(ks[i]), N))
+                if (scores is not None and scores.dim() == 2
+                        and scores.shape[0] == B and scores.shape[1] == N):
+                    _, idx = torch.topk(scores[i], ki)
+                    kept_i = output[i, idx, :].contiguous()    # (ki, D)
+                else:
+                    # no per-row scores (random/tome_merge selector, or first
+                    # call before vision hook captured): keep first ki patches.
+                    kept_i = output[i, :ki, :].contiguous()    # (ki, D)
+                results.append(kept_i)
+            hook_state["kept_counts"].extend(ks)
+            hook_state["ev_per_batch_k"].append(list(ks))
+            module._vtc_keep_count = sum(ks)  # type: ignore[attr-defined]
+            if hook_state["n_calls"] <= 8:
+                print(f"[serve_bench] EV1 projector hook #{hook_state['n_calls']}: "
+                      f"B={B} in={N} per-row-k={ks} "
+                      f"(list-return {len(results)}x 2D; scatter by vLLM)",
+                      flush=True)
+            return results   # list[(k_i, D)] — sanity_check passes, scatter OK
+
         ck = _cur_k()
         cr = _cur_r()
         if args.pruning_rate == 0.0 and not adaptive:
@@ -876,6 +991,7 @@ def build_engine(model: str, args):
     projector._vtc_clip_tokenizer = clip_tokenizer     # type: ignore[attr-defined]
     projector._vtc_times = _vtc_times  # type: ignore[attr-defined]  (M1 timing)
     projector._vtc_k_cell = k_cell     # type: ignore[attr-defined]  (adaptive: mutable per-request k)
+    projector._vtc_ev_state = ev_state if elasticvis else None  # type: ignore[attr-defined]
     return llm, projector
 
 
@@ -1063,9 +1179,55 @@ def run(args) -> dict:
         )
         print(f"[serve_bench] controller: {controller}", flush=True)
 
+    # ---- elasticvis per-request allocator (EV-1) ----
+    ev_state = getattr(projector, "_vtc_ev_state", None)
+    ev_allocator: Optional[LiveGreedyAllocator] = None
+    if ev_state is not None:
+        ev_allocator = LiveGreedyAllocator(
+            k_min=int(getattr(args, "ev_k_min", 144)),
+            k_max=int(getattr(args, "ev_k_max", 576)),
+            slo_type=str(getattr(args, "slo_type", "e2e")),
+        )
+        print(f"[serve_bench] EV allocator: {ev_allocator}", flush=True)
+
     # max_num_seqs is stamped onto every LoadReading so the num_running signal
     # can normalize to a concurrency fraction. Captured once (the engine's cap).
     _mnseqs = int(getattr(args, "max_num_seqs", 256))
+
+    def _ev_resolve_k(rid: str, req_idx: int) -> int:
+        """ElasticVis: compute k_i for this request from live load + SLO, store
+        in ev_state, set cur_k, push to k_fifo. Returns k_i.
+
+        Debug mode (--ev-debug-k '576,144,576'): assigns k round-robin from the
+        spec (smoke test; bypasses the allocator). Otherwise: reads live engine
+        load via get_metrics, runs the queue-aware greedy gate."""
+        if ev_state is None:
+            return 576
+        dbg = ev_state.get("debug_k")
+        if dbg:
+            ks = assign_debug_k(dbg, max(req_idx + 1, 1))
+            k_i = int(ks[req_idx % len(ks)])
+        else:
+            rd = _read_engine_load(llm, max_num_seqs=_mnseqs)
+            nr = getattr(rd, "num_running", None) or 0
+            sum_k = nr * 288  # approximate (mean k of in-flight reqs)
+            slo_i = _ev_slo_ms(req_idx)
+            k_i = ev_allocator.allocate(rd, slo_i, sum_k=sum_k)
+        k_i = max(1, min(int(k_i), 576))
+        ev_state["k_by_rid"][rid] = k_i
+        ev_state["cur_k"] = k_i           # get_num_image_tokens reads THIS
+        ev_state["k_fifo"].append(k_i)    # projector hook pops B per forward
+        return k_i
+
+    def _ev_slo_ms(req_idx: int) -> float:
+        """Per-request SLO deadline (ms). --ev-mixed-slo '3500,15000' alternates
+        tight/slack (H1b); otherwise uniform --slo-ms."""
+        mixed = getattr(args, "ev_mixed_slo", None)
+        if mixed:
+            vals = [float(x.strip()) for x in mixed.split(",") if x.strip()]
+            if vals:
+                return vals[req_idx % len(vals)]
+        return float(getattr(args, "slo_ms", 5000.0))
 
     def _decide_and_set_k():
         """Adaptive: read engine load, decide r, update k_cell. Returns r (or None)."""
@@ -1213,6 +1375,8 @@ def run(args) -> dict:
             seg_pairs = []
             for s in batch_samples:
                 rid = f"dval_{req_counter}"; req_counter += 1
+                if ev_state is not None:
+                    _ev_resolve_k(rid, req_counter - 1)
                 msgs = _build_messages(s)
                 prepped = llm.preprocess_chat(msgs)[0]
                 engine.add_request(rid, prepped, sp)
@@ -1337,8 +1501,10 @@ def run(args) -> dict:
         rids_in_order: list[str] = []
         t_all_start = time.perf_counter()
         for i, conv in enumerate(all_messages):
-            prompt = llm._preprocess_chat_one(conv)
             rid = f"p2_{i}"
+            if ev_state is not None:
+                _ev_resolve_k(rid, i)  # sets ev_state["cur_k"] + k_fifo BEFORE preprocess
+            prompt = llm._preprocess_chat_one(conv)
             engine.add_request(rid, prompt, sp)
             submit_ts[rid] = time.perf_counter()
             rids_in_order.append(rid)
@@ -1391,9 +1557,11 @@ def run(args) -> dict:
     else:
         # ---- SERIAL path (default): per-request TTFT, M1 prefill breakdown --
         t_all_start = time.perf_counter()
-        for s in samples:
+        for s_idx, s in enumerate(samples):
             if adaptive:
                 _decide_and_set_k()   # per-request r from the live load
+            if ev_state is not None:
+                _ev_resolve_k(f"ser_{s_idx}", s_idx)
             messages = _build_messages(s)
             t0 = time.perf_counter()
             outputs = llm.chat(messages, sp, use_tqdm=False)
@@ -1494,9 +1662,21 @@ def run(args) -> dict:
         "diversity_lam": getattr(args, "diversity_lam", 0.0),
         "max_num_seqs": getattr(args, "max_num_seqs", 256),
         "adaptive": bool(getattr(args, "adaptive", False)),
+        "k_policy": _resolve_k_policy(args),
         "load_profile": getattr(args, "load_profile", None),
         "controller": (_controller_json(controller))
                      if controller is not None else None,
+        "elasticvis": ({
+            "k_by_rid": dict(list(ev_state["k_by_rid"].items())[:20]) if ev_state else {},
+            "k_by_rid_n": len(ev_state["k_by_rid"]) if ev_state else 0,
+            "ev_per_batch_k_head": hook_state.get("ev_per_batch_k", [])[:10],
+            "allocator_realized_summary": (ev_allocator.realized_summary()
+                                           if ev_allocator is not None else None),
+            "slo_ms": getattr(args, "slo_ms", None),
+            "slo_type": getattr(args, "slo_type", None),
+            "ev_mixed_slo": getattr(args, "ev_mixed_slo", None),
+            "ev_debug_k": getattr(args, "ev_debug_k", None),
+        }) if ev_state is not None else None,
         "load_trace": {  # P3-step-4: KV-bound regime evidence (all runs)
             "peak_kv_occupancy": run_peak_occ,
             "peak_num_running": run_peak_nr,
@@ -1649,6 +1829,39 @@ def main() -> None:
                          "(default cosine = L2-normalize both sides first).")
     ap.add_argument("--rand-seed", type=int, default=0,
                     help="seed for the 'random' selector (P3 sanity floor). 0=default.")
+    # ---- ElasticVis EV-1: per-request visual-token budget allocator ----------
+    ap.add_argument("--k-policy", default=None,
+                    choices=["fixed", "segment", "elasticvis"],
+                    help="k-policy (additive; EV-1). 'fixed' (default if neither "
+                         "this nor --adaptive given): scalar --pruning-rate for the "
+                         "whole run (byte-identical to pre-EV-1). 'segment': the v2 "
+                         "per-segment LoadAdaptiveController (same as --adaptive; "
+                         "all in-flight requests share one k per segment). "
+                         "'elasticvis': PER-REQUEST k_i from the LiveGreedyAllocator "
+                         "(breaks the shared-k constraint -- different requests in "
+                         "the SAME batched forward get different visual-token counts).")
+    ap.add_argument("--slo-ms", type=float, default=10000.0,
+                    help="ElasticVis: per-request SLO deadline (ms) for the allocator "
+                         "gate. Default 10000 (the e2e floor at c64/k576 is ~10s, so "
+                         "10s lets the allocator give high-k in light spells and drop "
+                         "to k_min under load). Overridden per-request by --ev-mixed-slo.")
+    ap.add_argument("--slo-type", default="e2e", choices=["ttft", "e2e"],
+                    help="ElasticVis: SLO gate type. 'e2e' gates on wait+P(k)+S(k); "
+                         "'ttft' gates on wait+P(k). Default e2e (deployment-relevant).")
+    ap.add_argument("--ev-k-min", type=int, default=144,
+                    help="ElasticVis: minimum visual-token budget k_min on the grid.")
+    ap.add_argument("--ev-k-max", type=int, default=576,
+                    help="ElasticVis: maximum visual-token budget k_max on the grid.")
+    ap.add_argument("--ev-debug-k", default=None,
+                    help="ElasticVis SMOKE TEST: comma-separated k values assigned "
+                         "round-robin (e.g. '576,144,576'). Bypasses the allocator so "
+                         "you can verify different requests in ONE batch get different "
+                         "visual-token counts. The projector hook debug-print shows "
+                         "the per-row k evidence.")
+    ap.add_argument("--ev-mixed-slo", default=None,
+                    help="ElasticVis H1b: comma-separated per-request SLO deadlines "
+                         "(ms), assigned round-robin (e.g. '3500,15000' = 50%% tight / "
+                         "50%% slack, the §8 TextVQA +35.5%% regime).")
     args = ap.parse_args()
     # V0 rollback: VLLM_USE_V1 must be set BEFORE the first `import vllm`. The
     # lazy imports inside build_engine/run() fire on the first call, so setting
