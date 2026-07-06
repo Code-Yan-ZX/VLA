@@ -56,7 +56,7 @@ import os
 import statistics
 import time
 from dataclasses import dataclass, asdict
-from typing import Optional
+from typing import Callable, Optional
 
 from .compressors import (  # noqa: F401  (re-export)
     ClsAttnSelector,
@@ -1106,6 +1106,60 @@ def goodput(xs: list[float], slo_ms: float, wall_s: float) -> dict:
     }
 
 
+def goodput_at_slo(rows: list[dict], slo_deadlines_ms: list[float],
+                   slo_type: str, wall_s: float,
+                   k_by_rid: Optional[dict] = None,
+                   rid_for_index: Optional[Callable[[int], str]] = None,
+                   cap_trace: int = 200) -> dict:
+    """Per-request-deadline goodput@SLO (the ElasticVis objective).
+
+    Computed for ANY k-policy (fixed-r baselines too). For each request i:
+      deadline_i = slo_deadlines_ms[i]  (ms, per-request)
+      lat_i      = rows[i]['e2e_ms'] if slo_type=='e2e' else rows[i]['ttft_ms']
+      met_i      = (lat_i is a number) and (lat_i <= deadline_i)
+      acc_i      = rows[i]['correct']  (0/1, the per-request correctness used
+                                       for the aggregate accuracy)
+      goodput_acc = sum(met_i * acc_i) / wall_s   (acc-WEIGHTED: ElasticVis obj)
+      met_rate    = sum(met_i) / wall_s           (unweighted, v2-comparable)
+
+    `rows` must be in submission order (so index i pairs with deadline i).
+    `k_by_rid`/`rid_for_index` are only for the per-request trace (k shown when
+    the policy records one, e.g. elasticvis; null for fixed-r unless caller
+    fills it). Returns the section dict (without deadline_source; caller adds).
+    """
+    n = len(rows)
+    n_met = 0
+    sum_met_acc = 0.0
+    trace: list[dict] = []
+    for i, r in enumerate(rows):
+        deadline_i = slo_deadlines_ms[i]
+        lat_i = r["e2e_ms"] if slo_type == "e2e" else r["ttft_ms"]
+        ok = (isinstance(lat_i, (int, float)) and lat_i == lat_i
+              and lat_i <= deadline_i)
+        acc_i = int(r.get("correct", 0) or 0)
+        if ok:
+            n_met += 1
+            sum_met_acc += acc_i
+        if len(trace) < cap_trace:
+            rid = rid_for_index(i) if rid_for_index else f"r{i}"
+            k = k_by_rid.get(rid) if k_by_rid else None
+            lat_out = (lat_i if (isinstance(lat_i, (int, float))
+                                 and lat_i == lat_i) else None)
+            trace.append({
+                "rid": rid, "k": k,
+                "deadline_ms": deadline_i, "lat_ms": lat_out,
+                "met": bool(ok), "acc": acc_i,
+            })
+    return {
+        "goodput_acc": (sum_met_acc / wall_s) if wall_s > 0 else 0.0,
+        "met_rate": (n_met / wall_s) if wall_s > 0 else 0.0,
+        "frac_met": (n_met / n) if n else 0.0,
+        "n_met": n_met, "n": n,
+        "slo_type": slo_type,
+        "per_request": trace,
+    }
+
+
 # --------------------------------------------------------------------------- #
 # Main
 # --------------------------------------------------------------------------- #
@@ -1656,6 +1710,43 @@ def run(args) -> dict:
         if r0["served_req_s"]["mean"] > 0:
             e2e_speedup = agg["served_req_s"]["mean"] / r0["served_req_s"]["mean"]
 
+    # ---- EV-1b: per-request-deadline goodput@SLO (the ElasticVis objective) - #
+    # Computed for ANY k-policy (fixed-r baselines too) whenever --slo-ms OR
+    # --ev-mixed-slo is set (args.slo_ms has a default, so this always runs).
+    # deadline_i = _ev_slo_ms(i) (the WORKLOAD's per-request deadline, applies to
+    # all policies); lat_i = e2e if slo_type=='e2e' else ttft; met_i<=deadline_i.
+    # `raw` is in submission order so index i pairs with deadline i. The per-
+    # request k in the trace is filled from ev_state when the policy records one
+    # (elasticvis); null for fixed-r (single k lives in pruning_rate / hook).
+    _slo_type_ev = str(getattr(args, "slo_type", "e2e"))
+    _ev_slo_deadlines = [_ev_slo_ms(i) for i in range(len(raw))]
+    _rid_for_index = (lambda i: f"p2_{i}") if batch_submit else (lambda i: f"ser_{i}")
+    _ev_k_by_rid = ev_state["k_by_rid"] if ev_state else None
+    # For the per-request trace's k: use ev_state's per-rid k (elasticvis); for
+    # fixed-r (single k for the whole run) fill target_k so the baseline's trace
+    # is complete. For segment/adaptive (k varies per-segment but isn't recorded
+    # per-rid) leave k null rather than mislabel with the r_max endpoint.
+    if _ev_k_by_rid is None and _resolve_k_policy(args) == "fixed":
+        _ev_k_by_rid = {_rid_for_index(i): target_k for i in range(len(raw))}
+    _goodput_at_slo = goodput_at_slo(
+        raw, _ev_slo_deadlines, _slo_type_ev, wall,
+        k_by_rid=_ev_k_by_rid, rid_for_index=_rid_for_index,
+    )
+    _goodput_at_slo["deadline_source"] = ("ev_mixed_slo"
+                                          if getattr(args, "ev_mixed_slo", None)
+                                          else "slo_ms")
+    _goodput_at_slo["slo_ms"] = getattr(args, "slo_ms", None)
+    _goodput_at_slo["ev_mixed_slo"] = getattr(args, "ev_mixed_slo", None)
+    # GLOBAL-slo goodput (backward compat): single deadline = args.slo_ms via the
+    # original goodput() helper (acc-unaware, the v2 throughput-vs-SLO metric).
+    _global_slo_ms = getattr(args, "slo_ms", None)
+    _global_lats = [r["e2e_ms"] if _slo_type_ev == "e2e" else r["ttft_ms"]
+                    for r in raw]
+    _goodput_at_slo["global_slo_goodput"] = (
+        goodput(_global_lats, float(_global_slo_ms), wall)
+        if _global_slo_ms is not None else None
+    )
+
     result = {
         "benchmark": args.benchmark, "pruning_rate": args.pruning_rate,
         "selector": getattr(args, "selector", "proxy"),
@@ -1663,6 +1754,10 @@ def run(args) -> dict:
         "max_num_seqs": getattr(args, "max_num_seqs", 256),
         "adaptive": bool(getattr(args, "adaptive", False)),
         "k_policy": _resolve_k_policy(args),
+        "slo_ms": getattr(args, "slo_ms", None),
+        "slo_type": _slo_type_ev,
+        "ev_mixed_slo": getattr(args, "ev_mixed_slo", None),
+        "goodput_at_slo": _goodput_at_slo,
         "load_profile": getattr(args, "load_profile", None),
         "controller": (_controller_json(controller))
                      if controller is not None else None,
