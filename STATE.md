@@ -11,8 +11,8 @@
 
 ## ★ 立即进行：EV-0 GO on TextVQA（H1b mixed-SLO +35.5%，零 GPU sim 确认）
 **门控刻画被 5 benchmark 验证**：ElasticVis 的 goodput 收益被 accuracy(k) 陡度门控。知识型(MME/MMBench/ScienceQA)~0.01→无 win；GQA 0.12-0.13→边界 NO-GO；**TextVQA 0.28-0.29→WIN**。synthetic sweep：H1b(混合-SLO) crossover≈0.15，H1(均匀-SLO)≈0.40 → **混合-SLO 是稳健 regime**。**真实 TextVQA sim：H1b mixed-SLO Greedy 2.36 vs bestFixed 1.74 = +35.5% WIN**；H1 0.898 lose；GQA H1b 0.978 lose。机制=紧 deadline 给低 k、松给高 k。详见 design §8 + `runs/elasticvis_ev0/{gating_sweep,confirm_textvqa}.py`。
-## ★ 立即进行：EV-1d ✅ GPU open-loop 赢（方向成立）→ allocator 重校准拿公平 magnitude
-EV-1d 决定性测试（user 批准 A）：**rate=15 近饱和 EV +7.5% WIN（vs r0）**；rate=8 轻载输（allocator 误校准）。robust **placeholder-shrink 集成**（projector 直通+vLLM 原生切 [0:k_i]，c64/200 不崩，解决批 hook 崩溃）。per-row-k 200/200 稳定。**ElasticVis 在真实 serving regime（open-loop+SLO 压力）GPU 验证成立。** caveat：+7.5% 是 allocator 用闭环 c64 常数（open-loop 实际 compute ~10× 低）→ 高估延迟→轻载白给 k144。下一步：①重校准 allocator（load-dependent gate，live num_running 估延迟）拿公平 magnitude ②更陡 benchmark（DocVQA/OCR range>0.4）作 EV-2 提升 headroom。门控刻画（5 benchmark，sim）+ robust 集成是已得成果。
+## ★ 立即进行：ElasticVis ❌ 终判 negative（EV-1e 公平 GPU 测试输）→ 收尾方向待 user 定
+EV-1e（recalibrated load-dependent allocator + EV/fixed 同引擎设置，公平）：open-loop TextVQA c64 mixed-SLO，rate8 0.991×(tied)、rate12 0.885×输、rate15 0.757×输。EV-1d 的 +7.5% 是不公平 artifact（enforce_eager 不对称+未校准）。**根因 fundamental：continuous batching 同 forward 共享 GPU compute，k576 长 prefill 延迟整批 decode（含紧 deadline）→ 给 slack 高 k 拖慢整批→紧请求 miss SLO；sim 独立 slot 模型不捕获此 batch 干扰→+35.5% 不迁移。结论：per-request 视觉 token 预算在连续批处理下不提升 goodput@SLO（架构性）。** 已得成果：门控刻画(5 benchmark sim)、robust placeholder-shrink 集成(per-request k 在 c64 工作,机制证)、GPU 实测 accuracy(k)+fixed-r baselines、batch-interference 这个新发现。v2 测量论文(drafts/paper_v2.md,9表5图47ref)仍可独立投。**待 user 定**：A 折入 v2 论文 negative-finding 节→投 v2｜B 独立 negative-result 论文｜C pivot SLO-aware batching(按 deadline 分批避免干扰,新方向)。
 
 ## ★ 评测制度（已批准）
 **open-loop 变载到达为主 + 混合-SLO 为辅**。现有 c64 闭环准入负载≈常数（v2 逐段控制器 n=500 null 的原因）→ 不是正确评测。H1 赢点=变载；H1b=混合 deadline。baseline：fixed-{r0,r25,r50,r75}+v2控制器+oracle。
