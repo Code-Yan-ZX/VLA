@@ -556,9 +556,10 @@ def build_engine(model: str, args):
         # runs could keep graphs but we use eager uniformly for cross-cell
         # comparability. ELASTICVIS additionally returns a LIST of per-image
         # tensors (variable k_i) from the projector hook — CUDA graphs cannot
-        # capture dynamic-shape list returns.
-        enforce_eager=bool(getattr(args, "adaptive", False)
-                           or _resolve_k_policy(args) == "elasticvis"),
+        # ADAPTIVE mode needs eager: varying per-segment k → varying seq lengths
+        # → CUDA graph capture mismatches. ELASTICVIS placeholder-shrink does NOT
+        # need eager (hook is pass-through, no dynamic shapes in the forward).
+        enforce_eager=bool(getattr(args, "adaptive", False)),
         limit_mm_per_prompt={"image": 1},
         allowed_local_media_path=_repo_root,
         max_num_seqs=getattr(args, "max_num_seqs", 256),  # M2: concurrency control
@@ -572,12 +573,11 @@ def build_engine(model: str, args):
             disable_log_stats=False,      # enables llm.get_metrics() for the controller
             enable_prefix_caching=False,  # per-request k must take effect every call
         )
-        if _resolve_k_policy(args) == "elasticvis":
-            # Disable async scheduling: the open-loop submission loop interleaves
-            # preprocess (main thread) with engine.step (scheduler thread). Async
-            # scheduling lets the forward run concurrently with the next preprocess,
-            # which races on ev_state["cur_k"] / mm cache → CUDA assert.
-            llm_kwargs["async_scheduling"] = False
+        # Note: async_scheduling stays at vLLM default (True). The placeholder-
+        # shrink approach (no embed_multimodal patch, no hook) has NO race
+        # condition — get_num_image_tokens fires only at preprocess (main thread),
+        # and the hook is a pass-through. EV-1d's async_scheduling=False was for
+        # the now-obsolete embed_multimodal patch.
     llm = LLM(**llm_kwargs)
 
     # ---- locate the projector + vision tower on the loaded model ----
@@ -1708,11 +1708,18 @@ def run(args) -> dict:
                 for o in engine.step():
                     if getattr(o, "finished", False):
                         rid = o.request_id
-                        e2e_by_rid[rid] = (time.perf_counter() - submit_ts[rid]) * 1000.0
+                        e2e_ms_val = (time.perf_counter() - submit_ts[rid]) * 1000.0
+                        e2e_by_rid[rid] = e2e_ms_val
                         m = getattr(o, "metrics", None)
                         ftl = getattr(m, "first_token_latency", 0.0) if m else 0.0
                         ttft_by_rid[rid] = (ftl * 1000.0) if ftl and ftl > 0 else float("nan")
                         out_by_rid[rid] = o
+                        # Feed the live EMA: update allocator with observed e2e
+                        if ev_allocator is not None and ev_state is not None:
+                            # find the base rid for k lookup
+                            base_rid = rid.rsplit("-", 1)[0] if "-" in rid else rid
+                            k_val = ev_state["k_by_rid"].get(base_rid, 288)
+                            ev_allocator.update_ema(e2e_ms_val, k_val)
             elif next_idx < len(samples):
                 # Engine idle, more arrivals pending — sleep until next arrival
                 wait_s = arrivals[next_idx] - (time.perf_counter() - t_all_start)
