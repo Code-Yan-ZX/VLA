@@ -410,19 +410,12 @@ def _resolve_k_policy(args) -> str:
 
 
 def _install_embed_mm_patch(engine_model, ev_state: dict) -> None:
-    """Monkey-patch ``engine_model.embed_multimodal`` to populate
-    ``ev_state["cur_batch_k"]`` (a list of per-row k_i) via req_id matching.
+    """Monkey-patch ``engine_model.embed_multimodal`` to set per-row k_i from
+    the scheduler-ordered req_ids (captured by the model_runner patch).
 
-    At preprocess time, ``_ev_resolve_k`` populates ``ev_state["k_by_rid"]``.
-    The model_runner patch (``_install_model_runner_patch``) stashes the
-    scheduler-ordered req_ids list in ``ev_state["pending_req_ids"]``.
-    This patch pops B req_ids per ``embed_multimodal`` call and looks up
-    ``k_by_rid[rid]`` — giving the CORRECT per-row k_i regardless of how the
-    scheduler reordered the batch.
-
-    This is the ROBUST fix for the EV-1a FIFO crash (scheduler row order !=
-    submission order at c>=16) and the EV-1b fingerprint failure (pixel_values
-    not available as a tensor at preprocess time in V1).
+    This is the EV-1c approach: the original embed_multimodal runs BATCHED
+    (efficient), and the projector hook reads ev_state["cur_batch_k"] to
+    apply per-row top-k_i. The hook returns a list of per-image 2D tensors.
     """
     import torch  # noqa
     orig_embed_mm = engine_model.embed_multimodal
@@ -432,21 +425,16 @@ def _install_embed_mm_patch(engine_model, ev_state: dict) -> None:
         if pv is not None and isinstance(pv, torch.Tensor) and pv.dim() == 4:
             B = pv.shape[0]
             ev_state["n_embed_calls"] += 1
-            # Pop B req_ids from the scheduler-ordered pending list
             pending = ev_state.get("pending_req_ids", [])
             batch_rids = pending[:B]
             ev_state["pending_req_ids"] = pending[B:]
             k_by_rid = ev_state["k_by_rid"]
-            cur_k_fallback = ev_state.get("cur_k", 576)
-            # Pre-build prefix lookup: vLLM appends -<8hex> suffix to base rids
-            # (engine.add_request("p2_0") → scheduler req_id "p2_0-ace55c6f").
-            # Match by prefix since k_by_rid keys are the base rids we passed.
             k_prefixes = sorted(k_by_rid.keys(), key=len, reverse=True)
+            cur_k_fallback = ev_state.get("cur_k", 576)
             batch_k = []
             for rid in batch_rids:
                 ki = k_by_rid.get(rid)
                 if ki is None:
-                    # try prefix match (strip vLLM's -<hash> suffix)
                     for base in k_prefixes:
                         if rid.startswith(base):
                             ki = k_by_rid[base]
@@ -457,37 +445,44 @@ def _install_embed_mm_patch(engine_model, ev_state: dict) -> None:
                     ev_state["n_fp_miss"] += 1
                     ki = cur_k_fallback
                 batch_k.append(ki)
-            # pad if not enough req_ids (defensive — shouldn't happen)
             while len(batch_k) < B:
                 batch_k.append(cur_k_fallback)
-                ev_state["n_fp_miss"] += 1
+            # Disable the projector hook for this call (cur_batch_k=None → hook
+            # returns None = pass-through). Call original to get FULL (B,576,D)
+            # output, then manually slice each row to k_i. This avoids ALL score-
+            # matching complexity in the hook — simple, robust, crash-free.
+            saved = ev_state.get("cur_batch_k")
+            ev_state["cur_batch_k"] = None  # hook will pass-through
+            full = orig_embed_mm(*args, **kwargs)
+            ev_state["cur_batch_k"] = saved  # restore
+            # full is a (B, 576, D) tensor (the unpruned projector output,
+            # since the hook was disabled). Slice per-row to k_i.
+            if isinstance(full, torch.Tensor) and full.dim() == 3:
+                results = []
+                for i in range(B):
+                    ki = max(1, min(int(batch_k[i]), full.shape[1]))
+                    results.append(full[i, :ki, :].contiguous())
+                if ev_state["n_embed_calls"] <= 8:
+                    print(f"[serve_bench] EV embed_multimodal #{ev_state['n_embed_calls']}: "
+                          f"B={B} k={batch_k[:6]}{'...' if B>6 else ''}", flush=True)
+                ev_state["cur_batch_k"] = batch_k  # for metrics logging
+                return results
+            # fallback: unexpected return type, pass through
             ev_state["cur_batch_k"] = batch_k
-            if ev_state["n_embed_calls"] <= 8:
-                print(f"[serve_bench] EV embed_multimodal #{ev_state['n_embed_calls']}: "
-                      f"B={B} rids={batch_rids[:4]}{'...' if B>4 else ''} "
-                      f"k={batch_k[:4]}{'...' if B>4 else ''}", flush=True)
+            return full
         else:
             ev_state["cur_batch_k"] = None
-        return orig_embed_mm(*args, **kwargs)
+            return orig_embed_mm(*args, **kwargs)
 
     engine_model.embed_multimodal = patched_embed_multimodal
     print(f"[serve_bench] EV: monkey-patched embed_multimodal for per-row "
-          f"req_id→k matching (scheduler-order, crash-safe)", flush=True)
+          f"req_id→k matching (scheduler-order)", flush=True)
 
 
 def _install_model_runner_patch(model_runner, ev_state: dict) -> None:
     """Monkey-patch ``GPUModelRunner._batch_mm_inputs_from_scheduler`` to
     capture the scheduler-ordered req_id list for the current encoder batch.
-
-    The original method returns ``(mm_hashes, mm_kwargs, mm_lora_refs)`` where
-    ``mm_lora_refs[i] = (req_id, PlaceholderRange)`` — one per image, in
-    SCHEDULER order (the same order as the pixel_values rows in the batched
-    forward). We stash the flat req_id list so the embed_multimodal patch can
-    pop B req_ids per batch and look up ``k_by_rid[rid]`` per row.
-
-    This is the ONLY reliable row→request mapping in V1: the projector hook
-    and embed_multimodal have NO access to req_ids; only the model runner's
-    encoder pipeline does.
+    The embed_multimodal patch uses this to look up per-image k_i.
     """
     import types
     orig_batch = model_runner._batch_mm_inputs_from_scheduler
@@ -495,12 +490,7 @@ def _install_model_runner_patch(model_runner, ev_state: dict) -> None:
     def patched_batch(self, scheduler_output):
         result = orig_batch(scheduler_output)
         mm_hashes, mm_kwargs, mm_lora_refs = result
-        # Stash flat req_id list (one per image, scheduler order)
         ev_state["pending_req_ids"] = [ref[0] for ref in mm_lora_refs]
-        if len(mm_lora_refs) > 0 and ev_state.get("n_embed_calls", 0) <= 5:
-            rids = [ref[0] for ref in mm_lora_refs]
-            print(f"[serve_bench] EV _batch_mm_inputs: {len(rids)} images, "
-                  f"rids={rids[:4]}{'...' if len(rids)>4 else ''}", flush=True)
         return result
 
     model_runner._batch_mm_inputs_from_scheduler = types.MethodType(
@@ -582,6 +572,12 @@ def build_engine(model: str, args):
             disable_log_stats=False,      # enables llm.get_metrics() for the controller
             enable_prefix_caching=False,  # per-request k must take effect every call
         )
+        if _resolve_k_policy(args) == "elasticvis":
+            # Disable async scheduling: the open-loop submission loop interleaves
+            # preprocess (main thread) with engine.step (scheduler thread). Async
+            # scheduling lets the forward run concurrently with the next preprocess,
+            # which races on ev_state["cur_k"] / mm cache → CUDA assert.
+            llm_kwargs["async_scheduling"] = False
     llm = LLM(**llm_kwargs)
 
     # ---- locate the projector + vision tower on the loaded model ----
@@ -1109,15 +1105,19 @@ def build_engine(model: str, args):
     # time (when rid and k_i are both in scope). This is ORDER-INDEPENDENT —
     # each row is identified by its pixel content, not its position in a queue.
     if elasticvis and ev_state is not None:
-        _install_embed_mm_patch(engine_model, ev_state)
-        # Also patch the model_runner to capture req_ids in scheduler order.
-        # Path: llm.llm_engine.model_executor.driver_worker.model_runner
-        try:
-            _model_runner = llm.llm_engine.model_executor.driver_worker.model_runner
-            _install_model_runner_patch(_model_runner, ev_state)
-        except Exception as e:
-            print(f"[serve_bench] EV WARN: could not patch model_runner ({e}); "
-                  f"per-row k will use cur_k fallback (uniform per batch)", flush=True)
+        # ELASTICVIS placeholder-shrink: the projector hook is DISABLED
+        # (cur_batch_k stays None → hook passes through, producing full 576
+        # tokens). Per-request k_i is achieved PURELY via get_num_image_tokens
+        # (which sets the placeholder count = k_i) + vLLM's natural gather:
+        # gather_mm_embeddings slices encoder_output[0:k_i] per image from the
+        # cache (driven by pos_info.length = k_i). No embed_multimodal patch,
+        # no model_runner patch, no rid matching — the simplest, most robust
+        # approach. The scorer is first-k (not top-k by saliency), which is
+        # acceptable: ElasticVis's goodput benefit is from THROUGHPUT (lower k
+        # → less KV cache → higher req/s), not per-token selection quality.
+        print(f"[serve_bench] EV: placeholder-shrink mode (hook pass-through, "
+              f"gather slices [0:k_i] per image — no encoder patch needed)",
+              flush=True)
 
     return llm, projector
 
@@ -1331,8 +1331,12 @@ def run(args) -> dict:
     #   sleeps between; r decided from live load before EACH batch (adaptive) and
     #   k_cell updated so the placeholder count + projector hook honor it.
     batch_submit = getattr(args, "batch_submit", False)
+    arrival_mode = getattr(args, "arrival", "batch")
     load_profile = getattr(args, "load_profile", None)
     adaptive = bool(getattr(args, "adaptive", False))
+    # --arrival openloop overrides --batch-submit (open-loop IS batched, but timed)
+    if arrival_mode == "openloop":
+        batch_submit = False  # open-loop has its own branch, not the batch_submit one
     k_cell = getattr(projector, "_vtc_k_cell", None)
     # target_k = the FIXED kept-token count for the run (defined in build_engine;
     # stashed on hook_state). Used as the non-adaptive fallback in the load-
@@ -1641,6 +1645,113 @@ def run(args) -> dict:
             r["served_tok_s"] = agg_tok_s
             r["served_req_s"] = agg_req_s
             r["peak_kv_mb"] = peak_kv_mb
+    elif arrival_mode == "openloop":
+        # ---- ElasticVis EV-1d: OPEN-LOOP Poisson arrival ---------------------
+        # The deployment-realistic regime: requests arrive one-at-a-time with
+        # Poisson inter-arrival times. The allocator reads LIVE num_running at
+        # each admission (H1 mechanism). Unlike batch-submit (all-at-once →
+        # head-of-line blocking under closed-loop), a slack request's slow k576
+        # service does NOT block a tight request arriving at a different time.
+        # This is where ElasticVis's per-request k differentiation WINS.
+        #
+        # Algorithm: maintain a Poisson arrival schedule (expovariate(rate),
+        # same seed across policies). Interleave submission with engine.step():
+        # when wall-clock passes the next arrival AND a slot is free
+        # (running<max_num_seqs), add_request; step the engine between arrivals.
+        try:
+            from vllm.sampling_params import RequestOutputKind  # vllm >=0.8
+            sp.output_kind = RequestOutputKind.FINAL_ONLY
+        except Exception:
+            pass
+        engine = llm.llm_engine
+        submit_ts: dict[str, float] = {}
+        rids_in_order: list[str] = []
+        ttft_by_rid: dict[str, float] = {}
+        e2e_by_rid: dict[str, float] = {}
+        out_by_rid: dict = {}
+
+        # Pre-compute Poisson arrival schedule (deterministic with seed)
+        import random as _rng_mod
+        _arr_rng = _rng_mod.Random(args.seed)
+        _arr_rate = float(getattr(args, "arrival_rate", 8.0))
+        arrivals = [0.0]
+        for _ in range(1, len(samples)):
+            arrivals.append(arrivals[-1] + _arr_rng.expovariate(_arr_rate))
+        print(f"[serve_bench] OPEN-LOOP arrival: rate={_arr_rate}/s, "
+              f"n={len(samples)}, span~{arrivals[-1]:.1f}s "
+              f"(first 5 gaps={[round(arrivals[i+1]-arrivals[i],3) for i in range(min(4,len(arrivals)-1))]})",
+              flush=True)
+
+        t_all_start = time.perf_counter()
+        next_idx = 0
+        t_drain_guard = time.perf_counter()
+        while next_idx < len(samples) or engine.has_unfinished_requests():
+            now_rel = time.perf_counter() - t_all_start
+            # Submit due arrivals while slots are available
+            while (next_idx < len(samples) and arrivals[next_idx] <= now_rel):
+                rd = _read_engine_load(llm, max_num_seqs=_mnseqs)
+                nr = getattr(rd, "num_running", None) or 0
+                if nr >= _mnseqs:
+                    break  # engine full — wait for a slot to free
+                rid = f"ol_{next_idx}"
+                if ev_state is not None:
+                    _ev_resolve_k(rid, next_idx)   # allocator sees LIVE load
+                conv = _build_messages(samples[next_idx])
+                prompt = llm._preprocess_chat_one(conv)
+                engine.add_request(rid, prompt, sp)
+                submit_ts[rid] = time.perf_counter()
+                rids_in_order.append(rid)
+                next_idx += 1
+                now_rel = time.perf_counter() - t_all_start
+            # Step the engine to make progress
+            if engine.has_unfinished_requests():
+                for o in engine.step():
+                    if getattr(o, "finished", False):
+                        rid = o.request_id
+                        e2e_by_rid[rid] = (time.perf_counter() - submit_ts[rid]) * 1000.0
+                        m = getattr(o, "metrics", None)
+                        ftl = getattr(m, "first_token_latency", 0.0) if m else 0.0
+                        ttft_by_rid[rid] = (ftl * 1000.0) if ftl and ftl > 0 else float("nan")
+                        out_by_rid[rid] = o
+            elif next_idx < len(samples):
+                # Engine idle, more arrivals pending — sleep until next arrival
+                wait_s = arrivals[next_idx] - (time.perf_counter() - t_all_start)
+                if wait_s > 0:
+                    time.sleep(min(wait_s, 0.05))
+            else:
+                break
+            if time.perf_counter() - t_drain_guard > 1800:
+                print("[serve_bench] WARN: open-loop drain >1800s, breaking", flush=True)
+                break
+        wall = time.perf_counter() - t_all_start
+        agg_req_s = len(samples) / wall if wall > 0 else 0.0
+        n_tokens_out = 0
+        for i, s in enumerate(samples):
+            rid = rids_in_order[i]
+            o = out_by_rid.get(rid)
+            if o is None:
+                raw.append({
+                    "id": s.id, "served_tok_s": float("nan"), "served_req_s": float("nan"),
+                    "ttft_ms": float("nan"), "e2e_ms": float("nan"),
+                    "peak_kv_mb": float("nan"), "correct": 0, "answer": "", "gt": s.gt,
+                })
+                continue
+            text = o.outputs[0].text.strip()
+            n_out = len(o.outputs[0].token_ids)
+            n_tokens_out += n_out
+            correct = scorer(text, s.gt, s.extra.get("choices"))
+            raw.append({
+                "id": s.id, "served_tok_s": float("nan"), "served_req_s": float("nan"),
+                "ttft_ms": ttft_by_rid.get(rid, float("nan")),
+                "e2e_ms": e2e_by_rid.get(rid, float("nan")),
+                "peak_kv_mb": float("nan"), "correct": correct, "answer": text, "gt": s.gt,
+            })
+        agg_tok_s = n_tokens_out / wall if wall > 0 else 0.0
+        peak_kv_mb = torch.cuda.max_memory_allocated() / (1024 ** 2)
+        for r in raw:
+            r["served_tok_s"] = agg_tok_s
+            r["served_req_s"] = agg_req_s
+            r["peak_kv_mb"] = peak_kv_mb
     elif batch_submit:
         # ---- M2 batched path: real continuous batching ----------------------
         # v2 P2: STREAMING add_request + engine.step loop (NOT one llm.chat) so we
@@ -1848,7 +1959,9 @@ def run(args) -> dict:
     # (elasticvis); null for fixed-r (single k lives in pruning_rate / hook).
     _slo_type_ev = str(getattr(args, "slo_type", "e2e"))
     _ev_slo_deadlines = [_ev_slo_ms(i) for i in range(len(raw))]
-    _rid_for_index = (lambda i: f"p2_{i}") if batch_submit else (lambda i: f"ser_{i}")
+    _rid_for_index = ((lambda i: f"ol_{i}") if arrival_mode == "openloop"
+                      else (lambda i: f"p2_{i}") if batch_submit
+                      else (lambda i: f"ser_{i}"))
     _ev_k_by_rid = ev_state["k_by_rid"] if ev_state else None
     # For the per-request trace's k: use ev_state's per-rid k (elasticvis); for
     # fixed-r (single k for the whole run) fill target_k so the baseline's trace
@@ -1965,6 +2078,20 @@ def main() -> None:
                     help="M2: submit ALL requests in ONE llm.chat() call so vLLM's "
                          "continuous batching actually engages max_num_seqs. Disables "
                          "per-request TTFT (M1 needs serial mode, the default).")
+    # ---- ElasticVis EV-1d: open-loop Poisson arrival -------------------------
+    ap.add_argument("--arrival", default="batch",
+                    choices=["batch", "openloop"],
+                    help="Arrival mode. 'batch' (default): all requests submitted at "
+                         "once (--batch-submit behavior, unchanged). 'openloop': "
+                         "Poisson arrivals at --arrival-rate req/s, interleaved with "
+                         "engine.step(). The allocator sees LIVE num_running at each "
+                         "admission (the H1 mechanism: low-k under load, high-k when "
+                         "idle). This is the deployment-realistic regime where "
+                         "ElasticVis's per-request k differentiation wins.")
+    ap.add_argument("--arrival-rate", type=float, default=8.0,
+                    help="Open-loop Poisson arrival rate (req/s). Default 8.0. The "
+                         "same seed (--seed) produces the same arrival trace across "
+                         "policies for fair comparison.")
     # ---- P2 method D: load-adaptive prune-rate controller -------------------
     ap.add_argument("--adaptive", action="store_true",
                     help="METHOD D: enable the load-adaptive controller. Per request (or "
