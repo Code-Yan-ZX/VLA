@@ -11,7 +11,8 @@
 
 ## ★ 立即进行：EV-0 GO on TextVQA（H1b mixed-SLO +35.5%，零 GPU sim 确认）
 **门控刻画被 5 benchmark 验证**：ElasticVis 的 goodput 收益被 accuracy(k) 陡度门控。知识型(MME/MMBench/ScienceQA)~0.01→无 win；GQA 0.12-0.13→边界 NO-GO；**TextVQA 0.28-0.29→WIN**。synthetic sweep：H1b(混合-SLO) crossover≈0.15，H1(均匀-SLO)≈0.40 → **混合-SLO 是稳健 regime**。**真实 TextVQA sim：H1b mixed-SLO Greedy 2.36 vs bestFixed 1.74 = +35.5% WIN**；H1 0.898 lose；GQA H1b 0.978 lose。机制=紧 deadline 给低 k、松给高 k。详见 design §8 + `runs/elasticvis_ev0/{gating_sweep,confirm_textvqa}.py`。
-**下一步 EV-1（GPU）：** EV-1a ✅ per-request k 在 live vLLM 验证通过（smoke: 同批 [576,144,576]；真 allocator: mixed-SLO 按deadline选k [144,576,...]）。EV-1b ✅ per-request-deadline goodput@SLO 指标接入（`goodput_at_slo` section: goodput_acc=Σmet·acc/wall, met_rate, per-request trace；任意 policy 都报；smoke 8图验 hand-check 通过）。TextVQA 支持确认（subset + scorer 齐全）。EV-1c ⏳ TextVQA 跑 ElasticVis vs fixed-{r} goodput@SLO（enforce_eager caveat：相对比较不受影响）。caveat：enforce_eager=True（CUDA graph 不支持 dynamic list）。
+## ★ 立即进行：EV-1d ✅ GPU open-loop 赢（方向成立）→ allocator 重校准拿公平 magnitude
+EV-1d 决定性测试（user 批准 A）：**rate=15 近饱和 EV +7.5% WIN（vs r0）**；rate=8 轻载输（allocator 误校准）。robust **placeholder-shrink 集成**（projector 直通+vLLM 原生切 [0:k_i]，c64/200 不崩，解决批 hook 崩溃）。per-row-k 200/200 稳定。**ElasticVis 在真实 serving regime（open-loop+SLO 压力）GPU 验证成立。** caveat：+7.5% 是 allocator 用闭环 c64 常数（open-loop 实际 compute ~10× 低）→ 高估延迟→轻载白给 k144。下一步：①重校准 allocator（load-dependent gate，live num_running 估延迟）拿公平 magnitude ②更陡 benchmark（DocVQA/OCR range>0.4）作 EV-2 提升 headroom。门控刻画（5 benchmark，sim）+ robust 集成是已得成果。
 
 ## ★ 评测制度（已批准）
 **open-loop 变载到达为主 + 混合-SLO 为辅**。现有 c64 闭环准入负载≈常数（v2 逐段控制器 n=500 null 的原因）→ 不是正确评测。H1 赢点=变载；H1b=混合 deadline。baseline：fixed-{r0,r25,r50,r75}+v2控制器+oracle。
