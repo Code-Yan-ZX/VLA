@@ -1,3 +1,9 @@
+# SUPERSEDED — see final_results_v3.md
+
+> **This V0-era file (vLLM 0.10.2 V0, LLaVA-1.5-7B) is superseded by
+> `/final_results_v3.md` at the repo root**, the single source of truth for all
+> numbers in the v3 paper. Retained for historical V0 comparison only.
+
 # Final Results — Consolidated Paper Data (ALL numbers, honest)
 
 > P4 prep. Every number the paper will cite, organized as paper tables. Each row
