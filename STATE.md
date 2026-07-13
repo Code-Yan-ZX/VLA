@@ -1,29 +1,28 @@
 # STATE.md — 当前项目状态（主窗口维护，保持 ≤30 行）
 
-> 项目：VLM 视觉 token 压缩 · 目标 Q1/Q2 SCI · 详见 **ORCHESTRATION.md** + **notes/elasticvis_design.md**（spine）+ **notes/elasticvis_positioning.md**
-> 最近更新：2026-07-06 · **新主对话从 notes/elasticvis_design.md 读起**
+> 项目：VLM 视觉 token 压缩 · 目标 Q1/Q2 SCI · 详见 ORCHESTRATION.md + notes/elasticvis_design.md
+> 最近更新：2026-07-13 · **用户 pivot：ElasticVis allocator 终判 negative → 转 EV-VAR（方差外部性信号验证）** · 计划全文 ~/.claude/plans/warm-tinkering-bird.md
 
-## ★ 当前方法（ElasticVis）— 定位已重定位（2026-07-06 novelty 扫描）
-**准入时、由实时负载+SLO 裕度驱动、优化 goodput@SLO 的 per-request 视觉 token 分配器**，坐在 elastic 压缩器（PARCEL-like）之上，非压缩器。
-**❗"0/N 做 per-request 预算"claim 已 RETIRE**：CARES/DyToS/PARCEL 已做 per-request 视觉预算（内容驱动/无系统信号），AdaServe/SLOs-Serve 做了 per-request budget-for-goodput（文本域）。**干净单元 = 系统信号驱动（H1）**。详见 `notes/elasticvis_design.md` §0。
+## ★ 用户决策（2026-07-13）：停止把 ElasticVis allocator 当正向 claim
+EV-1e 已 GPU 终判 negative（连续批处理下 per-request 视觉 token 预算不提升 goodput@SLO，架构性）。但负结果暴露了**批内延迟外部性**机制（高 k prefill 拖慢同批 decode）。用户指令：低成本受控实验验证该外部性能否转化为**超越 {Σk、SLO slack、token-budget batching} 的预测信号**；只有信号成立 **且** compatible co-batching 在真实 GPU 胜过 {FIFO、deadline-only、token-budget、chunked-prefill、最佳固定压缩}，才作为新方法主线。
 
-**已批准 spine：A→B**（用户 2026-07-06）。核心 H1 系统信号 allocator（现有数据够），内容维度 H2 作后续扩展（对标 CARES）。
+## ★ 当前方向：EV-VAR（分阶段 go/no-go，plan: warm-tinkering-bird.md）
+**H_var**：连续批处理下 per-request 延迟含"批组成"驱动分量，iso-ΣK 下随方差/兼容性变化、不被三混淆量解释、chunked-prefill 后仍有残余。**铁律**：旧 sim（independent-slot）按构造假设掉干扰 → 只作 null（residual=real−sim），不作正向证据；既有 trace 无 batch 组成 → 必须新跑带 step 级 logging 的受控实验。
+- **Stage 0**（去风险，进行中）：serve_bench 加 `--log-step-composition`（monkey-patch vllm0.19 `Scheduler.schedule` 存 `SchedulerOutput`，读 `num_scheduled_tokens`/`scheduled_new_reqs` → 成员/相位/Σk/var/wallclock）+ `--chunked-prefill {on,off}` + force `enforce_eager=True`。env `qwen3vl_clean`(vllm0.19 V1-only)，3 图 smoke 验证 primitive。
+- **Stage 1**（微基准 gate-before-gate）：batch_submit + `--ev-debug-k` 构造 iso-ΣK 受控 batch；ΣK×{同构/温和/双峰极端}×{prefill-only/prefill+decode}×{chunked ON/OFF}。→GO2 若 composition 效应 >10% & p<0.05（chunked ON）。
+- **Stage 2**（预测回归）：openloop 多 policy{FIFO/deadline/token-budget/random} sweep + 新 step 级 logging；M0(~Σk+slack+tokenbudget) vs M1(+var/compatibility) 嵌套回归 + sim null-residual 交叉验证。→GO3 若 M1≫M0 & 效应>噪声。
+- **Stage 3 GATE**（仅 1+2 GO，>6GPU·h 找人）：compatible co-batching 须胜全部 5 baseline（mean±std ≥3 repeats）。
 
-## ★ 立即进行：EV-0 GO on TextVQA（H1b mixed-SLO +35.5%，零 GPU sim 确认）
-**门控刻画被 5 benchmark 验证**：ElasticVis 的 goodput 收益被 accuracy(k) 陡度门控。知识型(MME/MMBench/ScienceQA)~0.01→无 win；GQA 0.12-0.13→边界 NO-GO；**TextVQA 0.28-0.29→WIN**。synthetic sweep：H1b(混合-SLO) crossover≈0.15，H1(均匀-SLO)≈0.40 → **混合-SLO 是稳健 regime**。**真实 TextVQA sim：H1b mixed-SLO Greedy 2.36 vs bestFixed 1.74 = +35.5% WIN**；H1 0.898 lose；GQA H1b 0.978 lose。机制=紧 deadline 给低 k、松给高 k。详见 design §8 + `runs/elasticvis_ev0/{gating_sweep,confirm_textvqa}.py`。
-## ★ 立即进行：ElasticVis ❌ 终判 negative（EV-1e 公平 GPU 测试输）→ 收尾方向待 user 定
-EV-1e（recalibrated load-dependent allocator + EV/fixed 同引擎设置，公平）：open-loop TextVQA c64 mixed-SLO，rate8 0.991×(tied)、rate12 0.885×输、rate15 0.757×输。EV-1d 的 +7.5% 是不公平 artifact（enforce_eager 不对称+未校准）。**根因 fundamental：continuous batching 同 forward 共享 GPU compute，k576 长 prefill 延迟整批 decode（含紧 deadline）→ 给 slack 高 k 拖慢整批→紧请求 miss SLO；sim 独立 slot 模型不捕获此 batch 干扰→+35.5% 不迁移。结论：per-request 视觉 token 预算在连续批处理下不提升 goodput@SLO（架构性）。** 已得成果：门控刻画(5 benchmark sim)、robust placeholder-shrink 集成(per-request k 在 c64 工作,机制证)、GPU 实测 accuracy(k)+fixed-r baselines、batch-interference 这个新发现。v2 测量论文(drafts/paper_v2.md,9表5图47ref)仍可独立投。**待 user 定**：A 折入 v2 论文 negative-finding 节→投 v2｜B 独立 negative-result 论文｜C pivot SLO-aware batching(按 deadline 分批避免干扰,新方向)。
-
-## ★ 评测制度（已批准）
-**open-loop 变载到达为主 + 混合-SLO 为辅**。现有 c64 闭环准入负载≈常数（v2 逐段控制器 n=500 null 的原因）→ 不是正确评测。H1 赢点=变载；H1b=混合 deadline。baseline：fixed-{r0,r25,r50,r75}+v2控制器+oracle。
+## 评测制度（沿用）
+open-loop 变载到达为主 + 混合-SLO 为辅。baseline：fixed-{r0,r25,r50,r75}+控制器+oracle。
 
 ## v2 资产（substrate，全现成）
-framework `src/serve_bench.py`(V1 c64 goodput)+`src/load_controller.py`(逐段→ElasticVis 逐请求后继)+`src/compressors.py`；数据 `runs/v2_p{0..3}/`；模型 LLaVA-1.5-7B + Qwen3-VL-8B；env `qwen3vl_clean`(V1)。v2 论文 `drafts/paper_v2.md`(9表5图47ref) 可独立投（fallback/伴生）。
+framework `src/serve_bench.py`(V1 c64 goodput+openloop+per-req k via ev_state["cur_k"])+`load_controller.py`+`compressors.py`+`src/elasticvis/`；数据 eval/subsets/{gqa,textvqa,mme,mmbench,scienceqa}_{200,500}.jsonl + runs/v2_p*/；模型 LLaVA-1.5-7B(runs/models/)+Qwen3-VL-8B；env `qwen3vl_clean`(V1)。v2 论文 drafts/paper_v2.md 可独立投。
 
 ## 已完成（背景）
-P0-P4 全完成（lit+定位｜probe｜selector 三连败→proxy 天花板｜v2 实验(2引擎×2架构×4压缩器+c64+goodput)｜v2 论文+图）。ElasticVis 是 P5 方法转向。详见 DECISIONS.md。
+P0-P4 全完成；ElasticVis EV-0..EV-1e（allocator 终判 negative，已得：门控刻画(5 benchmark)/placeholder-shrink 集成/batch-interference 发现）。详见 DECISIONS.md。
 
 ## 关键约束
-- 算力 1× A40 46GB 串行（c64 是天花板）；env `qwen3vl_clean`(V1)。
-- 提交以用户本人名义，禁 AI 署名。每步前 web 核实版本+novelty 监控（关键词见 design §0：elastic visual-token / per-query resolution / SLO-customized token budget + VLM）。
+- 算力 1× A40 46GB 串行；env `qwen3vl_clean`(V1, vllm0.19)。
+- 提交以用户本人名义，禁 AI 署名。每步 web 核实版本+novelty 监控。
 - 升级找人：凭据 / >6GPU·h / claim 推翻 / 投稿前。
