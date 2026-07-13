@@ -559,7 +559,7 @@ def build_engine(model: str, args):
         # ADAPTIVE mode needs eager: varying per-segment k → varying seq lengths
         # → CUDA graph capture mismatches. ELASTICVIS placeholder-shrink does NOT
         # need eager (hook is pass-through, no dynamic shapes in the forward).
-        enforce_eager=bool(getattr(args, "adaptive", False)),
+        enforce_eager=True,  # always eager: per-request variable k needs it
         limit_mm_per_prompt={"image": 1},
         allowed_local_media_path=_repo_root,
         max_num_seqs=getattr(args, "max_num_seqs", 256),  # M2: concurrency control
@@ -573,12 +573,29 @@ def build_engine(model: str, args):
             disable_log_stats=False,      # enables llm.get_metrics() for the controller
             enable_prefix_caching=False,  # per-request k must take effect every call
         )
+        # Stage 0 levers: chunked prefill toggle + token-budget knob. When chunked
+        # prefill is OFF, vLLM's validator requires max_num_batched_tokens >=
+        # max_model_len, so bump to a large value unless the user set one.
+        llm_kwargs["enable_chunked_prefill"] = (args.chunked_prefill == "on")
+        if args.max_num_batched_tokens is not None:
+            llm_kwargs["max_num_batched_tokens"] = args.max_num_batched_tokens
+        elif args.chunked_prefill == "off":
+            llm_kwargs["max_num_batched_tokens"] = max(8192, args.max_model_len)
         # Note: async_scheduling stays at vLLM default (True). The placeholder-
         # shrink approach (no embed_multimodal patch, no hook) has NO race
         # condition — get_num_image_tokens fires only at preprocess (main thread),
         # and the hook is a pass-through. EV-1d's async_scheduling=False was for
         # the now-obsolete embed_multimodal patch.
-    llm = LLM(**llm_kwargs)
+    try:
+        llm = LLM(**llm_kwargs)
+    except Exception as e:
+        raise RuntimeError(
+            f"LLM(**llm_kwargs) failed: {e!r}. kwargs included "
+            f"enable_chunked_prefill={llm_kwargs.get('enable_chunked_prefill')} "
+            f"max_num_batched_tokens={llm_kwargs.get('max_num_batched_tokens')} "
+            f"max_model_len={llm_kwargs.get('max_model_len')}. "
+            f"(With chunked prefill OFF, max_num_batched_tokens must be >= "
+            f"max_model_len.)") from e
 
     # ---- locate the projector + vision tower on the loaded model ----
     # IDENTICAL attribute chain in V0 and V1-in-process (V1 multiproc=0): the
@@ -1287,6 +1304,68 @@ def goodput_at_slo(rows: list[dict], slo_deadlines_ms: list[float],
     }
 
 
+def _step_composition_record(sched, step_idx: int, t0: float,
+                             ev_state) -> "Optional[dict]":
+    """Build a per-engine-step batch-composition record from the SchedulerOutput
+    stashed on `sched` by the Scheduler.schedule monkey-patch (see run()).
+
+    Reads `sched._last_sched_output` (set by the wrapped schedule()):
+      * .num_scheduled_tokens : dict[rid -> #tokens scheduled this step]  (membership)
+      * .scheduled_new_reqs   : list[NewRequestData]  (prefill set; has .req_id)
+    per-request k comes from ev_state["k_by_rid"][rid] (set by _ev_resolve_k).
+    Returns None when no schedule has run yet (first-step guard).
+
+    phase: "prefill" if rid is a newly-scheduled request, else "decode"
+           (fallback heuristic: num_scheduled_tokens[rid] > 1 => prefill, since a
+           pure decode step schedules exactly 1 new token per request).
+    var_k: population variance of this step's k_i values (descriptive dispersion
+           of the batch's k composition; n_members is included so callers can
+           recompute sample variance if desired).
+    """
+    out = getattr(sched, "_last_sched_output", None)
+    if out is None:
+        return None
+    nst = getattr(out, "num_scheduled_tokens", None) or {}
+    members = list(nst.keys())
+    if not members:
+        return None
+    prefill_ids = set()
+    for nr in (getattr(out, "scheduled_new_reqs", None) or []):
+        rid = getattr(nr, "req_id", None)
+        if rid is not None:
+            prefill_ids.add(rid)
+    k_by_rid = (ev_state or {}).get("k_by_rid", {}) or {}
+    phase: dict = {}
+    k_i: dict = {}
+    for rid in members:
+        is_prefill = rid in prefill_ids
+        if not is_prefill and nst.get(rid, 0) > 1:  # fallback heuristic
+            is_prefill = True
+        phase[rid] = "prefill" if is_prefill else "decode"
+        # k_by_rid is keyed by the BASE rid we passed to add_request (e.g. "p2_0"),
+        # but the scheduler emits a UUID-suffixed id (e.g. "p2_0-81826b53").
+        # Try full rid first, then the suffix-stripped base rid (serve_bench's
+        # established pattern, see openloop loop).
+        kv = k_by_rid.get(rid)
+        if kv is None and "-" in rid:
+            kv = k_by_rid.get(rid.rsplit("-", 1)[0])
+        k_i[rid] = int(kv) if kv is not None else 0
+    ks = list(k_i.values())
+    n = len(ks)
+    mean_k = (sum(ks) / n) if n else 0.0
+    var_k = (sum((x - mean_k) ** 2 for x in ks) / n) if n else 0.0
+    return {
+        "step_idx": step_idx,
+        "members": members,
+        "phase": phase,
+        "k_i": k_i,
+        "sum_k": int(sum(ks)),
+        "var_k": float(var_k),
+        "n_members": n,
+        "wallclock_ms": (time.perf_counter() - t0) * 1000.0,
+    }
+
+
 # --------------------------------------------------------------------------- #
 # Main
 # --------------------------------------------------------------------------- #
@@ -1453,6 +1532,47 @@ def run(args) -> dict:
     # batch_submit / serial paths (which don't sample mid-decode).
     run_peak_occ: Optional[float] = None
     run_peak_nr: Optional[int] = None
+
+    # ---- Stage 0: per-engine-step batch-composition logging ------------------
+    # EngineCore.step() calls scheduler.schedule() but does NOT retain the
+    # returned SchedulerOutput. We wrap schedule() ONCE to stash it on the
+    # instance, then read scheduler._last_sched_output after each engine.step().
+    # Path (vLLM 0.19.0, V1 in-process): llm_engine.engine_core.engine_core.scheduler
+    #   llm_engine.engine_core        = InprocClient (VLLM_ENABLE_V1_MULTIPROCESSING=0)
+    #   InprocClient.engine_core      = real EngineCore
+    #   EngineCore.scheduler          = vllm.v1.core.sched.scheduler.Scheduler
+    # The openloop + batch_submit loops below append _step_composition_record()
+    # to step_composition_log; the serial/load_profile paths skip it.
+    _step_sched = None
+    step_composition_log: list = []
+    step_idx = 0
+    if getattr(args, "log_step_composition", False):
+        _eng = llm.llm_engine
+        _ec = _eng.engine_core
+        try:
+            _step_sched = _ec.engine_core.scheduler
+        except AttributeError as e:
+            raise RuntimeError(
+                f"could not reach in-process scheduler; engine_core path changed? "
+                f"type(llm_engine.engine_core)={type(_ec).__name__}; "
+                f"public_attrs={[a for a in dir(_ec) if not a.startswith('_')]} "
+                f"err={e}")
+        if not callable(getattr(_step_sched, "schedule", None)):
+            raise RuntimeError(
+                f"reached object has no callable .schedule: "
+                f"type={type(_step_sched).__name__} "
+                f"public_attrs={[a for a in dir(_step_sched) if not a.startswith('_')]}")
+        _orig_schedule = _step_sched.schedule
+
+        def _stash_schedule(*a, **kw):
+            o = _orig_schedule(*a, **kw)
+            _step_sched._last_sched_output = o
+            return o
+
+        _step_sched.schedule = _stash_schedule
+        print(f"[serve_bench] step-composition logging ON: wrapped "
+              f"{type(_step_sched).__name__}.schedule to stash SchedulerOutput",
+              flush=True)
 
     if load_profile is not None:
         # ---- method D: time-varying load profile (STREAMING submission) -------
@@ -1705,6 +1825,7 @@ def run(args) -> dict:
                 now_rel = time.perf_counter() - t_all_start
             # Step the engine to make progress
             if engine.has_unfinished_requests():
+                _t0_step = time.perf_counter()
                 for o in engine.step():
                     if getattr(o, "finished", False):
                         rid = o.request_id
@@ -1720,6 +1841,11 @@ def run(args) -> dict:
                             base_rid = rid.rsplit("-", 1)[0] if "-" in rid else rid
                             k_val = ev_state["k_by_rid"].get(base_rid, 288)
                             ev_allocator.update_ema(e2e_ms_val, k_val)
+                if args.log_step_composition and _step_sched is not None:
+                    rec = _step_composition_record(_step_sched, step_idx, _t0_step, ev_state)
+                    if rec is not None:
+                        step_composition_log.append(rec)
+                    step_idx += 1
             elif next_idx < len(samples):
                 # Engine idle, more arrivals pending — sleep until next arrival
                 wait_s = arrivals[next_idx] - (time.perf_counter() - t_all_start)
@@ -1813,6 +1939,7 @@ def run(args) -> dict:
         out_by_rid: dict = {}
         t_drain_guard = time.perf_counter()
         while engine.has_unfinished_requests():
+            _t0_step = time.perf_counter()
             for o in engine.step():
                 if getattr(o, "finished", False):
                     rid = o.request_id
@@ -1821,6 +1948,11 @@ def run(args) -> dict:
                     ftl = getattr(m, "first_token_latency", 0.0) if m else 0.0
                     ttft_by_rid[rid] = (ftl * 1000.0) if ftl and ftl > 0 else float("nan")
                     out_by_rid[rid] = o
+            if args.log_step_composition and _step_sched is not None:
+                rec = _step_composition_record(_step_sched, step_idx, _t0_step, ev_state)
+                if rec is not None:
+                    step_composition_log.append(rec)
+                step_idx += 1
             if time.perf_counter() - t_drain_guard > 1800:
                 print("[serve_bench] WARN: batch drain >1800s, breaking", flush=True)
                 break
@@ -2042,6 +2174,16 @@ def run(args) -> dict:
     os.makedirs(os.path.dirname(os.path.abspath(args.metrics_out)), exist_ok=True)
     with open(args.metrics_out, "w") as f:
         json.dump(result, f, indent=2)
+    # Stage 0 sidecar: per-engine-step batch-composition log
+    if getattr(args, "log_step_composition", False) and step_composition_log:
+        steps_path = args.metrics_out + ".steps.json"
+        with open(steps_path, "w") as f:
+            json.dump({
+                "n_steps": len(step_composition_log),
+                "steps": step_composition_log,
+            }, f, indent=2)
+        print(f"[serve_bench] step-composition log: {len(step_composition_log)} "
+              f"steps -> {steps_path}", flush=True)
     kept_head = hook_state.get("kept_counts", [])[:5]
     print(f"[serve_bench] {args.benchmark} r={args.pruning_rate} n={len(raw)} "
           f"acc={agg['accuracy']:.3f} tok/s={agg['served_tok_s']['mean']:.1f} "
@@ -2099,6 +2241,22 @@ def main() -> None:
                     help="Open-loop Poisson arrival rate (req/s). Default 8.0. The "
                          "same seed (--seed) produces the same arrival trace across "
                          "policies for fair comparison.")
+    # ---- Stage 0: per-engine-step batch-composition logging -------------------
+    ap.add_argument("--log-step-composition", action="store_true",
+                    help="Log per-engine-step batch composition (members, "
+                         "phase=prefill|decode, per-request k_i, sum_k, var_k, "
+                         "wallclock_ms) to <metrics-out>.steps.json. Monkey-patches "
+                         "the in-process V1 Scheduler.schedule to stash its "
+                         "SchedulerOutput. Requires --engine v1 (in-process).")
+    ap.add_argument("--chunked-prefill", choices=["on", "off"], default="on",
+                    help="vLLM V1 enable_chunked_prefill toggle. 'off' forces "
+                         "whole-prefill; vLLM then requires max_num_batched_tokens "
+                         ">= max_model_len, so we bump it to 8192 (or to "
+                         "--max-num-batched-tokens if given).")
+    ap.add_argument("--max-num-batched-tokens", type=int, default=None,
+                    help="vLLM scheduler token-budget lever (max_num_batched_tokens). "
+                         "If unset: vLLM default with chunked prefill ON, or 8192 "
+                         "with chunked prefill OFF (to satisfy the validator).")
     # ---- P2 method D: load-adaptive prune-rate controller -------------------
     ap.add_argument("--adaptive", action="store_true",
                     help="METHOD D: enable the load-adaptive controller. Per request (or "
