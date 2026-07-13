@@ -1,9 +1,12 @@
 # STATE.md — 当前项目状态（主窗口维护，保持 ≤30 行）
 
 > 项目：VLM 视觉 token 压缩 · 目标 Q1/Q2 SCI · 详见 ORCHESTRATION.md
-> 最近更新：2026-07-13 · **user 决策：v2 测量论文升为主线，method search 收束** · EV-VAR 计划 ~/.claude/plans/warm-tinkering-bird.md（已关闭）
+> 最近更新：2026-07-13 · **⚠️ v2 头条 claim 被 ERA 推翻（在 vLLM 内测了 served throughput）→ 升级找人定方向；已停 v2 自主改动** · EV-VAR 计划 ~/.claude/plans/warm-tinkering-bird.md（已关闭）
 
-## ★ 当前主线：v2 测量论文（measurement-led，drafts/paper_v2.md，可独立投）
+## ★ ⚠️ v2 头条 novelty claim 被推翻（2026-07-13，charter §6 升级）
+v2 核心卖点"**0/37 surveyed compressors report served throughput inside a production serving engine**"被 **ERA**(arXiv:2606.31982, Jun 2026) 打破：ERA 是 VLM 视觉 token 压缩器，在 vLLM 内测 served req/s(~42)、prefill 4.3×、KV 5×、peak mem 244→60GB。ERA 不在 37 survey（漏）。Salvage = sharpen claim 到 ERA 漏的：**continuous batching + online arrivals、TTFT、p99、goodput@SLO**（ERA 仅静态 batch）。**re-scan 现为必要**（ERA 被漏=survey 有 gap）。已做：§5.9 negative 节 + 5 图整合 + RTP-LLM 事实错误已修(commit f3449f6)。待 user 定 A(re-scan+sharpen)/B(sharpen now)/C(重评估)。详见 DECISIONS.md。
+
+## ★ 当前主线（待重定向）：v2 测量论文（measurement-led，drafts/paper_v2.md）
 v2 = 0/37 served-throughput 测量（survey 37 法无一在 serving engine 内测吞吐）+ 3 发现 + c64 goodput，9表5图47ref。**user 2026-07-13 定：升为主线，目标 Q1/Q2**。下一步：评估当前稿状态 → 整合 negative 节 → 投稿就绪。
 
 ## ★ method search 收束（两条 method 线均 GPU 证伪 → 折入 v2 negative-finding 节）
