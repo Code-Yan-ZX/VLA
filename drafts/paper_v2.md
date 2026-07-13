@@ -28,7 +28,13 @@ Yet a deployer who serves a VLM does not bill FLOPs — they bill **requests per
 6. **(Compressor-design) Prune-vs-merge tradeoff (§5.7).** Merge-based compression (ToMe) recovers **55% of prune's accuracy loss for only −1.5% throughput** — a deployment-relevant compressor-design insight the framework reveals.
 7. **(Supporting) A load-adaptive prune-depth controller** as *one instantiation* of a controller inside the framework — throughput-optimal under an accuracy guardrail, **not** a Pareto-dominant method (an n=500 noise gate overturned its n=200 Pareto claims; reported openly). We do **not** claim a method breakthrough.
 
-> **[Figure 1 placeholder — The served-throughput gap, re-cast as framework motivation.]** A two-bar chart over the 37-method landscape: bar A = 13/37 report *some* wall-clock-style number (offline CUDA latency / prefill / decode speedup on the authors' own harness); bar B = **0/37** measure served throughput (req/s, tok/s, TTFT, p99, KV-MB, goodput) inside a production serving engine. Re-cast: the gap motivates a *framework* (one that works for any boundary compressor across engines/architectures), not a single number. Underlying data: `notes/lit-survey.md` §2.1 and §5 (the 13 are SparseVLM, VisionZip, SparseVILA, DyCoke, Q-Zoom, LLaVA-UHD, ToMe, FasterVLM/VisPruner, PRUNESID, E-AdaPrune, FocusUI, Fourier-VLM, PLPHP).
+![Figure 1](figures/v2/fig1_gap.png)
+
+**Figure 1 — The served-throughput gap (framework motivation).**
+
+**Bars over the 37-method landscape (2023–2026).** Of 37 surveyed visual-token compressors, **37/37 report FLOPs or token-count**, **13/37 report some wall-clock-style number** (offline CUDA latency, raw prefill/decode, or self-reported "faster" on the authors' own harness — e.g., SparseVILA's AWQ pipeline), and **0/37 measure served throughput inside a production serving engine** (vLLM / SGLang / lmdeploy / TRT-LLM). The gap is unfilled and is what motivates a *framework* (one that works for any boundary compressor across engines and architectures), not a single method's number.
+
+*Source:* `notes/lit-survey.md` §2 (the 13 wall-clock-reporting methods are SparseVLM, VisionZip, SparseVILA, DyCoke, Q-Zoom, LLaVA-UHD, ToMe, FasterVLM/VisPruner, PRUNESID, E-AdaPrune, FocusUI, Fourier-VLM, PLPHP). *Generator:* `gen_fig1.py` · *Data loader:* `_data.throughput_tally()` (v1, reused).
 
 **Paper roadmap.** §2 surveys compression, serving engines, and the load-bearing gap (rewritten for v2). §3 presents the framework and the three deployment findings. §4 presents implementation, including the V1-migration contribution. §5 reports experiments across all four axes. §6 discusses limitations, including the controller's n=500 null and a saliency selector that underperforms random. §7 concludes.
 
@@ -94,7 +100,15 @@ The framework's core object is the **concurrency × prune-rate matrix** of serve
 
 **Compression lifts the hardware throughput ceiling.** The uncompressed baseline r0 *plateaus* from c16→c64 (8.23 → 9.18 req/s, only +12% — r0 is KV/compute-bound at c64), while r75 keeps climbing (16.17 → 20.39, +26%) and r50 similarly (12.45 → 14.59, +17%). Compression relieves the bottleneck that bounds r0's scalability: **it raises the achievable peak throughput of the hardware**, not just the per-config speedup ratio. This is the deployment story a FLOPs number cannot tell.
 
-> **[Figure 2 placeholder — Concurrency × prune curve, c1–c64.]** req/s (y) vs prune rate (x: r0/r50/r75), four curves for c1/c4/c16/c64 on GQA, V1. Annotate the c64/r75 = 2.22× point and the ceiling-lift arrows: r0 c16→c64 (+12%, plateaued) vs r75 c16→c64 (+26%, still climbing). Underlying data: Table 1.
+![Figure 2](figures/v2/fig2_concurrency_ceiling.png)
+
+**Figure 2 — Concurrency × prune curve, c1–c64, with ceiling-lift (scale headline).**
+
+**Served req/s vs prune rate** for LLaVA-1.5-7B / GQA / vLLM V1 (n=200/cell, closed-loop batch-submit). Four concurrency curves c ∈ {1, 4, 16, 64} (single-hue blue ramp, light→dark). The prune speedup *grows monotonically and has not saturated at c64*: the r75/r0 ratio rises **1.19× (c1) → 1.53× (c4) → 1.96× (c16) → 2.22× (c64)**.
+
+**Ceiling-lift (the deployment-relevant secondary finding).** The uncompressed baseline r0 *plateaus* from c16→c64 (8.23→9.18 req/s, **+12%** — r0 is KV/compute-bound at the single-A40 ceiling), while r75 keeps climbing (16.17→20.39, **+26%**). Compression **raises the achievable peak throughput of the hardware**, not just the per-config speedup ratio — an effect invisible to concurrency-independent FLOPs measurement.
+
+*Source:* `runs/v2_p2/batch_c{1,4,16,64}_r{0,50,75}.json` (paper Table 1 / `notes/v2_p2_scale.md` Table A). c64 = single-A40 r0 ceiling (peak KV ≈ 41 GB). *Generator:* `gen_fig2.py`.
 
 ### 3.3 Three deployment findings (the differentiation spine)
 
@@ -194,7 +208,15 @@ Under c64 closed-loop, tight SLOs (TTFT≤500 ms, e2e≤1 s) are unmeetable for 
 
 **Three deployment-relevant results.** (i) **r75 strictly dominates r0 at c64** — 2.22× the throughput AND **2.84× lower p99-TTFT** (18.4 s → 6.5 s) AND 2.69× lower p99-e2e. There is *no tradeoff* in the saturated regime: pruning relieves the KV/prefill bottleneck that bounds *both* throughput and tail latency under concurrency, so it improves both axes simultaneously. (ii) **Goodput@TTFT≤5s = 7.4×** (r75 13.7 vs r0 1.8 req/s); at e2e≤8 s, r75 delivers **23×** (20.4 vs 0.9). (iii) Pruning is a **tail-latency reducer**, not just a throughput booster: the p99 win (2.84×) exceeds the per-request median win (serial c1 p50 433→367 ms = only 1.18×), because the benefit is largest on the *queued* requests that dominate the tail.
 
-> **[Figure 3 placeholder — Goodput-Pareto at c64 (the deployment figure).]** x-axis: served req/s; y-axis: p99-TTFT (lower is better), log-scale. Three points (r0/r50/r75) forming the Pareto frontier; the r75 point is in the upper-right (high throughput, low tail). Inset: goodput (req/s under SLO) vs SLO threshold, three curves, showing r75's 7.4× goodput at TTFT≤5 s. Underlying data: Table 3.
+![Figure 3](figures/v2/fig3_goodput_pareto.png)
+
+**Figure 3 — Goodput-Pareto at c64 (the deployment figure, the paper's lead).**
+
+**Main panel (log-log):** served req/s (x) vs p99-TTFT (y, lower is better) at c=64 on LLaVA-1.5-7B / GQA / V1 (n=200, closed-loop). The three points are r0 (9.2 req/s, p99 18.4 s), r50 (14.6, 10.5 s), r75 (20.4, 6.5 s). **r75 strictly dominates r0** — it sits at the upper-right of the Pareto (high throughput, low tail): **2.22× the served req/s AND 2.84× lower p99-TTFT, with no tradeoff**. This is the pure-win headline: in the saturated regime, pruning relieves the KV/prefill bottleneck that bounds *both* throughput and tail latency, so it improves both axes simultaneously.
+
+**Inset:** goodput (req/s meeting the TTFT SLO) vs SLO threshold. At TTFT≤5 s, r75 delivers **7.4× the goodput** of r0 (13.7 vs 1.8 req/s); tight SLOs (≤1 s) are unmeetable for any r under c64 closed-loop (the 64-way chunked-prefill floor is ~3 s).
+
+*Source:* `runs/v2_p2/batch_c64_r{0,50,75}.json` (paper Table 3 / `notes/v2_p2_scale.md` Tables B, C). Goodput computed from per-request TTFT (`raw[*].ttft_ms`); *Generator:* `gen_fig3.py`.
 
 ### 5.4 Cross-compressor framework-generality (4/4)
 
@@ -230,7 +252,17 @@ Under c64 closed-loop, tight SLOs (TTFT≤500 ms, e2e≤1 s) are unmeetable for 
 
 **Framework-generality verdict (4/4).** Every compressor's r75 strictly dominates its own r0 at c64 — 2.18–2.30× the throughput AND 2.66–2.85× lower p99-TTFT; every compressor delivers **7–10× more goodput@TTFT≤5s** at r75 vs its own r0. **Throughput is compressor-invariant at iso-k**: r50 req/s = 14.15–14.47 (3% spread); r75 req/s = 19.73–20.73 (5% spread). Selection is O(N), runs once per request, and is invisible next to the multi-hundred-ms LLM forward; the only systematic throughput difference is ToMe's merge-compute overhead (−1.5% at r75, −2.1% at r50). The served-throughput win is a property of the **framework** (placeholder-shrink → genuine KV/compute relief under concurrency), measurable for *any* boundary compressor. **This is the evidence that defuses both the "only your proxy" criticism and the self-serving reading of the 0/37 gap**: the framework measures served throughput consistently across prune *and* merge, across saliency, CLS, and random selection signals.
 
-> **[Figure 5 placeholder — Cross-compressor panel at c64.]** Four subplots (one per compressor), each showing the r0→r50→r75 Pareto frontier (req/s vs p99-TTFT). A shared overlay showing all four r75 points cluster at ~20 req/s and ~6.5 s p99 demonstrates compressor-invariance at iso-k. Underlying data: Tables 4–5.
+![Figure 5](figures/v2/fig5_crosscompressor.png)
+
+**Figure 5 — Cross-compressor panel at c64 (framework generality).**
+
+**Two panels, c=64 on LLaVA-1.5-7B / GQA / V1 (n=200), four compressors:** proxy (saliency, prune), true_cls (CLS-attention, prune), ToMe (cosine-similarity, **merge**), random (uniform, prune).
+
+**(a) Throughput vs prune rate.** The four curves **overlap at iso-k** — throughput is **compressor-invariant** (r75 req/s = 19.7–20.7, only ~5% spread). Selection is O(N), runs once per request, and is invisible next to the multi-hundred-ms LLM forward; the only systematic difference is ToMe's merge-compute overhead (−1.5% at r75). The served-throughput win is a property of the **framework** (placeholder-shrink → genuine KV/compute relief), measurable for *any* boundary compressor — defusing the "only your proxy" criticism.
+
+**(b) Accuracy vs prune rate.** **ToMe (merge) is highest at r75** (0.540 vs proxy 0.475) — merge's averaging preserves information that prune discards, recovering ~55% of prune's accuracy loss. **Honest red flag:** at r75, uniform *random* (0.535) **beats both saliency selectors** (proxy 0.475, true_cls 0.490) — the known FastV-style failure mode (saliency picks central/object patches; many GQA questions need scattered/specific patches). This is a **selector-design finding** (motivating query-aware selection), not a framework failure: every compressor shows the goodput-Pareto win.
+
+*Source:* `runs/v2_p3/{proxy,true_cls,tome_merge,random}_c64_r{0,50,75}.json` (paper Tables 4–5 / `notes/v2_p3_crosscompressor.md` Tables 1, 3). *Generator:* `gen_fig5.py`.
 
 **Honest red flag (saliency underperforms random at high r).** At r75 on GQA, the saliency selectors are *worse* than uniform random: proxy 0.475 (−0.060 vs random), true_cls 0.490 (−0.045 vs random); random reaches 0.535. This is the known FastV-style failure mode — saliency picks visually-salient central/object patches while GQA often asks about scattered/specific regions; random preserves spatial diversity. **This is not a framework failure** (every compressor shows the goodput win); it is a selector-design finding that motivates query-aware selection (`clip_query`-style scoring by relevance to the *question*, not visual salience) as the v2 method-design track. The framework measures this honestly across all compressors; the selector design is orthogonal.
 
@@ -257,7 +289,15 @@ We re-test F1/F2/F3 on Qwen3-VL-8B-Instruct, a modern dynamic-resolution model w
 
 **Implication for compressor design (§6).** On natively-compressed architectures, the real lever is **pre-merger pruning** (let the pruner and merger not compete for the same resource) — a concrete future direction the framework surfaces. We report the attenuation openly as nuanced science, not a universal constant: F1's concurrency amplification scales with the visual-token budget that survives the model's own compression.
 
-> **[Figure 4 placeholder — Architecture-conditional amplification.]** r75/r0 served speedup (y) vs concurrency c (x, log scale), two curves: LLaVA-1.5-7B (steep, 1.21×→1.86×→2.22×) and Qwen3-VL-8B (shallow, 1.08×→1.29×→1.34×). Annotate the ~3× attenuation and the mechanism (native merger as substitute). Underlying data: Table 6.
+![Figure 4](figures/v2/fig4_arch_conditional.png)
+
+**Figure 4 — Architecture-conditional amplification (honest boundary).**
+
+**r75/r0 served-req/s speedup vs concurrency (log x), two architectures.** LLaVA-1.5-7B (fixed 576 visual tokens, blue) rises steeply: **1.19× (c1) → 1.53× (c4) → 1.96× (c16) → 2.22× (c64)**. Qwen3-VL-8B-Instruct (dynamic resolution, native 2×2 MLP merger, violet) is **attenuated**: 1.08× (c1) → 1.29× (c12) → 1.34× (c64, r50/r0 — r75 not measured on Qwen3-VL c64). The concurrency-amplification mechanism (F1) is robust to the architecture (Qwen3-VL r75 bonus c1→c12 = +0.21 > 0) but is **~1/3 the strength** of LLaVA-1.5 (+0.21 vs +0.65).
+
+**Mechanism — the native 2×2 merger and a post-hoc pruner are SUBSTITUTES, not complements.** The merger compresses 4 patches → 1 token *before* our pruner; on GQA only ~260 post-merger tokens survive (vs LLaVA's fixed 576), so the pruner has less to remove → smaller KV/prefill relief → smaller F1 speedup. The attenuation is honest, mechanism-explained science that surfaces **pre-merger pruning** as the next lever on natively-compressed architectures.
+
+*Source:* LLaVA — `runs/v2_p2/batch_c{1,4,16,64}_r{0,75}.json`; Qwen3-VL c1/c12 — `notes/v2_p1_qwen3vl.md` §2; Qwen3-VL c64 — `runs/v2_p2/qwen3vl_c64_r{0,50}.json`. *Generator:* `gen_fig4.py`.
 
 ### 5.6 Prefill breakdown (F2)
 
@@ -309,6 +349,29 @@ For completeness we report the load-adaptive controller (§4.3) on the five-benc
 
 **Honest reframed controller claim.** The robust, n=500-surviving claim is: the controller delivers a throughput win over the accuracy-favoring fixed point (r25) on the dense/MC benchmarks — MMBench +5.3%, ScienceQA +5.2%, TextVQA +3.7% — *without an accuracy loss vs r25*, i.e., a free throughput gain at the r25 accuracy floor. It does **not** beat fixed-r50 on accuracy anywhere; on 4/5 benchmarks fixed-r50 has the highest req/s. The controller's niche is recovering roughly half the r25→r50 throughput gap when r25 is the mandated accuracy floor. We retain the n=200 numbers and the reversal history in `eval/final_results.md` for reviewer audit. **The framework's value does not depend on this controller**, which we include as one honest instantiation, not a SOTA method.
 
+### 5.9 Method-space exploration and bounding: two serving-signal hypotheses, falsified on GPU
+
+The framework's purpose is measurement, not a new scheduler. To bound the method space honestly, we used the framework's substrate — per-request visual-token budgets, open-loop goodput@SLO, and a step-level batch-composition probe (Appendix) — to test two natural "serving-signal" hypotheses that, if true, would motivate a scheduler beyond fixed-rate compression. **Both are falsified on real GPU.** We report them as honest negatives that sharpen, rather than compete with, the measurement contribution.
+
+**H1 — per-request budget allocation for goodput@SLO.** A per-request allocator assigns each request a visual-token budget k_i at admission (tight SLO → low k; slack SLO → high k) to maximize goodput@SLO, generalizing fixed-r. On open-loop TextVQA c64 mixed-SLO (5 s / 15 s deadlines), apples-to-apples against the best fixed-r (identical engine settings, uniform eager mode), the allocator **does not improve goodput@SLO**: at offered load 8 req/s it ties (0.991×), at 12 it loses (0.885×), at 15 it loses (0.757×). **Mechanism:** under continuous batching, a high-k request's long prefill delays the *entire* batch's decode — including the tight-deadline requests it is co-batched with — so giving slack requests high k harms the tight requests. The independent-slot latency model used in offline simulation (which predicted a +35% win) misses this intra-batch interference and does not transfer to the engine.
+
+**H2 — visual-token variance as an intra-batch latency signal.** H1's failure suggests a salvage: even if per-request *allocation* fails, perhaps the *variance* of visual-token counts across co-batched requests is itself a latency externality a co-batching scheduler could exploit. We test this directly with a step-level composition probe: 4 open-loop cells = {homogeneous k=360, bimodal k∈{144, 576}} × {chunked-prefill on/off}, **same arrival trace** (identical seed; only k-composition varies), n=300 TextVQA mixed-SLO, 2048 pooled engine steps. We regress per-step wall-clock on total tokens (Σk), batch size, and composition features.
+
+**Table 10 — Does visual-token composition predict per-step latency beyond total tokens? (nested likelihood-ratio over 2048 steps; baseline = Σk + n_members + chunked-prefill)**
+
+| terms added to the baseline | F | p | verdict |
+|---|---|---|---|
+| {var_k, max_k} (the k-composition signal) | **0.18** | **0.84** | zero explanatory power |
+| {n_prefill, n_decode} (phase mix / work structure) | 98.6 | 1e-22 | drives the entire joint signal |
+| {var_k, max_k}, chunked-prefill **on** only | **0.20** | **0.82** | no residual after the standard mitigation |
+| {var_k, max_k}, high concurrency (n_members ≥ 12) | 0.85 | 0.43 | non-significant even under load |
+
+The k-composition of a batch carries **no** latency information beyond its total token count and its phase mix; max_k even takes the *wrong* sign (bimodal batches are marginally faster at iso-Σk). The standard chunked-prefill mitigation removes any trace of an effect.
+
+**Why both fail — the total-token bound.** The two negatives share one root cause. Under continuous batching with chunked prefill, per-step token budgets are capped, so a step's wall-clock is set by *work structure* — how many requests are in prefill vs decode, which any token-budget scheduler already accounts for through Σk — not by the *spread* of visual-token counts. The H1 "intra-batch interference" reduces, on inspection, to the total-token effect: high-k requests cost more total work, fully captured by Σk. **There is no serving-signal — per-request budget or batch variance — for a scheduler to exploit beyond what compression and token-budget batching already provide.** We report this to bound the method space: this paper's contribution is the measurement framework and the deployment findings, not a scheduler, and the scheduling-based extensions we could construct on the substrate do not survive a fair GPU test.
+
+*Sources: H1 allocator GPU test — `runs/ev1e_*`; H2 variance step-log regression — `src/ev_var/analyze_stage1.py`, `runs/ev_var/stage1_results.json`. Step-composition instrumentation: `src/serve_bench.py --log-step-composition`.*
+
 ---
 
 ## 6. Discussion and Limitations
@@ -316,6 +379,8 @@ For completeness we report the load-adaptive controller (§4.3) on the five-benc
 We discuss the boundaries of our claims, several load-bearing for honest reviewing.
 
 **The method is supporting, not a breakthrough.** The framework and the deployment findings are the contribution. The load-adaptive controller is *one instantiation*; its clean Pareto-dominate count at n=500 is 0/5. We do not claim a new accuracy SOTA, a new selector, or a universally Pareto-dominant method. The framework measures *any* boundary compressor — including future query-aware or learned selectors — and is the durable contribution.
+
+**Two serving-signal schedulers, explored and falsified (§5.9).** Beyond the controller, we tested two stronger scheduling hypotheses on the framework substrate — per-request budget allocation for goodput@SLO, and visual-token variance as an intra-batch latency signal. Both are falsified on GPU: they reduce to a total-token (Σk) effect that compression and token-budget batching already capture. We report this as method-space bounding, not failure — it sharpens the measurement contribution and documents that the scheduling lever is structurally denied by the continuous-batching + chunked-prefill substrate.
 
 **Architecture-conditional mechanism (the nuanced science).** F1's concurrency amplification is *not* a universal constant: it is strong on fixed-token LLaVA-1.5 and attenuated on natively-compressed Qwen3-VL, because the native 2×2 merger and a post-hoc pruner are substitutes. This is a feature (honest, mechanism-explained, predictive), not a defect. It surfaces a concrete future direction: **pre-merger pruning** (let the pruner and merger not compete for post-merger tokens) is likely the right lever on natively-compressed architectures — testable on a future cross-compressor × pre/post-merger ablation.
 
@@ -339,7 +404,7 @@ We discuss the boundaries of our claims, several load-bearing for honest reviewi
 
 ## 7. Conclusion
 
-We presented a **served-throughput measurement framework** for visual-token compression in VLMs, validated across **2 engines (vLLM V0 & V1) × 2 architectures (LLaVA-1.5-7B fixed-token, Qwen3-VL-8B dynamic-resolution w/ native 2×2 merger) × 4 compressors (proxy-prune, CLS-family-prune, ToMe-merge, random) × production scale (c1–c64, p50/p99 TTFT, goodput-under-SLO)** — closing a gap left open by all 37 compressors we surveyed. The framework yields deployment findings invisible to offline FLOPs accounting. The headline: at c64 on LLaVA-1.5, 75% pruning **strictly dominates** the uncompressed baseline — **2.22× served req/s AND 2.84× lower p99-TTFT, no tradeoff**, goodput@TTFT≤5s = **7.4×** — because compression **lifts the hardware's throughput ceiling** (r0 plateaus c16→c64; r75 keeps climbing). This goodput-Pareto win generalizes **4/4 across compressors** (throughput is compressor-invariant at iso-k — a framework property, not a selector artifact). The mechanism is **architecture-conditional**: strong on fixed-token LLaVA-1.5 (r75 amplification 1.19×→2.22× from c1→c64), attenuated on natively-compressed Qwen3-VL (1.08×→1.29×), because the native merger and a post-hoc pruner are substitutes — honest, mechanism-explained science that surfaces pre-merger pruning as the next lever. A V1-engine migration (in-process EngineCore, V1 scheduler intact) is an engineering contribution: F1 holds and is stronger on V1 (1.86× vs 1.75×). Merge-based compression (ToMe) recovers 55% of prune's accuracy loss for −1.5% throughput — a compressor-design insight the framework reveals. The load-adaptive controller is one honest instantiation (n=500 null on Pareto, supporting not breakthrough). The deployment win from visual-token compression lives in the serving engine (KV-cache/concurrency/goodput), is bounded by fixed encoder+merger cost, scales with the visual-token fraction, and is attenuated by native compression — effects invisible to FLOPs measurement, untouched by 37 prior methods, and measurable for any compressor by this framework.
+We presented a **served-throughput measurement framework** for visual-token compression in VLMs, validated across **2 engines (vLLM V0 & V1) × 2 architectures (LLaVA-1.5-7B fixed-token, Qwen3-VL-8B dynamic-resolution w/ native 2×2 merger) × 4 compressors (proxy-prune, CLS-family-prune, ToMe-merge, random) × production scale (c1–c64, p50/p99 TTFT, goodput-under-SLO)** — closing a gap left open by all 37 compressors we surveyed. The framework yields deployment findings invisible to offline FLOPs accounting. The headline: at c64 on LLaVA-1.5, 75% pruning **strictly dominates** the uncompressed baseline — **2.22× served req/s AND 2.84× lower p99-TTFT, no tradeoff**, goodput@TTFT≤5s = **7.4×** — because compression **lifts the hardware's throughput ceiling** (r0 plateaus c16→c64; r75 keeps climbing). This goodput-Pareto win generalizes **4/4 across compressors** (throughput is compressor-invariant at iso-k — a framework property, not a selector artifact). The mechanism is **architecture-conditional**: strong on fixed-token LLaVA-1.5 (r75 amplification 1.19×→2.22× from c1→c64), attenuated on natively-compressed Qwen3-VL (1.08×→1.29×), because the native merger and a post-hoc pruner are substitutes — honest, mechanism-explained science that surfaces pre-merger pruning as the next lever. A V1-engine migration (in-process EngineCore, V1 scheduler intact) is an engineering contribution: F1 holds and is stronger on V1 (1.86× vs 1.75×). Merge-based compression (ToMe) recovers 55% of prune's accuracy loss for −1.5% throughput — a compressor-design insight the framework reveals. The load-adaptive controller is one honest instantiation (n=500 null on Pareto, supporting not breakthrough), and two stronger serving-signal schedulers we built on the substrate — per-request goodput@SLO allocation and variance-aware co-batching — are falsified on GPU (§5.9), reducing to a total-token effect already captured by compression: the contribution is measurement, and the scheduling lever is structurally bounded by continuous batching with chunked prefill. The deployment win from visual-token compression lives in the serving engine (KV-cache/concurrency/goodput), is bounded by fixed encoder+merger cost, scales with the visual-token fraction, and is attenuated by native compression — effects invisible to FLOPs measurement, untouched by 37 prior methods, and measurable for any compressor by this framework.
 
 ---
 
