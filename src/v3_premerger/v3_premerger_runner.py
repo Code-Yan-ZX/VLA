@@ -199,6 +199,40 @@ SCORERS = {
 }
 
 
+# --------------------------------------------------------------------------- #
+# Merge-unit / token scoring functions -- the SELECTOR plug-in point.
+#   l2   : L2-norm of feature vectors (the ORIGINAL text-agnostic selector; the
+#          established v3 baseline). Behaviour identical to pre-change code.
+#   attn : global-centroid-distance saliency proxy. Each unit's (or token's)
+#          mean feature's L2 distance from the GLOBAL mean feature across the
+#          whole image -> measures distinctiveness/informativeness rather than
+#          magnitude. This is a DIFFERENT selector from L2, used ONLY to test
+#          stage-effect robustness (does pre>post hold with a different score?).
+#          NOTE on "attn" naming: true ViT self-attention is unavailable under
+#          vLLM 0.19's flash-attn eager path (weights are never materialised;
+#          forcing output_attentions on a 65k-token document is infeasible at
+#          ~17GB/head in fp16). We therefore substitute a cheap attention PROXY
+#          computed from the same merger-prehook hidden states L2 uses. CLS-
+#          attention is deliberately avoided (project history: CLS under-attends
+#          text/OCR). Mean-attention-received semantics are approximated by the
+#          centroid-distance "stands out from the crowd" score.
+# --------------------------------------------------------------------------- #
+def _score_tokens(hs, selector: str):
+    """hs: [n_tok, ctx] -> importance score [n_tok].  (post-merger path.)"""
+    if selector == "l2":
+        return hs.float().norm(dim=-1)
+    f = hs.float()                                     # [n_tok, ctx]
+    return (f - f.mean(dim=0, keepdim=True)).norm(dim=-1)
+
+
+def _score_units(feats, selector: str):
+    """feats: [num_units, unit, ctx] -> importance score [num_units].  (pre-)"""
+    if selector == "l2":
+        return feats.float().norm(dim=-1).mean(dim=-1)
+    uf = feats.float().mean(dim=1)                     # [num_units, ctx]
+    return (uf - uf.mean(dim=0, keepdim=True)).norm(dim=-1)
+
+
 def parse_args():
     ap = argparse.ArgumentParser()
     ap.add_argument("--mode", required=True, choices=["none", "post", "pre"])
@@ -214,6 +248,18 @@ def parse_args():
     ap.add_argument("--subset", required=True)
     ap.add_argument("--n", type=int, default=200)
     ap.add_argument("--max-tokens", type=int, default=32)
+    ap.add_argument("--selector", default="l2", choices=["l2", "attn"],
+                    help="l2 = L2-norm selector (default, original behavior); "
+                         "attn = global-centroid-distance saliency proxy -- a "
+                         "DIFFERENT selector for stage-effect robustness.")
+    ap.add_argument("--max-pixels", type=int, default=0,
+                    help="if >0, pass max_pixels to the image processor to cap "
+                         "image resolution (pre-merger tokens ~= max_pixels/256). "
+                         "Fixes the DocVQA encoder-cache crash on huge documents "
+                         "(keeps pre-merger token count <= ~6000 for ~1.5M px).")
+    ap.add_argument("--seed", type=int, default=0,
+                    help="vLLM/torch RNG seed (0 = default). For repeat runs; at "
+                         "temp=0 variance comes from GPU-kernel non-determinism.")
     ap.add_argument("--out", required=True)
     return ap.parse_args()
 
@@ -257,9 +303,9 @@ def patch_processor(r: float):
 # --------------------------------------------------------------------------- #
 # (B) POST-merger: wrap _process_image_input, prune post-split. (== v2_p1.)
 # --------------------------------------------------------------------------- #
-def setup_post_merger(model, r: float):
+def setup_post_merger(model, r: float, selector: str = "l2"):
     _orig = model._process_image_input
-    diag = {"fires": 0, "nk": []}
+    diag = {"fires": 0, "nk": [], "selector": selector}
 
     def _patched(image_input):
         splits = _orig(image_input)
@@ -270,7 +316,7 @@ def setup_post_merger(model, r: float):
         for s in splits:
             n = int(s.shape[0])
             k = max(1, int(round(n * (1.0 - r))))
-            score = s.float().norm(dim=-1)
+            score = _score_tokens(s, selector)
             idx = torch.topk(score, k).indices.sort().values
             out.append(s.index_select(0, idx).contiguous())
         if len(diag["nk"]) < 8:
@@ -285,16 +331,17 @@ def setup_post_merger(model, r: float):
 # grid_thw) + replace _process_image_input to split by pruned counts.
 # --------------------------------------------------------------------------- #
 class PreMergerPruner:
-    def __init__(self, r: float, spatial_merge_size: int):
+    def __init__(self, r: float, spatial_merge_size: int, selector: str = "l2"):
         self.r = r
         self.sm = spatial_merge_size
         self.unit = spatial_merge_size ** 2          # 4
+        self.selector = selector
         self.full_units = None                        # list[int] per image
         self.k_units = None                           # list[int] per image
         self._mask = None                             # cached token mask
         self.diag = {"visual_calls": 0, "merger_calls": 0,
                      "mask_computed_at": None, "mask_compute_count": 0,
-                     "per_tag_calls": {}, "nk": []}
+                     "per_tag_calls": {}, "nk": [], "selector": selector}
 
     def begin_pass(self, grid_thw):
         """visual.forward pre_hook: capture grid_thw, plan per-image counts."""
@@ -322,7 +369,7 @@ class PreMergerPruner:
             ctx = hs.shape[-1]
             num_units = seq // self.unit
             feats = hs.reshape(num_units, self.unit, ctx)
-            scores = feats.float().norm(dim=-1).mean(dim=-1)   # [num_units]
+            scores = _score_units(feats, self.selector)        # [num_units]
             keep = torch.zeros(num_units, dtype=torch.bool,
                                device=hs.device)
             off = 0
@@ -340,10 +387,10 @@ class PreMergerPruner:
         return (kept,)
 
 
-def setup_pre_merger(model, r: float):
+def setup_pre_merger(model, r: float, selector: str = "l2"):
     visual = model.visual
     sm = visual.spatial_merge_size
-    pruner = PreMergerPruner(r, sm)
+    pruner = PreMergerPruner(r, sm, selector)
 
     # (1) visual.forward pre_hook: capture grid_thw -> plan k_units.
     def _visual_prehook(module, args, kwargs):
@@ -397,7 +444,8 @@ def main():
 
     from vllm import LLM, SamplingParams
     t0 = time.perf_counter()
-    llm = LLM(
+    torch.manual_seed(args.seed)
+    llm_kwargs = dict(
         model=MODEL, dtype="bfloat16", tensor_parallel_size=1,
         gpu_memory_utilization=0.90, max_model_len=args.max_model_len,
         trust_remote_code=False, enforce_eager=True,
@@ -406,15 +454,21 @@ def main():
             os.path.join(os.path.dirname(__file__), os.pardir, os.pardir)),
         max_num_seqs=args.max_num_seqs,
         disable_log_stats=False, enable_prefix_caching=False,
+        seed=args.seed,
     )
+    # Cap image resolution if requested (DocVQA encoder-cache crash fix).
+    # pre-merger tokens ~= max_pixels / (patch=16)^2 ; 1.5M px -> ~5859 tokens.
+    if args.max_pixels and args.max_pixels > 0:
+        llm_kwargs["mm_processor_kwargs"] = {"max_pixels": args.max_pixels}
+    llm = LLM(**llm_kwargs)
     load_s = time.perf_counter() - t0
     model = llm.llm_engine.model_executor.driver_worker.model_runner.model
 
     diag = None
     if args.mode == "post":
-        diag = setup_post_merger(model, r)
+        diag = setup_post_merger(model, r, args.selector)
     elif args.mode == "pre":
-        pruner, _handles = setup_pre_merger(model, r)
+        pruner, _handles = setup_pre_merger(model, r, args.selector)
         diag = pruner.diag
 
     samples = load_subset(args.subset)[:args.n]
@@ -472,6 +526,8 @@ def main():
         "model": MODEL, "mode": args.mode, "benchmark": args.benchmark, "r": r,
         "max_num_seqs": args.max_num_seqs, "n": len(samples),
         "max_tokens": args.max_tokens, "max_model_len": args.max_model_len,
+        "selector": args.selector, "max_pixels": args.max_pixels,
+        "seed": args.seed,
         "wall_s": round(wall, 3), "req_per_s": round(req_s, 4),
         "acc": round(acc, 4), "n_answered": n_ok, "n_skipped": n_skip,
         "mean_ptid_len": round(sum(kept_counts) / len(kept_counts), 1) if kept_counts else 0,
