@@ -145,7 +145,58 @@ def score_textvqa(pred: str, gt: str, choices: Optional[list[str]] = None) -> in
     return 0
 
 
-SCORERS = {"gqa": score_gqa, "textvqa": score_textvqa}
+# DocVQA: same VQA/exact-match convention as TextVQA (gt is a ';'-joined list
+# of short text spans; task spec says "DocVQA uses VQA-accuracy / exact-match
+# like TextVQA"). Reuses score_textvqa unchanged.
+score_docvqa = score_textvqa
+
+
+def score_yesno(pred: str, gt: str, choices: Optional[list[str]] = None) -> int:
+    """Yes/no scorer for MME (gt in {"yes","no"}). Lead alnum token must == gt.
+    (Copied verbatim from src/serve_bench.py:score_yesno so the runner is
+    self-contained.)"""
+    if not gt:
+        return 0
+    g = gt.strip().lower()
+    if g not in {"yes", "no"}:
+        return 0
+    p_words = _norm_words(pred)
+    for w in p_words:
+        if w in {"a", "an", "the"}:
+            continue
+        return 1 if w == g else 0
+    return 0
+
+
+def score_mc_letter(pred: str, gt: str, choices: Optional[list[str]] = None) -> int:
+    """Multiple-choice letter scorer for MMBench / ScienceQA. Extracts the
+    model's first option letter (A-Z) and matches gt (single letter).
+    (Copied verbatim from src/serve_bench.py:score_mc_letter.)"""
+    if not gt:
+        return 0
+    g = gt.strip().upper()
+    if not (len(g) == 1 and g.isalpha()):
+        return 0
+    p = pred.strip().upper()
+    if not p:
+        return 0
+    for tok in p.split():
+        core = tok.rstrip(".,:;)\"'")
+        if len(core) == 1 and core.isalpha():
+            return 1 if core == g else 0
+    if p[0].isalpha():
+        return 1 if p[0] == g else 0
+    return 0
+
+
+SCORERS = {
+    "gqa": score_gqa,
+    "textvqa": score_textvqa,
+    "docvqa": score_docvqa,
+    "mme": score_yesno,
+    "mmbench": score_mc_letter,
+    "scienceqa": score_mc_letter,
+}
 
 
 def parse_args():
@@ -155,7 +206,11 @@ def parse_args():
                     help="prune ratio; k_i = round(full_i*(1-r)). "
                          "{0.5,0.75,0.875} -> keep {50,25,12.5}% of merge-units.")
     ap.add_argument("--max-num-seqs", type=int, default=16)
-    ap.add_argument("--benchmark", required=True, choices=["gqa", "textvqa"])
+    ap.add_argument("--max-model-len", type=int, default=32768,
+                    help="vLLM max_model_len. Raise for huge-image benchmarks "
+                         "(DocVQA documents); baseline was hardcoded 8192.")
+    ap.add_argument("--benchmark", required=True,
+                    choices=["gqa", "textvqa", "docvqa", "mme", "mmbench", "scienceqa"])
     ap.add_argument("--subset", required=True)
     ap.add_argument("--n", type=int, default=200)
     ap.add_argument("--max-tokens", type=int, default=32)
@@ -344,11 +399,11 @@ def main():
     t0 = time.perf_counter()
     llm = LLM(
         model=MODEL, dtype="bfloat16", tensor_parallel_size=1,
-        gpu_memory_utilization=0.90, max_model_len=8192,
+        gpu_memory_utilization=0.90, max_model_len=args.max_model_len,
         trust_remote_code=False, enforce_eager=True,
         limit_mm_per_prompt={"image": 1},
         allowed_local_media_path=os.path.abspath(
-            os.path.join(os.path.dirname(__file__), os.pardir)),
+            os.path.join(os.path.dirname(__file__), os.pardir, os.pardir)),
         max_num_seqs=args.max_num_seqs,
         disable_log_stats=False, enable_prefix_caching=False,
     )
@@ -378,27 +433,47 @@ def main():
     llm.chat([msgs_all[0]], sampling_params=sp)
 
     t0 = time.perf_counter()
-    outs = llm.chat(msgs_all, sampling_params=sp)
-    wall = time.perf_counter() - t0
+    n_skip = 0
+    try:
+        outs = llm.chat(msgs_all, sampling_params=sp)
+        wall = time.perf_counter() - t0
+    except Exception as e:
+        # Batched call aborts if ANY single prompt exceeds max_model_len (or
+        # another per-sample failure). Re-run per-sample, skip the failures so
+        # one huge document cannot abort the whole DocVQA run.
+        print(f"[v3] batched chat failed ({type(e).__name__}: {str(e)[:200]}); "
+              f"falling back to per-sample (skip-on-error).", flush=True)
+        outs = [None] * len(msgs_all)
+        t0 = time.perf_counter()
+        for i, m in enumerate(msgs_all):
+            try:
+                outs[i] = llm.chat([m], sampling_params=sp)[0]
+            except Exception:
+                outs[i] = None
+                n_skip += 1
+        wall = time.perf_counter() - t0
 
     n_ok = 0
     correct = 0
     kept_counts = []
     for s, o in zip(samples, outs):
+        if o is None:
+            continue
         ans = o.outputs[0].text.strip()
         if ans:
             n_ok += 1
         correct += scorer(ans, s.gt, s.extra.get("choices"))
         kept_counts.append(len(o.prompt_token_ids))
-    req_s = len(samples) / wall
-    acc = correct / len(samples)
+    n_scored = len(samples) - n_skip
+    req_s = n_scored / wall if wall > 0 else 0.0
+    acc = correct / n_scored if n_scored else 0.0
 
     result = {
         "model": MODEL, "mode": args.mode, "benchmark": args.benchmark, "r": r,
         "max_num_seqs": args.max_num_seqs, "n": len(samples),
-        "max_tokens": args.max_tokens,
+        "max_tokens": args.max_tokens, "max_model_len": args.max_model_len,
         "wall_s": round(wall, 3), "req_per_s": round(req_s, 4),
-        "acc": round(acc, 4), "n_answered": n_ok,
+        "acc": round(acc, 4), "n_answered": n_ok, "n_skipped": n_skip,
         "mean_ptid_len": round(sum(kept_counts) / len(kept_counts), 1) if kept_counts else 0,
         "load_s": round(load_s, 1),
         "proc_placeholder_counts": proc_log["counts"][:3],
