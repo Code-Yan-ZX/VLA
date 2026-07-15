@@ -9,13 +9,18 @@ Modes:
   --mode post   (B) POST-merger: hook model._process_image_input, prune each
                       per-image embed (post-split, full multiscale row) to
                       k_i = round(full_i*(1-r)) by L2-norm. (== v2_p1 baseline.)
-  --mode pre    (C) PRE-merger: register_forward_pre_hook on visual.merger AND
-                      each visual.deepstack_merger_list[*]. All 4 mergers consume
-                      the same block-major hidden_states (groups of 4 consecutive
-                      tokens = 1 merge-unit). ONE keep-mask over merge-units,
-                      computed once from the first merger's input (deepstack[0],
-                      layer-8 features) and cached, is applied to all 4 -> the
-                      deepstack cat (qwen3_vl.py L654) never sees a seq mismatch.
+  --mode pre    (C) PRE-merger: monkey-patch visual.merger.forward (AND each
+                      visual.deepstack_merger_list[*].forward for qwen3vl) to
+                      slice the merger input. A forward_pre_hook canNOT be used:
+                      Qwen2.5-VL's merger class is decorated with vLLM
+                      @support_torch_compile, whose __call__ calls self.forward
+                      directly and bypasses nn.Module forward_pre_hooks; wrapping
+                      .forward is hook-bypass-proof. All mergers consume the same
+                      block-major hidden_states (groups of 4 consecutive tokens =
+                      1 merge-unit). ONE keep-mask over merge-units, computed once
+                      from the first merger's input (deepstack[0], layer-8
+                      features) and cached, is applied to all 4 -> the deepstack
+                      cat (qwen3_vl.py L654) never sees a seq mismatch.
                       _process_image_input is replaced to split by the PRUNED
                       per-image counts (k_units). Processor placeholder patch is
                       IDENTICAL to post-merger (scales by (1-r)).
@@ -32,8 +37,19 @@ import torch
 import vllm
 import dataclasses as _dc
 import vllm.model_executor.models.qwen3_vl as _q3vl_mod
+import vllm.model_executor.models.qwen2_5_vl as _q2vl_mod
 
-MODEL = "Qwen/Qwen3-VL-8B-Instruct"
+# Model-family registry. qwen2vl = Qwen2.5-VL (single native 2x2 merger, NO
+# deepstack); qwen3vl = Qwen3-VL (merger + 3 deepstack mergers). The two
+# mergers are structurally identical (forward(x).view(-1, hidden_size) where
+# hidden_size = ctx * spatial_merge_size**2; consecutive-4 input tokens form
+# one merge-unit in BOTH), so the pre/post SELECTOR logic is shared -- only the
+# hook TARGET SET differs: qwen2vl hooks visual.merger ONLY.
+MODELS = {
+    "qwen3vl": "Qwen/Qwen3-VL-8B-Instruct",
+    "qwen2vl": "Qwen/Qwen2.5-VL-7B-Instruct",
+}
+MODEL = MODELS["qwen3vl"]   # default; overridden in main() per --model-family/--model
 
 # --------------------------------------------------------------------------- #
 # Data + scoring (inlined from src/serve_bench.py, identical to v2_p1_runner).
@@ -235,7 +251,11 @@ def _score_units(feats, selector: str):
 
 def parse_args():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--mode", required=True, choices=["none", "post", "pre"])
+    # --mode/--benchmark/--subset are required for a real run but NOT for
+    # --dry-check (which validates hook setup on dummy modules without a GPU).
+    # main() enforces their presence when not dry-checking.
+    ap.add_argument("--mode", required=False, default=None,
+                    choices=["none", "post", "pre"])
     ap.add_argument("--r", type=float, default=0.0,
                     help="prune ratio; k_i = round(full_i*(1-r)). "
                          "{0.5,0.75,0.875} -> keep {50,25,12.5}% of merge-units.")
@@ -243,9 +263,9 @@ def parse_args():
     ap.add_argument("--max-model-len", type=int, default=32768,
                     help="vLLM max_model_len. Raise for huge-image benchmarks "
                          "(DocVQA documents); baseline was hardcoded 8192.")
-    ap.add_argument("--benchmark", required=True,
+    ap.add_argument("--benchmark", required=False, default=None,
                     choices=["gqa", "textvqa", "docvqa", "mme", "mmbench", "scienceqa"])
-    ap.add_argument("--subset", required=True)
+    ap.add_argument("--subset", required=False, default=None)
     ap.add_argument("--n", type=int, default=200)
     ap.add_argument("--max-tokens", type=int, default=32)
     ap.add_argument("--selector", default="l2", choices=["l2", "attn"],
@@ -260,17 +280,52 @@ def parse_args():
     ap.add_argument("--seed", type=int, default=0,
                     help="vLLM/torch RNG seed (0 = default). For repeat runs; at "
                          "temp=0 variance comes from GPU-kernel non-determinism.")
-    ap.add_argument("--out", required=True)
+    ap.add_argument("--model-family", default="qwen3vl",
+                    choices=["qwen3vl", "qwen2vl"],
+                    help="Architecture family. qwen3vl (DEFAULT) hooks "
+                         "visual.merger + visual.deepstack_merger_list (current "
+                         "behavior, bit-identical). qwen2vl hooks visual.merger "
+                         "ONLY -- Qwen2.5-VL has no deepstack mergers.")
+    ap.add_argument("--model", default=None,
+                    help="HF model id override. If given, family is auto-detected "
+                         "from the id (Qwen2* -> qwen2vl, else qwen3vl), overriding "
+                         "--model-family. Default = MODELS[family].")
+    ap.add_argument("--dry-check", action="store_true",
+                    help="No-GPU path: import-check + construct hook setup on a "
+                         "dummy model object for the chosen family, then exit. "
+                         "Catches syntax/logic errors without loading vLLM/touching "
+                         "a GPU. Use while the model is still downloading.")
+    ap.add_argument("--out", required=False, default=None,
+                    help="Output JSON path (required unless --dry-check).")
     return ap.parse_args()
 
 
 # --------------------------------------------------------------------------- #
-# Processor placeholder patch (IDENTICAL for post and pre): scale each image's
-# placeholder list by (1-r). The real placeholder path in vLLM 0.19 is
-# Qwen3VLMultiModalProcessor._get_prompt_updates -> get_image_replacement_qwen3vl.
+# Processor placeholder patch (IDENTICAL for post and pre, IDENTICAL across
+# families): scale each image's placeholder list by (1-r). Both families define
+# _get_prompt_updates on their own processor class returning PromptUpdate
+# objects with .modality and a .replacement(item_idx)->list callable, so the
+# wrapper is generic -- only the ProcCls differs.
+#   qwen3vl: Qwen3VLMultiModalProcessor._get_prompt_updates
+#   qwen2vl: Qwen2_5_VLMultiModalProcessor._get_prompt_updates
 # --------------------------------------------------------------------------- #
-def patch_processor(r: float):
-    ProcCls = _q3vl_mod.Qwen3VLMultiModalProcessor
+def detect_family(model_id: str) -> str:
+    """Auto-detect family from HF model id. Qwen2/Qwen2.5-VL -> qwen2vl;
+    everything else (incl. Qwen3-VL) -> qwen3vl."""
+    mid = model_id.lower()
+    if "qwen2" in mid:          # qwen2-vl / qwen2.5-vl / qwen2_5_vl
+        return "qwen2vl"
+    return "qwen3vl"
+
+
+def _proc_class(family: str):
+    """The multimodal processor class carrying _get_prompt_updates for a family."""
+    return (_q2vl_mod.Qwen2_5_VLMultiModalProcessor if family == "qwen2vl"
+            else _q3vl_mod.Qwen3VLMultiModalProcessor)
+
+
+def patch_processor(r: float, family: str = "qwen3vl"):
+    ProcCls = _proc_class(family)
     if getattr(ProcCls._get_prompt_updates, "_vtc_patched", False):
         ProcCls._get_prompt_updates = ProcCls._get_prompt_updates._vtc_orig
     _orig = ProcCls._get_prompt_updates
@@ -355,15 +410,24 @@ class PreMergerPruner:
         if len(self.diag["nk"]) < 8:
             self.diag["nk"].append((self.full_units[0], self.k_units[0]))
 
-    def merger_prehook(self, module, args):
-        """Slices the merger's input hidden_states to the kept merge-units."""
+    def slice_input(self, hs, module):
+        """Return the kept (pruned) merger input hidden_states for one call.
+
+        Wrapped directly onto each merger's ``forward`` (see
+        ``_wrap_merger_forward``) INSTEAD OF ``register_forward_pre_hook``:
+        Qwen2.5-VL's ``Qwen2_5_VisionPatchMerger`` is decorated with vLLM's
+        ``@support_torch_compile``, whose custom ``__call__`` calls
+        ``self.forward(...)`` directly and NEVER runs ``nn.Module``
+        ``forward_pre_hooks`` -- the root cause of the qwen2vl
+        hook-not-firing bug (Qwen3-VL's merger is a plain nn.Module, so hooks
+        fired there). Wrapping ``.forward`` is hook-bypass-proof and
+        numerically identical for both families. ``hs`` is [seq, 1, ctx]."""
         self.diag["merger_calls"] += 1
         tag = getattr(module, "_premerger_tag", "?")
         self.diag["per_tag_calls"][tag] = \
             self.diag["per_tag_calls"].get(tag, 0) + 1
         if self.r == 0.0:
-            return None
-        hs = args[0]                                   # [seq, 1, ctx]
+            return hs
         if self._mask is None:
             seq = hs.shape[0]
             ctx = hs.shape[-1]
@@ -379,15 +443,54 @@ class PreMergerPruner:
                 keep[off + idx] = True
                 off += f
             # expand unit-mask -> token mask (contiguous 4-token blocks)
-            tok_mask = keep.unsqueeze(-1).expand(-1, self.unit).reshape(-1)
-            self._mask = tok_mask
+            self._mask = keep.unsqueeze(-1).expand(-1, self.unit).reshape(-1)
             self.diag["mask_computed_at"] = tag
             self.diag["mask_compute_count"] += 1
-        kept = hs[self._mask]                          # [num_kept, 1, ctx]
-        return (kept,)
+        return hs[self._mask]                          # [num_kept, 1, ctx]
 
 
-def setup_pre_merger(model, r: float, selector: str = "l2"):
+def _wrap_merger_forward(merger, pruner: "PreMergerPruner"):
+    """Monkey-patch ``merger.forward`` to slice its input via ``pruner`` BEFORE
+    the native 2x2 merge. Used INSTEAD of ``register_forward_pre_hook``:
+    ``Qwen2_5_VisionPatchMerger`` is decorated with ``@support_torch_compile``,
+    whose custom ``__call__`` (a) bypasses ``nn.Module`` forward_pre_hooks and
+    (b) when ``compile_mm_encoder`` is on, dispatches to the captured aot graph
+    and never reaches ``self.forward``. Two measures make the wrap actually run:
+      1. ``merger.forward = _wrapped`` -- the eager branch of the decorated
+         ``__call__`` is ``return self.forward(*args, **kwargs)``, which hits
+         our wrap.
+      2. ``merger.do_not_compile = True`` -- forces the decorated ``__call__``
+         to ALWAYS take that eager branch (never the compiled-graph branch), so
+         pruning runs on every call. Only set for decorated mergers (Qwen3-VL's
+         merger is a plain nn.Module with no such attr -> guarded out).
+    Numerically identical for both families. Returns the original forward for
+    potential restoration."""
+    orig_forward = merger.forward
+
+    def _wrapped(*args, _orig=orig_forward, _m=merger, **kwargs):
+        import traceback
+        hs = args[0]                                   # [seq, 1, ctx]
+        kept = pruner.slice_input(hs, _m)
+        out = _orig(kept, *args[1:], **kwargs)
+        print(f"[DIAG_wrap] tag={getattr(_m, '_premerger_tag', '?')} "
+              f"hs={tuple(hs.shape)} kept={tuple(kept.shape)} "
+              f"out={tuple(out.shape)} n={pruner.diag['merger_calls']} "
+              f"do_not_compile={getattr(_m, 'do_not_compile', 'NA')} "
+              f"id_merger={id(_m)} id_self_forward={id(_m.forward)}",
+              file=sys.stderr, flush=True)
+        if not getattr(_m, "_vtc_stk_done", False):
+            for fr in traceback.format_stack()[-6:-1]:
+                print("    " + fr.strip().replace("\n", " "), file=sys.stderr, flush=True)
+            _m._vtc_stk_done = True
+        return out
+
+    merger.forward = _wrapped
+    if hasattr(merger, "do_not_compile"):
+        merger.do_not_compile = True
+    return orig_forward
+
+
+def setup_pre_merger(model, r: float, selector: str = "l2", family: str = "qwen3vl"):
     visual = model.visual
     sm = visual.spatial_merge_size
     pruner = PreMergerPruner(r, sm, selector)
@@ -402,16 +505,51 @@ def setup_pre_merger(model, r: float, selector: str = "l2"):
         return None
     handle_v = visual.register_forward_pre_hook(_visual_prehook, with_kwargs=True)
 
-    # (2) merger + deepstack mergers pre_hooks.
+    # (2) merger [+ deepstack mergers for qwen3vl] pre_hooks.
+    #   qwen3vl: hook visual.merger AND each visual.deepstack_merger_list[*] --
+    #     all 4 consume the same block-major hidden_states, so ONE cached mask
+    #     (computed at the first merger's input) applies to all -> the deepstack
+    #     cat never sees a seq mismatch.
+    #   qwen2vl: hook visual.merger ONLY -- Qwen2.5-VL has no deepstack
+    #     (confirmed: Qwen2_5_VisionTransformer defines no deepstack_merger_list).
     handles = [handle_v]
     visual.merger._premerger_tag = "main"
     targets = [visual.merger]
-    for i, m in enumerate(visual.deepstack_merger_list):
-        m._premerger_tag = f"deepstack_{i}"
-        targets.append(m)
+    if family == "qwen3vl":
+        for i, m in enumerate(visual.deepstack_merger_list):
+            m._premerger_tag = f"deepstack_{i}"
+            targets.append(m)
     for m in targets:
-        h = m.register_forward_pre_hook(pruner.merger_prehook)
-        handles.append(h)
+        orig = _wrap_merger_forward(m, pruner)
+        handles.append(orig)
+
+    # ---- TEMP DIAG: wrap visual.forward + dump compiler/merger facts --------
+    _mg = visual.merger
+    try:
+        _cc = visual.vllm_config.compilation_config
+        print(f"[DIAG_cc] compile_mm_encoder={_cc.compile_mm_encoder} "
+              f"cudagraph_mm_encoder={_cc.cudagraph_mm_encoder} mode={_cc.mode}",
+              file=sys.stderr, flush=True)
+    except Exception as _e:
+        print(f"[DIAG_cc] unavailable ({_e})", file=sys.stderr, flush=True)
+    print(f"[DIAG_merger] type={type(_mg).__name__} "
+          f"bases={[b.__name__ for b in type(_mg).__bases__]} "
+          f"do_not_compile={getattr(_mg, 'do_not_compile', 'NA')} "
+          f"forward_name={getattr(_mg.forward, '__name__', '?')} "
+          f"call_owner={type(_mg).__call__.__qualname__}",
+          file=sys.stderr, flush=True)
+    _orig_vf = visual.forward
+
+    def _diag_visual(*args, _ovf=_orig_vf, **kwargs):
+        print(f"[DIAG_visual_in] merger_calls={pruner.diag['merger_calls']}",
+              file=sys.stderr, flush=True)
+        out = _ovf(*args, **kwargs)
+        print(f"[DIAG_visual_out] out={tuple(out.shape)} "
+              f"merger_calls={pruner.diag['merger_calls']}",
+              file=sys.stderr, flush=True)
+        return out
+    visual.forward = _diag_visual
+    # ---- /TEMP DIAG --------------------------------------------------------
 
     # (3) replace _process_image_input: split by PRUNED counts (k_units).
     _orig_pii = model._process_image_input
@@ -428,6 +566,10 @@ def setup_pre_merger(model, r: float, selector: str = "l2"):
             sizes = (grid_thw.prod(-1) // pruner.unit).tolist()
         else:
             sizes = pruner.k_units
+        import sys
+        print(f"[DIAG_pii] type={image_input.get('type')} embeds_dim0={image_embeds.shape[0]} "
+              f"sizes={sizes} k_units={pruner.k_units} merger_calls={pruner.diag.get('merger_calls')} "
+              f"mask_comp={pruner.diag.get('mask_compute_count')}", file=sys.stderr, flush=True)
         return image_embeds.split(sizes)
     model._process_image_input = _patched_pii
 
@@ -435,18 +577,134 @@ def setup_pre_merger(model, r: float, selector: str = "l2"):
 
 
 # --------------------------------------------------------------------------- #
+# No-GPU dry check: validates the family-aware code paths (imports, argparse,
+# processor class selection, hook TARGET SET, cached-mask logic, post prune)
+# on dummy nn.Module objects + synthetic tensors. Does NOT load vLLM or touch a
+# GPU. GPU-dependent and thus UNTESTED here: real vLLM LLM load, the actual
+# merger forward under the hook with real weights, end-to-end chat, and runtime
+# mrope-position correctness (the runner relies on vLLM's placeholder-count-
+# based mrope, identical contract for both families).
+# --------------------------------------------------------------------------- #
+def run_dry_check(family: str):
+    import torch.nn as nn
+
+    class _DummyMerger(nn.Module):
+        def forward(self, x):
+            return x
+
+    class _DummyVisual(nn.Module):
+        def __init__(self, fam):
+            super().__init__()
+            self.spatial_merge_size = 2
+            self.merger = _DummyMerger()
+            if fam == "qwen3vl":
+                self.deepstack_merger_list = nn.ModuleList(
+                    [_DummyMerger() for _ in range(3)])
+
+    class _DummyModel:
+        def __init__(self, fam):
+            self.visual = _DummyVisual(fam)
+            self._process_image_input = lambda ii: tuple()
+
+    print(f"[dry-check] family={family}  model_id={MODELS[family]}")
+    model = _DummyModel(family)
+
+    # (a) processor patch installs on the RIGHT class for this family
+    ProcCls = _proc_class(family)
+    want = (_q2vl_mod.Qwen2_5_VLMultiModalProcessor if family == "qwen2vl"
+            else _q3vl_mod.Qwen3VLMultiModalProcessor)
+    assert ProcCls is want, f"proc class mismatch: {ProcCls} vs {want}"
+    proc_log = patch_processor(0.75, family)
+    assert getattr(ProcCls._get_prompt_updates, "_vtc_patched", False), "patch not installed"
+    # restore so repeated dry-checks across families stay clean
+    ProcCls._get_prompt_updates = ProcCls._get_prompt_updates._vtc_orig
+    print(f"[dry-check]   OK processor patch on {ProcCls.__name__}")
+
+    # (b) pre-merger hook TARGET SET matches family (deepstack included/omitted)
+    pruner, handles = setup_pre_merger(model, 0.75, "l2", family)
+    n_merger_hooks = len(handles) - 1                 # -1 for the visual.fwd hook
+    expected = 4 if family == "qwen3vl" else 1        # merger + 3 deepstack | merger only
+    assert n_merger_hooks == expected, \
+        f"merger hook count {n_merger_hooks} != expected {expected}"
+    print(f"[dry-check]   OK pre-merger targets: {n_merger_hooks} merger hooks "
+          f"(expected {expected}); deepstack "
+          f"{'INCLUDED' if family == 'qwen3vl' else 'OMITTED (correct for qwen2vl)'}")
+
+    # (c) cached-once-per-pass mask + per-image topk on a synthetic 2-image batch
+    unit = model.visual.spatial_merge_size ** 2        # 4
+    full_units = [8, 4]
+    grid_thw = torch.tensor([[1, 4, 8], [1, 4, 4]])   # prod(-1)//4 = [8, 4]
+    pruner.begin_pass(grid_thw)
+    assert pruner.full_units == full_units, pruner.full_units
+    assert pruner.k_units == [2, 1], pruner.k_units   # round([8,4]*0.25) = [2,1]
+    seq = sum(full_units) * unit                       # 48 pre-merger tokens
+    hs = torch.randn(seq, 1, 768)
+    out = pruner.slice_input(hs, model.visual.merger)
+    kept = out.shape[0]
+    assert kept == sum(pruner.k_units) * unit == 12, kept
+    # fire once more -> mask is cached, count stable, no recompute
+    _ = pruner.slice_input(hs, model.visual.merger)
+    assert pruner.diag["mask_compute_count"] == 1, pruner.diag["mask_compute_count"]
+    print(f"[dry-check]   OK mask logic: {seq} pre-merger toks -> {kept} kept "
+          f"(units {full_units}->{pruner.k_units}); mask computed once/cached")
+
+    # (d) post-merger prune (family-agnostic): wraps _process_image_input
+    model2 = _DummyModel(family)
+    called = {"n": 0}
+    def _fake_orig(ii):
+        called["n"] += 1
+        return (torch.randn(40, 16), torch.randn(20, 16))   # 2 image splits
+    model2._process_image_input = _fake_orig
+    diag = setup_post_merger(model2, 0.75, "l2")
+    out = model2._process_image_input(None)
+    assert called["n"] == 1 and diag["fires"] == 1
+    assert [s.shape[0] for s in out] == [10, 5], \
+        [s.shape[0] for s in out]    # round([40,20]*0.25) = [10,5]
+    print(f"[dry-check]   OK post-merger prune: splits [40,20] -> "
+          f"{[s.shape[0] for s in out]} (r=0.75)")
+
+    print(f"[dry-check] ALL PASS for family={family}")
+
+
+# --------------------------------------------------------------------------- #
 def main():
     args = parse_args()
+
+    # Resolve family + model id. --model (if given) triggers auto-detection and
+    # overrides --model-family; otherwise use --model-family's standard model.
+    if args.model:
+        family = detect_family(args.model)
+        model_id = args.model
+    else:
+        family = args.model_family
+        model_id = MODELS[family]
+
+    # No-GPU dry check: validate imports + hook setup on dummy modules for the
+    # chosen family. Exits before any vLLM/GPU use.
+    if args.dry_check:
+        run_dry_check(family)
+        return
+
+    if args.out is None:
+        raise SystemExit("--out is required when not using --dry-check")
+    # --dry-check skips these (it never loads data/runs a benchmark); a real
+    # run requires all three.
+    missing = [n for n, v in (("--mode", args.mode),
+                              ("--benchmark", args.benchmark),
+                              ("--subset", args.subset)) if not v]
+    if missing:
+        raise SystemExit("required (unless --dry-check): " + ", ".join(missing))
+
     r = args.r
     if args.mode == "none":
         r = 0.0
-    proc_log = patch_processor(r)
+    proc_log = patch_processor(r, family)
 
     from vllm import LLM, SamplingParams
     t0 = time.perf_counter()
     torch.manual_seed(args.seed)
     llm_kwargs = dict(
-        model=MODEL, dtype="bfloat16", tensor_parallel_size=1,
+        model=model_id, dtype="bfloat16", tensor_parallel_size=1,
         gpu_memory_utilization=0.90, max_model_len=args.max_model_len,
         trust_remote_code=False, enforce_eager=True,
         limit_mm_per_prompt={"image": 1},
@@ -468,7 +726,7 @@ def main():
     if args.mode == "post":
         diag = setup_post_merger(model, r, args.selector)
     elif args.mode == "pre":
-        pruner, _handles = setup_pre_merger(model, r, args.selector)
+        pruner, _handles = setup_pre_merger(model, r, args.selector, family)
         diag = pruner.diag
 
     samples = load_subset(args.subset)[:args.n]
@@ -523,7 +781,8 @@ def main():
     acc = correct / n_scored if n_scored else 0.0
 
     result = {
-        "model": MODEL, "mode": args.mode, "benchmark": args.benchmark, "r": r,
+        "model": model_id, "model_family": family,
+        "mode": args.mode, "benchmark": args.benchmark, "r": r,
         "max_num_seqs": args.max_num_seqs, "n": len(samples),
         "max_tokens": args.max_tokens, "max_model_len": args.max_model_len,
         "selector": args.selector, "max_pixels": args.max_pixels,
