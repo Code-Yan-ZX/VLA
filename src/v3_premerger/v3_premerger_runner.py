@@ -442,11 +442,11 @@ class PreMergerPruner:
             self.diag["per_tag_calls"].get(tag, 0) + 1
         if self.r == 0.0:
             return hs
+        seq = hs.shape[0]
+        ctx = hs.shape[-1]
+        num_units = seq // self.unit
         if self._mask is None:
-            # ---- compute per-unit L2 scores + top-k mask (unchanged) ----
-            seq = hs.shape[0]
-            ctx = hs.shape[-1]
-            num_units = seq // self.unit
+            # ---- compute per-unit L2 scores + top-k mask ----
             feats = hs.reshape(num_units, self.unit, ctx)
             scores = _score_units(feats, self.selector)        # [num_units]
             keep = torch.zeros(num_units, dtype=torch.bool,
@@ -458,44 +458,57 @@ class PreMergerPruner:
                 keep[off + idx] = True
                 off += f
             self._mask = keep.unsqueeze(-1).expand(-1, self.unit).reshape(-1)
+            self._vz_scores = scores                 # cached for VisionZip-style
             self.diag["mask_computed_at"] = tag
             self.diag["mask_compute_count"] += 1
-            # ---- VisionZip-style: dominant + context split ----
-            if self.visionzip_style:
-                ctx_out = []  # list of ctx-token tensors per image
+            self.diag["vz_dom"].clear()
+            self.diag["vz_ctx"].clear()
+        # ---- VisionZip-style: dominant + context split ----
+        # Runs on EVERY merger call (not just first): context tokens are
+        # recomputed from the current merger's input features, using the
+        # cached per-unit scores.  All mergers produce the same output size
+        # (sum k_i per image) so torch.cat across mergers works.
+        if self.visionzip_style:
+                dom_out = []  # dominant tokens (top-k_dom units per image)
+                ctx_out = []  # context tokens per image
                 off_img = 0
+                feats_vz = hs.reshape(num_units, self.unit, ctx)
                 for img_i, (f, k) in enumerate(
                         zip(self.full_units, self.k_units)):
                     k_dom = max(1, int(round(k * self.visionzip_dom_ratio)))
                     k_ctx = k - k_dom
+                    s_img = self._vz_scores[off_img:off_img + f]
+                    # dominant: top-k_dom units by score (per-image)
+                    dom_idx = torch.topk(s_img, k_dom).indices.sort().values
+                    _dom_mask = torch.zeros(f, dtype=torch.bool, device=hs.device)
+                    _dom_mask[dom_idx] = True
+                    _dom_tokens = _dom_mask.unsqueeze(-1).expand(-1, self.unit).reshape(-1)
+                    dom_out.append(hs[off_img * self.unit: (off_img + f) * self.unit][_dom_tokens]
+                                   .reshape(k_dom, self.unit, ctx))
+                    # context: merge remaining (f - k_dom) units into k_ctx groups
                     if k_ctx > 0 and f - k_dom > 0:
-                        s_img = scores[off_img:off_img + f]
-                        dom_idx = torch.topk(s_img, k_dom).indices
-                        mask_dom = torch.zeros(f, dtype=torch.bool)
-                        mask_dom[dom_idx] = True
-                        nondom = ~mask_dom           # (f - k_dom) units
-                        avg_feats = feats[off_img:off_img + f][nondom]  # (n, 4, ctx)
-                        # Split nondom units into k_ctx equal-size bins, avg each
-                        n_nondom = avg_feats.shape[0]
+                        _nondom = feats_vz[off_img:off_img + f][~_dom_mask]
+                        n_nd = _nondom.shape[0]
                         ctx_units_list = []
                         for ci in range(k_ctx):
-                            lo = int(ci * n_nondom / k_ctx)
-                            hi = int((ci + 1) * n_nondom / k_ctx)
+                            lo = int(ci * n_nd / k_ctx)
+                            hi = int((ci + 1) * n_nd / k_ctx)
                             ctx_units_list.append(
-                                avg_feats[lo:hi].mean(dim=0, keepdim=True))
-                        ctx_out.append(torch.cat(ctx_units_list, dim=0))  # (k_ctx, 4, ctx)
+                                _nondom[lo:hi].mean(dim=0, keepdim=True))
+                        ctx_out.append(torch.cat(ctx_units_list, dim=0))
                     else:
                         ctx_out.append(torch.empty(0, self.unit, ctx,
                                                    device=hs.device, dtype=hs.dtype))
-                    self.diag["vz_dom"].append(k_dom)
-                    self.diag["vz_ctx"].append(k_ctx)
+                    if self.diag["merger_calls"] <= len(self.full_units):
+                        self.diag["vz_dom"].append(k_dom)
+                        self.diag["vz_ctx"].append(k_ctx)
                     off_img += f
-                # Build the combined output: dominant (via mask) + context
-                dom = hs[self._mask].reshape(-1, self.unit, ctx)  # kept units
-                parts = [dom] + ctx_out
+                dom_all = torch.cat(dom_out, dim=0) if dom_out else torch.empty(0, self.unit, ctx, device=hs.device, dtype=hs.dtype)
+                parts = [dom_all] + ctx_out
                 parts = [p for p in parts if p.shape[0] > 0]
-                combined = torch.cat(parts, dim=0)  # (k_dom_total + k_ctx_total, 4, ctx)
-                return combined.reshape(-1, 1, ctx)    # (total, 1, ctx)
+                combined = torch.cat(parts, dim=0)
+                combined_out = combined.reshape(-1, 1, ctx)
+                return combined_out
         # ---- standard pre-merger (dominant-only) ----
         return hs[self._mask]                           # [num_kept, 1, ctx]
 
