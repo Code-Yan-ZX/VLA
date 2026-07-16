@@ -33,6 +33,7 @@ from __future__ import annotations
 import os, sys, time, json, argparse
 
 os.environ.setdefault("VLLM_ENABLE_V1_MULTIPROCESSING", "0")
+import functools
 import torch
 import vllm
 import dataclasses as _dc
@@ -498,6 +499,120 @@ def _wrap_merger_forward(merger, pruner: "PreMergerPruner"):
     return orig_forward
 
 
+# --------------------------------------------------------------------------- #
+# Qwen2.5-VL pre-merger visual.forward patch: skip reverse_indices after merger.
+# Qwen2.5-VL's visual.forward applies window-attention permutation before the
+# merger and restores spatial order via reverse_indices after the merger.
+# In pre-merger mode the merger input is pruned (by _wrap_merger_forward) so
+# the output has k_units < full_units tokens.  reverse_indices maps k_units
+# back to full_units — a shape mismatch that crashes (split_with_sizes).
+# This patch is a LINE-BY-LINE copy of vLLM 0.19's
+# Qwen2_5_VLVisionTransformer.forward (qwen2_5_vl.py:777–877) with ONE
+# change: the reverse_indices restoration is SKIPPED, so the output stays
+# compressed.
+# --------------------------------------------------------------------------- #
+def _install_qwen2vl_pre_visual_forward(visual, pruner):
+    """Replace Qwen2.5-VL visual.forward to skip reverse_indices after merger.
+
+    IMPORTANT: we assign ``visual.forward = patched_forward`` as an INSTANCE
+    attribute.  nn.Module._call_impl accesses ``self.forward`` which for
+    instance attributes returns the bare function WITHOUT Python descriptor
+    binding — so ``self`` is NOT passed implicitly.  We capture ``visual``
+    in the closure instead of relying on ``self``.
+    """
+    import torch
+    import torch.nn.functional as F
+    from vllm.model_executor.models.utils import cast_overflow_tensors
+
+    _visual = visual
+
+    def patched_forward(hidden_states, grid_thw):
+        # ── vLLM 0.19 qwen2_5_vl.py Qwen2_5_VLVisionTransformer.forward ──
+        seq_len, _ = hidden_states.size()
+        rotary_pos_emb_cos: list = []
+        rotary_pos_emb_sin: list = []
+        window_index: list = []
+        cu_window_seqlens: list = [torch.tensor([0], dtype=torch.int32)]
+        cu_seqlens: list = []
+
+        hidden_states = hidden_states.to(device=_visual.device, dtype=_visual.dtype)
+        hidden_states = _visual.patch_embed(hidden_states)
+
+        window_index_id = 0
+        cu_window_seqlens_last = 0
+        for t, h, w in grid_thw:
+            t, h, w = int(t), int(h), int(w)
+            (cos_thw, sin_thw, window_index_thw,
+             cu_seqlens_window_thw, cu_seqlens_thw,
+             ) = _visual.get_rope_by_thw(t, h, w)
+            window_index.append(window_index_thw + window_index_id)
+            window_index_id += t * (h // _visual.spatial_merge_size) * (
+                w // _visual.spatial_merge_size)
+            cu_seqlens_window_thw = cu_seqlens_window_thw + cu_window_seqlens_last
+            cu_window_seqlens_last = cu_seqlens_window_thw[-1]
+            cu_window_seqlens.append(cu_seqlens_window_thw)
+            rotary_pos_emb_cos.append(cos_thw)
+            rotary_pos_emb_sin.append(sin_thw)
+            cu_seqlens.append(cu_seqlens_thw)
+
+        rotary_pos_emb_cos = torch.cat(rotary_pos_emb_cos)
+        rotary_pos_emb_sin = torch.cat(rotary_pos_emb_sin)
+        window_index = torch.cat(window_index)
+        reverse_indices = _visual.invert_permutation(window_index)
+        cu_window_seqlens = torch.cat(cu_window_seqlens)
+        cu_window_seqlens = torch.unique_consecutive(cu_window_seqlens)
+        cu_seqlens = torch.cat(cu_seqlens)
+        cu_seqlens = torch.cumsum(cu_seqlens, dim=0, dtype=torch.int32)
+        cu_seqlens = F.pad(cu_seqlens, (1, 0), "constant", 0)
+        max_seqlen_full = _visual.compute_attn_mask_seqlen(cu_seqlens)
+        max_seqlen_window = _visual.compute_attn_mask_seqlen(cu_window_seqlens)
+        cu_seqlens = cu_seqlens.to(device=_visual.device, non_blocking=True)
+        cu_window_seqlens = cu_window_seqlens.to(device=_visual.device,
+                                                  non_blocking=True)
+        rotary_pos_emb_cos = rotary_pos_emb_cos.to(device=_visual.device,
+                                                   non_blocking=True)
+        rotary_pos_emb_sin = rotary_pos_emb_sin.to(device=_visual.device,
+                                                   non_blocking=True)
+        window_index = window_index.to(device=hidden_states.device,
+                                       non_blocking=True)
+        reverse_indices = reverse_indices.to(device=hidden_states.device,
+                                             non_blocking=True)
+
+        hidden_states = hidden_states.reshape(
+            seq_len // _visual.spatial_merge_unit, _visual.spatial_merge_unit, -1)
+        hidden_states = hidden_states[window_index, :, :]
+        hidden_states = hidden_states.reshape(seq_len, -1)
+        hidden_states = hidden_states.unsqueeze(1)
+
+        for layer_num, blk in enumerate(_visual.blocks):
+            if layer_num in _visual.fullatt_block_indexes:
+                cu_seqlens_now = cu_seqlens
+                max_seqlen_now = max_seqlen_full
+            else:
+                cu_seqlens_now = cu_window_seqlens
+                max_seqlen_now = max_seqlen_window
+            hidden_states = blk(hidden_states,
+                                cu_seqlens=cu_seqlens_now,
+                                rotary_pos_emb_cos=rotary_pos_emb_cos,
+                                rotary_pos_emb_sin=rotary_pos_emb_sin,
+                                max_seqlen=max_seqlen_now)
+
+        if hidden_states.dtype == torch.float16:
+            hidden_states = cast_overflow_tensors(hidden_states)
+
+        # merger → wrapped forward prunes input → compressed output
+        hidden_states = _visual.merger(hidden_states)
+        # ── PATCH: SKIP reverse_indices restoration ──
+        # Original (line 877): hidden_states = hidden_states[reverse_indices, :]
+        # This would restore full_units from compressed k_units → shape
+        # mismatch crash.  Without it, output stays compressed.
+        return hidden_states
+
+    patched_forward._premerger_original = visual.forward
+    visual.forward = patched_forward
+    return patched_forward._premerger_original
+
+
 def setup_pre_merger(model, r: float, selector: str = "l2", family: str = "qwen3vl"):
     visual = model.visual
     sm = visual.spatial_merge_size
@@ -558,6 +673,12 @@ def setup_pre_merger(model, r: float, selector: str = "l2", family: str = "qwen3
         return out
     visual.forward = _diag_visual
     # ---- /TEMP DIAG --------------------------------------------------------
+
+    # (2b) Qwen2.5-VL: replace diagnostic wrapper with reverse_indices-skip
+    # patch.  Without this, merger output gets inflated from k_units back to
+    # full_units by reverse_indices → split_with_sizes crash.
+    if family == "qwen2vl":
+        _install_qwen2vl_pre_visual_forward(visual, pruner)
 
     # (3) replace _process_image_input: split by PRUNED counts (k_units).
     _orig_pii = model._process_image_input
