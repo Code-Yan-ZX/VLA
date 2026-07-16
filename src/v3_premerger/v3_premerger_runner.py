@@ -263,6 +263,14 @@ def parse_args():
     ap.add_argument("--max-model-len", type=int, default=32768,
                     help="vLLM max_model_len. Raise for huge-image benchmarks "
                          "(DocVQA documents); baseline was hardcoded 8192.")
+    ap.add_argument("--max-num-batched-tokens", type=int, default=None,
+                    help="vLLM max_num_batched_tokens. In vLLM 0.19 V1 this ALSO "
+                         "gates the multimodal encoder cache size (scheduler.py: "
+                         "encoder_cache_size = max_num_batched_tokens). DocVQA huge "
+                         "images produce image-item embed_length up to ~16k tokens; "
+                         "vLLM default 8192 -> ValueError 'exceeds pre-allocated "
+                         "encoder cache size 8192' + cascading OOM. Raise to >=32768 "
+                         "for DocVQA post-merger cells. None = vLLM default.")
     ap.add_argument("--benchmark", required=False, default=None,
                     choices=["gqa", "textvqa", "docvqa", "mme", "mmbench", "scienceqa"])
     ap.add_argument("--subset", required=False, default=None)
@@ -718,6 +726,12 @@ def main():
     # pre-merger tokens ~= max_pixels / (patch=16)^2 ; 1.5M px -> ~5859 tokens.
     if args.max_pixels and args.max_pixels > 0:
         llm_kwargs["mm_processor_kwargs"] = {"max_pixels": args.max_pixels}
+    # max_num_batched_tokens also sets the V1 multimodal encoder cache budget
+    # (scheduler.py: encoder_cache_size = max_num_batched_tokens). Required for
+    # DocVQA post-merger: a single huge document image-item embed_length (~16k)
+    # exceeds vLLM's default 8192 -> ValueError + cascading OOM/skip-all.
+    if args.max_num_batched_tokens is not None:
+        llm_kwargs["max_num_batched_tokens"] = args.max_num_batched_tokens
     llm = LLM(**llm_kwargs)
     load_s = time.perf_counter() - t0
     model = llm.llm_engine.model_executor.driver_worker.model_runner.model
@@ -785,6 +799,7 @@ def main():
         "mode": args.mode, "benchmark": args.benchmark, "r": r,
         "max_num_seqs": args.max_num_seqs, "n": len(samples),
         "max_tokens": args.max_tokens, "max_model_len": args.max_model_len,
+        "max_num_batched_tokens": args.max_num_batched_tokens,
         "selector": args.selector, "max_pixels": args.max_pixels,
         "seed": args.seed,
         "wall_s": round(wall, 3), "req_per_s": round(req_s, 4),
