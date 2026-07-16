@@ -281,6 +281,17 @@ def parse_args():
                     help="l2 = L2-norm selector (default, original behavior); "
                          "attn = global-centroid-distance saliency proxy -- a "
                          "DIFFERENT selector for stage-effect robustness.")
+    ap.add_argument("--visionzip-style", action="store_true",
+                    help="Dominant + context token paradigm (VisionZip proxy). "
+                         "Instead of pruning all non-dominant units, merge them "
+                         "into context tokens via grouped averaging. K_dom + K_ctx "
+                         "= K (iso-token with vanilla pre-merger). Faithful to "
+                         "VisionZip's dominant/context split but uses L2 scores "
+                         "as attention proxy (no FlashAttention disable needed).")
+    ap.add_argument("--visionzip-dom-ratio", type=float, default=0.7,
+                    help="Fraction of K allocated to dominant tokens under "
+                         "--visionzip-style (default 0.7 -> 70% dominant, "
+                         "30% context).")
     ap.add_argument("--max-pixels", type=int, default=0,
                     help="if >0, pass max_pixels to the image processor to cap "
                          "image resolution (pre-merger tokens ~= max_pixels/256). "
@@ -395,17 +406,21 @@ def setup_post_merger(model, r: float, selector: str = "l2"):
 # grid_thw) + replace _process_image_input to split by pruned counts.
 # --------------------------------------------------------------------------- #
 class PreMergerPruner:
-    def __init__(self, r: float, spatial_merge_size: int, selector: str = "l2"):
+    def __init__(self, r: float, spatial_merge_size: int, selector: str = "l2",
+                 visionzip_style: bool = False, visionzip_dom_ratio: float = 0.7):
         self.r = r
         self.sm = spatial_merge_size
         self.unit = spatial_merge_size ** 2          # 4
         self.selector = selector
+        self.visionzip_style = visionzip_style
+        self.visionzip_dom_ratio = visionzip_dom_ratio
         self.full_units = None                        # list[int] per image
         self.k_units = None                           # list[int] per image
         self._mask = None                             # cached token mask
         self.diag = {"visual_calls": 0, "merger_calls": 0,
                      "mask_computed_at": None, "mask_compute_count": 0,
-                     "per_tag_calls": {}, "nk": [], "selector": selector}
+                     "per_tag_calls": {}, "nk": [], "selector": selector,
+                     "vz_dom": [], "vz_ctx": []}
 
     def begin_pass(self, grid_thw):
         """visual.forward pre_hook: capture grid_thw, plan per-image counts."""
@@ -420,17 +435,7 @@ class PreMergerPruner:
             self.diag["nk"].append((self.full_units[0], self.k_units[0]))
 
     def slice_input(self, hs, module):
-        """Return the kept (pruned) merger input hidden_states for one call.
-
-        Wrapped directly onto each merger's ``forward`` (see
-        ``_wrap_merger_forward``) INSTEAD OF ``register_forward_pre_hook``:
-        Qwen2.5-VL's ``Qwen2_5_VisionPatchMerger`` is decorated with vLLM's
-        ``@support_torch_compile``, whose custom ``__call__`` calls
-        ``self.forward(...)`` directly and NEVER runs ``nn.Module``
-        ``forward_pre_hooks`` -- the root cause of the qwen2vl
-        hook-not-firing bug (Qwen3-VL's merger is a plain nn.Module, so hooks
-        fired there). Wrapping ``.forward`` is hook-bypass-proof and
-        numerically identical for both families. ``hs`` is [seq, 1, ctx]."""
+        """Return the kept (pruned) merger input hidden_states for one call."""
         self.diag["merger_calls"] += 1
         tag = getattr(module, "_premerger_tag", "?")
         self.diag["per_tag_calls"][tag] = \
@@ -438,6 +443,7 @@ class PreMergerPruner:
         if self.r == 0.0:
             return hs
         if self._mask is None:
+            # ---- compute per-unit L2 scores + top-k mask (unchanged) ----
             seq = hs.shape[0]
             ctx = hs.shape[-1]
             num_units = seq // self.unit
@@ -451,11 +457,47 @@ class PreMergerPruner:
                 idx = torch.topk(s_i, k).indices
                 keep[off + idx] = True
                 off += f
-            # expand unit-mask -> token mask (contiguous 4-token blocks)
             self._mask = keep.unsqueeze(-1).expand(-1, self.unit).reshape(-1)
             self.diag["mask_computed_at"] = tag
             self.diag["mask_compute_count"] += 1
-        return hs[self._mask]                          # [num_kept, 1, ctx]
+            # ---- VisionZip-style: dominant + context split ----
+            if self.visionzip_style:
+                ctx_out = []  # list of ctx-token tensors per image
+                off_img = 0
+                for img_i, (f, k) in enumerate(
+                        zip(self.full_units, self.k_units)):
+                    k_dom = max(1, int(round(k * self.visionzip_dom_ratio)))
+                    k_ctx = k - k_dom
+                    if k_ctx > 0 and f - k_dom > 0:
+                        s_img = scores[off_img:off_img + f]
+                        dom_idx = torch.topk(s_img, k_dom).indices
+                        mask_dom = torch.zeros(f, dtype=torch.bool)
+                        mask_dom[dom_idx] = True
+                        nondom = ~mask_dom           # (f - k_dom) units
+                        avg_feats = feats[off_img:off_img + f][nondom]  # (n, 4, ctx)
+                        # Split nondom units into k_ctx equal-size bins, avg each
+                        n_nondom = avg_feats.shape[0]
+                        ctx_units_list = []
+                        for ci in range(k_ctx):
+                            lo = int(ci * n_nondom / k_ctx)
+                            hi = int((ci + 1) * n_nondom / k_ctx)
+                            ctx_units_list.append(
+                                avg_feats[lo:hi].mean(dim=0, keepdim=True))
+                        ctx_out.append(torch.cat(ctx_units_list, dim=0))  # (k_ctx, 4, ctx)
+                    else:
+                        ctx_out.append(torch.empty(0, self.unit, ctx,
+                                                   device=hs.device, dtype=hs.dtype))
+                    self.diag["vz_dom"].append(k_dom)
+                    self.diag["vz_ctx"].append(k_ctx)
+                    off_img += f
+                # Build the combined output: dominant (via mask) + context
+                dom = hs[self._mask].reshape(-1, self.unit, ctx)  # kept units
+                parts = [dom] + ctx_out
+                parts = [p for p in parts if p.shape[0] > 0]
+                combined = torch.cat(parts, dim=0)  # (k_dom_total + k_ctx_total, 4, ctx)
+                return combined.reshape(-1, 1, ctx)    # (total, 1, ctx)
+        # ---- standard pre-merger (dominant-only) ----
+        return hs[self._mask]                           # [num_kept, 1, ctx]
 
 
 def _wrap_merger_forward(merger, pruner: "PreMergerPruner"):
@@ -613,10 +655,11 @@ def _install_qwen2vl_pre_visual_forward(visual, pruner):
     return patched_forward._premerger_original
 
 
-def setup_pre_merger(model, r: float, selector: str = "l2", family: str = "qwen3vl"):
+def setup_pre_merger(model, r: float, selector: str = "l2", family: str = "qwen3vl",
+                      visionzip_style: bool = False, visionzip_dom_ratio: float = 0.7):
     visual = model.visual
     sm = visual.spatial_merge_size
-    pruner = PreMergerPruner(r, sm, selector)
+    pruner = PreMergerPruner(r, sm, selector, visionzip_style, visionzip_dom_ratio)
 
     # (1) visual.forward pre_hook: capture grid_thw -> plan k_units.
     def _visual_prehook(module, args, kwargs):
@@ -861,7 +904,9 @@ def main():
     if args.mode == "post":
         diag = setup_post_merger(model, r, args.selector)
     elif args.mode == "pre":
-        pruner, _handles = setup_pre_merger(model, r, args.selector, family)
+        pruner, _handles = setup_pre_merger(model, r, args.selector, family,
+                                             visionzip_style=args.visionzip_style,
+                                             visionzip_dom_ratio=args.visionzip_dom_ratio)
         diag = pruner.diag
 
     samples = load_subset(args.subset)[:args.n]
@@ -921,6 +966,8 @@ def main():
         "max_num_seqs": args.max_num_seqs, "n": len(samples),
         "max_tokens": args.max_tokens, "max_model_len": args.max_model_len,
         "max_num_batched_tokens": args.max_num_batched_tokens,
+        "visionzip_style": args.visionzip_style,
+        "visionzip_dom_ratio": args.visionzip_dom_ratio,
         "selector": args.selector, "max_pixels": args.max_pixels,
         "seed": args.seed,
         "wall_s": round(wall, 3), "req_per_s": round(req_s, 4),
