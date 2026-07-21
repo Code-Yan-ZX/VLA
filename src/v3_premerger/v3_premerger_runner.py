@@ -961,14 +961,22 @@ def main():
     n_ok = 0
     correct = 0
     kept_counts = []
+    per_sample = []
     for s, o in zip(samples, outs):
         if o is None:
+            per_sample.append({"id": s.id, "correct": 0, "skipped": True,
+                               "answer": "", "gt": s.gt, "question": s.question})
             continue
         ans = o.outputs[0].text.strip()
         if ans:
             n_ok += 1
-        correct += scorer(ans, s.gt, s.extra.get("choices"))
-        kept_counts.append(len(o.prompt_token_ids))
+        c = scorer(ans, s.gt, s.extra.get("choices"))
+        correct += c
+        ptid_len = len(o.prompt_token_ids)
+        kept_counts.append(ptid_len)
+        per_sample.append({"id": s.id, "correct": int(c), "skipped": False,
+                           "answer": ans, "gt": s.gt, "question": s.question,
+                           "prompt_token_ids": ptid_len})
     n_scored = len(samples) - n_skip
     req_s = n_scored / wall if wall > 0 else 0.0
     acc = correct / n_scored if n_scored else 0.0
@@ -990,6 +998,7 @@ def main():
         "proc_placeholder_counts": proc_log["counts"][:3],
         "diag": diag,
         "vllm": vllm.__version__,
+        "per_sample": per_sample,
     }
     os.makedirs(os.path.dirname(args.out), exist_ok=True)
     with open(args.out, "w") as f:
