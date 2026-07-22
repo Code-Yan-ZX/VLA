@@ -1,22 +1,25 @@
 # STATE.md — 当前项目状态（主窗口维护，保持 ≤30 行）
 
 > 项目：VLM 视觉 token 压缩 · 目标 Q1/Q2 SCI · 详见 ORCHESTRATION.md
-> 最近更新：2026-07-21 · 创新型论文主线 pre-merger pruning · **spine 锁定=发现主导；证据整合就绪（`drafts/v3_evidence.md`）；待方向分析（新 agent）**
+> 最近更新：2026-07-22 · **SOTA 决胜小矩阵完成**：ChartQA/OCRBench n=200 建成+全跑（21 cell 零失败）、VisionZip 官方 audit(不可跑)、三方法 audit、`drafts/v3_sota_matrix.md` FINAL
 
 ## ★ 当前主线：创新型论文 — V3 pre-merger pruning ✅ GO（2026-07-14）
-方向：Qwen3-VL 原生 2×2 merger **之前**剪 token（prune merger input, preserve merger）—— 正交于全部失败尝试。Gate 全过：① novelty=GO（GitHub 源码核实 VisionZip 实为 POST-merger → pre-merger cell 空）② feasibility=GO（hook merger+3 deepstack, 不 fork）③ GPU go/no-go=**GO 强结果**。
-**✅ go/no-go**（n=200 Qwen3-VL-8B, iso-token pre vs post, L2 text-agnostic selector 控变量）：**TextVQA pre 大胜** keep{50,25,12.5}%→ptid{387,203,111} pre{0.75,0.70,0.62} vs post{0.51,0.26,0.18}，Δ{+24,+44,+44}pp（深度保 75% baseline vs post 21%，3.5×）。**GQA(object) post 胜**（Δ−2.5~−6pp）。throughput pre≈post（merger 仅 10% TTFT，如 F2）。**机制**：merger 是 lossy 聚合破坏 text 高频→post 灾难掉点，pre(raw patch)保 text；object 上 merger helpful→post 胜 = **workload-conditional stage 效应**（比 uniform win 更强）。代码 `src/v3_premerger/`。
-**📌 SPINE（user 定 A，发现主导）**：headline = lossy-merger 机制 + workload-conditional stage law（pre/post 优劣随 text-density 单调）+ **post-merger SOTA（VisionZip 类）在 text-dense 深压灾难崩溃（DocVQA 0.77→0.39、TextVQA→0.255）、pre-merger 是鲁棒修复**（field-relevant 强发现，戳现有方法软肋）。方法 = pre-merger pruning（已核实空 cell）+ adaptive stage selection（ptid 廉价信号、workload 级）作实用节；router +2pp 如实报不夸大。
-**✅ Task4 adaptive router（2026-07-21 完成）**：离线全梯度 4 bench×pre/post per-sample（id 对齐已核、oracle 复现）。pooled(N=774)：always-pre 0.634 / always-post 0.452 / oracle 0.702 / 廉价 router(ptid≥94) 0.655（胜两固定、距 oracle 4.65pp）。**分解**：workload 级仅占 oracle 增益 27%、sample 级 73%（query 依赖，ptid 等图像级廉价信号够不到，需 query-aware 重 router）；OCR 关键词路由更差(0.539)，有效信号=ptid。→ router 当 headline 太弱(+2pp)故 spine 转发现主导。代码 `router_probe_full.py`(commit 3cc3f31)。per-bench：DocVQA pre0.725/post0.390；TextVQA 0.695/0.255；MME(n174) 0.822/0.833≈tie；GQA 0.320/0.380。
-**🔧 Task1 DocVQA 修复 ✅(2026-07-16)**：crash 根因 vLLM0.19 `encoder_cache_size = max_num_batched_tokens` 默认 8192→大图崩。Runner +`--max-num-batched-tokens`(默认 None,DocVQA=32768)。clean：A=0.78(ptid4154)；@25% B=0.39/C=0.725=**+33.5pp**；@12.5% B=0.135/C=0.61=**+47.5pp**。越深压 pre 优势越大。
-**⚠️ 跨架构(Qwen2.5-VL-7B)搁置**：pre crash 已修但 mrope 错位仍挡 B+C（grid_thw 未同步 prune→位置编码错位）。预估 1-2 GPU·h 不值，搁置。
-**▶ 下一步**：① ✅ VisionZip-style 补 DocVQA（=0.390 iso-token ptid1054，与 post dom-only 同→崩）② ✅ 误差棒（TextVQA n500 +46.6pp/16.7σ；DocVQA n200 +33.5pp/7.2σ；docvqa_500 子集不存在，n200 已足）③ ✅ stage-law 图+证据整合→`drafts/v3_evidence.md`+`drafts/figures/stage_law.png`。**④ 方向分析：user 将派新 agent 评估后续努力方向**（候选：起草论文 / 补强 OCR-Bench·ChartQA·机制图·定性例子 / 跨架构）。**交接**：新 agent 先读 `HANDOFF.md`→STATE→DECISIONS→`drafts/v3_evidence.md`；本会话已 push。注：本会话子 agent 工具链连续 API 故障(InvalidParameter "Model not exist")，GPU 编排改主窗口后台 bash 直跑（工具不可用之妥协）。
+方向：Qwen3-VL 原生 2×2 merger **之前**剪 token（prune merger input, preserve merger）—— 正交于全部失败尝试。Gate 全过：novelty=GO（VisionZip 源码核实为 POST-merger → pre-merger cell 空）② feasibility=GO ③ GPU go/no-go=GO 强结果。
+**📌 SPINE（user 定 A，发现主导）**：lossy-merger 机制 + workload-conditional stage law + post-merger SOTA（VisionZip 类）text-dense 深压灾难崩溃、pre-merger 鲁棒修复。方法 = pre-merger pruning + adaptive stage selection（ptid、+2pp 如实报）。
+**✅ SOTA 决胜矩阵（2026-07-22，n=200 iso-token, Qwen3-VL-8B, L2 selector）**：
+- **OCRBench = text-dense 第三确证**：@25% pre **0.580** vs post/VZ 0.165（+41.5pp, 9.5σ）；@12.5% 0.380 vs 0.075（+30.5, 7.8σ）。子技能级：纯文字识别 pre 保 baseline/post 清零（Reg/NonSem/Irreg 1.0 vs 0.0）；手写公式同分（budget regime）。
+- **ChartQA = 新第三 regime：budget-dominated**（非 bug，per-sample 核实）：@25% pre=post=VZ **同分 0.190**（失败集不同：各对 38 题仅 20 重叠；压缩下模型转 hedging 长答 1.1→7.7 词）；@50% 0.39/0.335、@12.5% 0.15/0.095（+5.5, 1.7σ 不显著）。论文报 stage law（何处 pre 胜）× budget（是否可行）双轴，不 overclaim 单调。
+- **VisionZip-style ≡ post dom-only：11/11 cell**（含本轮补 post-mode TextVQA/DocVQA @25/@12.5）→ context tokens 零增益，崩溃纯由 stage 解释。
+- **旧 bench 保持**：TextVQA +44pp(9.8σ) / DocVQA +33.5pp(7.0σ) @25%；GQA −6pp（object, post 胜）；误差棒 binomial。
+**✅ audit 两则**：① VisionZip 官方（`JIA-Lab-research/VisionZip` CVPR'25）判定 (c) 本机不可跑（无 Qwen3-VL/vLLM；Qwen 变体需 attn 物化 OOM）；代码级再确认 post-merger；**作者 README Qwen2.5 OCRBench@50% 81.5→70.5（−13%）= 官方数字内 text-dense onset** → SOTA 列 = 我方 same-model port + 官方 mismatched reference（`drafts/visionzip_gap_report.md`）。② QuietPrune/Hi-Lo/IF-Prune **均不可同 budget 公平复现**（无码/空仓/需训 20–60 GPU·h）；IF-Prune InternVL recipe 弃（模型失配）；**Hi-Lo Prune 挂 watch**（`drafts/baseline_methods_audit.md`）。
+**资产新增**：`eval/subsets/{chartqa,ocrbench}_200.jsonl` + lmms-eval 移植 scorer（commit f23841a）；cell `runs/v3_sota_matrix/`（21 json）；脚本 `src/v3_premerger/v3_sota_matrix{,_followup}.sh`；定性 10 例 `drafts/qualitative_examples.md`（"$1.3B→$1.3M" 单位错 post+VZ 同犯 pre 对）。
+**▶ 下一步**：证据骨架已齐（`drafts/v3_sota_matrix.md` §0–6 + caveats 红线）→ **① 可起草论文**（nature-writing/nature-figure skills；stage_law.png 精修 + retention-vs-compression 曲线 + 子技能显微镜图）或 **② 先补机制可视化**（便宜、强化 §4）。写作红线：ChartQA/GQA gap 只报方向（≤1.7σ）；scope=Qwen3-VL 单架构；within-tier inversion 如实报。升级找人：投稿前。
 
 ## ★ method search 历史（均 GPU 证伪，作 negative 库）
-selector 三连败（CLS/LLM-cosine/CLIP，OCR 失败）｜load-adaptive controller（n=500 null）｜ElasticVis allocator（EV-1e 负）｜EV-VAR variance（Stage 1 负，F=0.18 p=0.84）。**教训**：boundary TF selector 打不过 intra-LLM OCR；scheduling-based 被 total-token bound。pre-merger = 新维度（compression-architecture）。
+selector 三连败（CLS/LLM-cosine/CLIP，OCR 失败）｜load-adaptive controller（n=500 null）｜ElasticVis allocator（EV-1e 负）｜EV-VAR variance（负，p=0.84）。pre-merger = 正交新维度。
 
 ## ★ v2 测量论文（fallback，drafts/paper_v2.md，ERA 后降级）
-v2 = 0/37 served-throughput framework（ERA arXiv:2606.31982 打破头条）。salvage = sharpen 到 continuous-batching/goodput/p99/TTFT。留作 fallback/支撑，非主线。
+salvage = sharpen 到 continuous-batching/goodput/p99/TTFT。留作 fallback/支撑。
 
 ## 资产 + 约束
-framework `src/serve_bench.py`+`compressors.py`+`src/elasticvis/`；v3 `src/v3_premerger/`(runner+router_probe*)；数据 eval/subsets/* + runs/；模型 LLaVA-1.5-7B + Qwen3-VL-8B；env `qwen3vl_clean`(vllm0.19 V1)。算力 1× A40 46GB 串行。提交用户名义禁 AI 署名。升级找人：凭据/>6GPU·h/claim推翻/投稿前。详见 DECISIONS.md。
+framework `src/serve_bench.py`+`compressors.py`；v3 `src/v3_premerger/`(runner: per_sample+vz-style+mnbt/mpix；router_probe*)；数据 eval/subsets/{textvqa,docvqa,gqa,mme,mmbench,scienceqa,chartqa,ocrbench}_{200}.jsonl + runs/；模型 Qwen3-VL-8B(-Instruct)；env `qwen3vl_clean`(vllm0.19 V1)。1× A40 串行共享机（跑前 nvidia-smi，勿 kill 他人）。提交用户名义 **Code-Yan-ZX** 禁 AI 署名。升级：凭据/>6GPU·h/claim 推翻/投稿前。详见 DECISIONS.md / HANDOFF.md。
