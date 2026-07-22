@@ -206,6 +206,52 @@ def score_mc_letter(pred: str, gt: str, choices: Optional[list[str]] = None) -> 
     return 0
 
 
+def score_chartqa(pred: str, gt: str, choices: Optional[list[str]] = None) -> int:
+    """ChartQA relaxed accuracy (lmms-eval convention): numeric answers within
+    +/-5% relative tolerance (trailing-% normalized), else normalized exact
+    match. Ported from lmms_eval/tasks/chartqa/utils.py:relaxed_correctness.
+    (Copied verbatim from src/serve_bench.py:score_chartqa.)"""
+    if not gt:
+        return 0
+    p = pred.strip()
+    g = gt.strip()
+
+    def _to_float(text: str):
+        try:
+            if text.endswith("%"):
+                return float(text.rstrip("%")) / 100.0
+            return float(text)
+        except ValueError:
+            return None
+
+    pf, gf = _to_float(p), _to_float(g)
+    if pf is not None and gf:
+        return int(abs(pf - gf) / abs(gf) <= 0.05)
+    return int(" ".join(_norm_words(p)) == " ".join(_norm_words(g)))
+
+
+def score_ocrbench(pred: str, gt: str, choices: Optional[list[str]] = None) -> int:
+    """OCRBench accuracy (lmms-eval convention): correct if ANY ';'-joined GT
+    answer is contained in the normalized (lowercase/strip/newline->space)
+    output. HME100k rows carry choices=["__nospace__"] -> space-insensitive
+    containment (LaTeX math), matching lmms_eval/tasks/ocrbench/utils.py.
+    (Copied verbatim from src/serve_bench.py:score_ocrbench.)"""
+    if not gt:
+        return 0
+    nospace = bool(choices) and "__nospace__" in choices
+    p = pred.lower().strip().replace("\n", " ")
+    for g in gt.split(";"):
+        g = g.lower().strip().replace("\n", " ")
+        if not g:
+            continue
+        if nospace:
+            if g.replace(" ", "") in p.replace(" ", ""):
+                return 1
+        elif g in p:
+            return 1
+    return 0
+
+
 SCORERS = {
     "gqa": score_gqa,
     "textvqa": score_textvqa,
@@ -213,6 +259,8 @@ SCORERS = {
     "mme": score_yesno,
     "mmbench": score_mc_letter,
     "scienceqa": score_mc_letter,
+    "chartqa": score_chartqa,
+    "ocrbench": score_ocrbench,
 }
 
 
@@ -273,7 +321,8 @@ def parse_args():
                          "encoder cache size 8192' + cascading OOM. Raise to >=32768 "
                          "for DocVQA post-merger cells. None = vLLM default.")
     ap.add_argument("--benchmark", required=False, default=None,
-                    choices=["gqa", "textvqa", "docvqa", "mme", "mmbench", "scienceqa"])
+                    choices=["gqa", "textvqa", "docvqa", "mme", "mmbench",
+                             "scienceqa", "chartqa", "ocrbench"])
     ap.add_argument("--subset", required=False, default=None)
     ap.add_argument("--n", type=int, default=200)
     ap.add_argument("--max-tokens", type=int, default=32)

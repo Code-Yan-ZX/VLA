@@ -292,12 +292,69 @@ def score_mc_letter(pred: str, gt: str, choices: Optional[list[str]] = None) -> 
     return 0
 
 
+def score_chartqa(pred: str, gt: str, choices: Optional[list[str]] = None) -> int:
+    """ChartQA relaxed accuracy (lmms-eval / official ChartQA eval).
+
+    Numeric answers are correct within a +/-5% relative tolerance
+    (trailing-% values normalized to fractions); non-numeric answers fall back
+    to normalized exact match. Ported from
+    lmms_eval/tasks/chartqa/utils.py:relaxed_correctness (arXiv:2203.10244,
+    sec 5.1). (`choices` accepted for signature parity; unused.)
+    """
+    if not gt:
+        return 0
+    p = pred.strip()
+    g = gt.strip()
+
+    def _to_float(text: str):
+        try:
+            if text.endswith("%"):
+                # Convert percentages to floats.
+                return float(text.rstrip("%")) / 100.0
+            return float(text)
+        except ValueError:
+            return None
+
+    pf, gf = _to_float(p), _to_float(g)
+    if pf is not None and gf:
+        return int(abs(pf - gf) / abs(gf) <= 0.05)
+    # non-numeric: normalized exact match (same word-normalization as elsewhere)
+    return int(" ".join(_norm_words(p)) == " ".join(_norm_words(g)))
+
+
+def score_ocrbench(pred: str, gt: str, choices: Optional[list[str]] = None) -> int:
+    """OCRBench accuracy (lmms-eval convention): correct if ANY of the
+    ';'-joined GT answers is contained in the model output after normalization
+    (lowercase, strip, '\\n'->' '). HME100k rows (handwritten LaTeX math)
+    additionally strip ALL spaces on both sides before the containment check,
+    matching lmms_eval/tasks/ocrbench/utils.py; such rows carry
+    choices=["__nospace__"] in the subset (a scorer FLAG, not MC options --
+    extra["choices"] is passed through by the runner unchanged).
+    """
+    if not gt:
+        return 0
+    nospace = bool(choices) and "__nospace__" in choices
+    p = pred.lower().strip().replace("\n", " ")
+    for g in gt.split(";"):
+        g = g.lower().strip().replace("\n", " ")
+        if not g:
+            continue
+        if nospace:
+            if g.replace(" ", "") in p.replace(" ", ""):
+                return 1
+        elif g in p:
+            return 1
+    return 0
+
+
 SCORERS = {
     "gqa": score_gqa,
     "textvqa": score_textvqa,
     "mme": score_yesno,
     "mmbench": score_mc_letter,
     "scienceqa": score_mc_letter,
+    "chartqa": score_chartqa,
+    "ocrbench": score_ocrbench,
 }
 
 
@@ -2210,7 +2267,8 @@ def main() -> None:
     ap.add_argument("--pruning-rate", type=float, default=0.0,
                     help="fraction of visual tokens to DROP (0=control)")
     ap.add_argument("--benchmark", required=True,
-                    choices=["gqa", "textvqa", "mme", "mmbench", "scienceqa"])
+                    choices=["gqa", "textvqa", "mme", "mmbench", "scienceqa",
+                             "chartqa", "ocrbench"])
     ap.add_argument("--subset", required=True, help="JSONL subset path")
     ap.add_argument("--metrics-out", required=True)
     ap.add_argument("--max-tokens", type=int, default=32)
