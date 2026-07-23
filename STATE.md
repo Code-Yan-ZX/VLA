@@ -1,21 +1,11 @@
 # STATE.md — 当前项目状态（主窗口维护，保持 ≤30 行）
 
-> 项目：VLM 视觉 token 压缩 · 目标 Q1/Q2 SCI · 详见 ORCHESTRATION.md
-> 最近更新：2026-07-23 · **机制纠正+评测修正+方法 gate 完成**：corrected mechanism 因果证实（swap≡pre）、官方指标 HOLD 无翻转、GQA 假象纠正（pre==post）、hybrid/router gate FAIL（诚实负结果）。详见 drafts/v3_merger_aware_results.md
+> 项目：VLM 视觉 token 压缩 · /goal 锁定：Rank-Before-Merge → **CCF-B 主（CCF-A 扩展）submission-ready 方法论文**
+> 最近更新：2026-07-23 · goal 接纳 + 五路测绘完成 + J0/J1 启动。队列见 runs/QUEUE.md；决策见 DECISIONS.md 末条。
 
-## ★ 当前主线：merger-aware token selection 方法论文（pre-merger pruning 升级）
-**机制（因果证实, n=64/bench, L2）**：merger 重写 unit saliency/ranking 且 anti-text。M1 pre/post ranking Spearman ρ=0.14(doc)/0.33(text)/0.36(gqa)；M2 rank_shift↔edge +0.44(doc)，pre-kept/post-dropped 单元 edge 0.64 vs 0.12（post 专丢文字）；**M3 ranking-swap 对照 swap≡pre**（doc 0.465=0.465 200/200、text 0.603≈0.598 198/200）→ pre>post gap 100% 来自 ranking（forward path/位置恒定，排除 mrope 混淆）。mask=2×2 unit 粒度，kept unit 的 merged token pre/post 相同 → 只差"用哪个 ranking 选"。
-**评测修正（官方指标, HOLD 无翻转）**：旧 containment 指标 + verbose 生成（median 132 字符句子）高估 ~100×。修 = short-answer prompt 烤入 subset（同 ChartQA/OCRBench 惯例）+ 官方 VQA-acc/ANLS 离线重评分。keep=25% n=200：**TextVQA VQA-acc pre .598 vs post .215（+38.3pp ~6σ）/ DocVQA ANLS pre .465 vs post .200（+26.5pp ~6σ）**。selector-invariant：attn pre .553>post .200（+35pp）。OCRBench/ChartQA 沿用移植 scorer（短答已烤入）。
-**⚠️ claim 纠正**：GQA "post 胜 object −6pp" 是 verbose+containment 假象 → 正式评测 **GQA pre==post==0.51**（n=100，待 n=200 确证）。stage law 改为 **pre 弱占优（object 平手、text-dense 大胜），无 crossover**。
-**方法 gate（n=100, user 预注册判据, FAIL）**：hybrid（agreement+disagreement→text）OCRBench −8pp vs pre、GQA 无 gap 可补、TextVQA 增益噪声级；disagreement router 0.484≤always-pre 0.494（oracle 0.576，+8.2pp 为 query 依赖、图像级信号够不到）。**因 pre≥post 占 84–97% 图（无 post 更优 regime），任何向 post 路由/混合只伤。**
-**▶ 存活的"方法" = rank-before-merge（pre-merger selection）**：merger 前特征上算 saliency→选→再 merge。新颖（pre×native-merger cell 空）+ 机制支撑（swap 对照）+ 弱占优 + selector-invariant。adaptive/hybrid 作 bounding negative 如实报（强化机制 claim）。
-**▶ 下一步（已升级 user 定方向）**：A=机制主导方法论文（rank-before-merge 为方法 + 诚实负结果，推荐）/ B=投 query-aware pre-merger 够 +8.2pp oracle（险，query-aware 曾 boundary 三连败但 pre 未试）/ C=A 先行 B 作扩展。写作红线：GQA tie 先 n=200 确证；scope=Qwen3-VL 单架构；hybrid/router 负结果如实报；ChartQA budget regime 只报方向。升级：投稿前。
-
-## ★ method search 历史（均 GPU 证伪，作 negative 库）
-selector 三连败（CLS/LLM-cosine/CLIP，OCR 失败）｜load-adaptive controller（n=500 null）｜ElasticVis allocator（EV-1e 负）｜EV-VAR variance（负，p=0.84）｜**merger-aware hybrid+disagreement-router（2026-07-23 gate FAIL，pre 是 fixed point）**。pre-merger = 正交新维度（机制证实）。
-
-## ★ v2 测量论文（fallback，drafts/paper_v2.md，ERA 后降级）
-salvage = sharpen 到 continuous-batching/goodput/p99/TTFT。留作 fallback/支撑。
-
-## 资产 + 约束
-framework `src/serve_bench.py`+`compressors.py`；v3 `src/v3_premerger/`(runner: mode pre/post/hybrid + mask-ranking swap + save-unit-scores；official_scorers.py)；机制 `scripts/mechanism_token_survival.py`；数据 eval/subsets/*_200.jsonl(textvqa/docvqa/gqa 已烤 short-answer)+runs/v3_merger_aware/{rescore_rerun,survival_capture,swap,hybrid_gate,router}/；模型 Qwen3-VL-8B；env `qwen3vl_clean`(vllm0.19 V1)。1× A40 串行共享机（跑前 nvidia-smi，勿 kill 他人）。提交用户名义 **Code-Yan-ZX** 禁 AI 署名。升级：凭据/>6GPU·h/claim 推翻/投稿前。详见 DECISIONS.md / drafts/v3_merger_aware_results.md。
+## ★ 完成条件（user）：Qwen3-VL-8B + Qwen2.5-VL-7B 结论一致 / 官方完整 split（TextVQA·DocVQA·OCRBench·GQA）/ 强 baseline 充分（FastV·VisionZip-port·PyramidDrop）/ 机制+效率消融闭环 / 论文 submission-ready。**不跨模型宣 SOTA；仅同模型同 harness 领先才写"超现有方法"**。
+## ★ 队列（串行 A40，每 job<6GPU·h）：J1 修通 Qwen2.5-VL → J2 跨代矩阵+官方 rescore+GQA n=200 tie 双模型确证 → J3 机制跨代复制 → J4 FastV/PyramidDrop port 探针 → **J5 QA 单次止损 gate（预注册：均值≥RBM+1pp 且 ≥3/4 基准不回退>0.5pp 且 z≥1.5，否则冻结 plain RBM、不再搜 hybrid/router，≤2GPU·h）** → J6 效率表 → J7 官方完整 split 主表（headline 先行，~50–60h 断点续跑）→ J8 消融闭环 → J9 paper_v4+venue（投稿前升级 user）。
+## ★ 测绘要点：① Qwen2.5-VL 崩溃根因=`_patched_pii` 绕过 vllm mrope 重算（block [16,24,24] θ1e6 剪后三轴错位；Qwen3 interleaved 自洽）→ 剪后调 `recompute_mrope_positions` 或 wrap 不替换（qwen2_5_vl.py:1342-1397）；`--model-family qwen2vl` 已全链路、baseline 正常 → 仅压缩路径坏 ② VisionZip-style≡post（11/11），官方码不可跑→port+mismatched 锚 ③ 官方 scorer 补 OCRBench/1000+GQA exact-match ④ 完整 split：GQA 在盘，余三下载到 runs/data/（~ 90% 满勿写）⑤ fairness=同 keep ratio+报绝对 token 数+统一 min/max pixels（patch14≠16 需 family 校准 iso-token）。
+## ★ 已确立 claim（推翻才动）：pre 弱占优无 crossover（GQA tie，n=200 待双模型确证）；text-dense 大胜（textvqa +38.3pp / docvqa +26.5pp / ocrbench +41.5pp）；M1–M3 机制因果链（swap≡pre）；selector-invariant；hybrid/router/adaptive 负结果如实报（强化机制 claim）。
+## ★ 约束：env qwen3vl_clean（vllm0.19 V1）；权重 /data/models/huggingface/hub（~/.cache 同）；runs/ gitignore，每 run 交 experiments/<exp>.md digest；commit=**Code-Yan-ZX 禁 AI 署名**；升级=凭据/>6GPU·h 训练/claim 推翻/投稿前。
+## 资产：runner src/v3_premerger/v3_premerger_runner.py（mode none/post/pre/hybrid, mask-ranking swap, selector l2/attn, visionzip-style, dry-check）；official_scorers.py（+J0b 补 OCR/GQA）；paper drafts/paper_v3.md；细节 ORCHESTRATION.md。
