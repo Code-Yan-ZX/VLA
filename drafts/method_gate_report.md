@@ -184,5 +184,6 @@ under containment, now reconfirmed at n=100 under the official metric).
   metric mixes VQA-acc/ANLS/exact-match across benches (per-bench rows given).
 - Single architecture (Qwen3-VL-8B). Chosen frac tuned on the same textvqa n=100 it is
   reported on (in-sample).
-- GPU: 12 gate cells (~45 min) + 4 sensitivity cells (~13 min) ≈ **58 GPU-min** on the
-  shared A40 (serial, gpu_memory_utilization 0.90), zero failures.
+- GPU: 12 gate cells (10.8 min wall, measured) + 4 sensitivity cells (7.5 min wall)
+  ≈ **19 GPU-min total** on the shared A40 (serial, gpu_memory_utilization 0.90),
+  zero failures (+2.5 min n=8 smoke).
