@@ -28,6 +28,18 @@ Modes:
 enforce_eager=True (variable per-request pruning breaks encoder CUDA graphs).
 One cell per fresh process. M-RoPE handled by vLLM's recompute_mrope_positions
 (same as v2_p1; output shape is identical between post and pre).
+
+--mask-ranking {stage,swap} (M3 causal control, drafts/v3_merger_aware_design.md
+§2): the pre vs post difference is ONLY which ranking picks the 2x2 merge-units
+(a kept unit's merged token is identical at either stage). swap crosses the
+ranking against the forward path: mode=post+swap runs the full post path but
+selects units with the PRE ranking (deepstack[0]-input unit scores, computed
+identically to pre mode, in setup_post_merger_swap); mode=pre+swap runs the
+sliced pre path but selects with the POST ranking (PreMergerPruner(mask_ranking=
+"swap") runs all mergers on the full input once to derive it). By unit
+equivalence, post+swap must reproduce pre-standard accuracy exactly and
+pre+swap must reproduce post-standard -- isolating RANKING as the only source
+of the pre/post gap.
 """
 from __future__ import annotations
 import os, sys, time, json, argparse
@@ -346,6 +358,24 @@ def parse_args():
                          "image resolution (pre-merger tokens ~= max_pixels/256). "
                          "Fixes the DocVQA encoder-cache crash on huge documents "
                          "(keeps pre-merger token count <= ~6000 for ~1.5M px).")
+    ap.add_argument("--mask-ranking", default="stage",
+                    choices=["stage", "swap"],
+                    help="Causal control for the ranking-vs-forward-path question "
+                         "(M3 in drafts/v3_merger_aware_design.md). stage (default): "
+                         "each mode selects units with its OWN stage's ranking "
+                         "(post -> post merged-token scores, pre -> pre block-8 "
+                         "unit scores; original behavior). swap: cross the ranking "
+                         "against the forward path -- mode=post + swap runs the FULL "
+                         "post-merger forward (everything merged) but SELECTS units "
+                         "with the PRE ranking (deepstack[0]-input unit scores, "
+                         "computed EXACTLY as pre mode); mode=pre + swap runs the "
+                         "sliced pre forward but selects with the POST ranking "
+                         "(computed by running all mergers on the full input once). "
+                         "Because a kept unit's merged token is identical at either "
+                         "stage (2x2 merge-unit equivalence), post+swap must "
+                         "reproduce pre-standard accuracy and pre+swap must "
+                         "reproduce post-standard -- isolating RANKING as the only "
+                         "source of the pre/post gap.")
     ap.add_argument("--seed", type=int, default=0,
                     help="vLLM/torch RNG seed (0 = default). For repeat runs; at "
                          "temp=0 variance comes from GPU-kernel non-determinism.")
@@ -451,24 +481,120 @@ def setup_post_merger(model, r: float, selector: str = "l2"):
 
 
 # --------------------------------------------------------------------------- #
+# (B-swap) POST forward path + PRE ranking selection (M3 causal control).
+#   The full post-merger forward runs UNCHANGED (all mergers see full input);
+#   we only OBSERVE the first-called merger's input -- deepstack_merger_list[0]
+#   for qwen3vl (called inside the block loop at layer 8; verified
+#   mask_computed_at='deepstack_0' in pre-mode diag), visual.merger for qwen2vl
+#   -- compute per-unit scores with _score_units EXACTLY as pre mode does, and
+#   cache them per image (split by grid_thw). The _process_image_input wrapper
+#   then selects each image's top-k merged tokens by those PRE unit scores
+#   (merged token i <-> unit i is 1:1: mergers map 4 consecutive block-major
+#   tokens -> 1 output token in row-major unit order). By the unit-equivalence
+#   argument, the selected merged tokens are bitwise the same tensors pre mode
+#   would have produced, so post+swap must reproduce pre-standard accuracy.
+# --------------------------------------------------------------------------- #
+def setup_post_merger_swap(model, r: float, selector: str = "l2",
+                           family: str = "qwen3vl"):
+    visual = model.visual
+    unit = visual.spatial_merge_size ** 2
+    state = {"grid_thw": None, "queue": []}   # queue: per-image PRE unit scores
+    diag = {"fires": 0, "nk": [], "selector": selector,
+            "mask_ranking": "swap:post-path+pre-ranking",
+            "score_passes": 0, "consumed": 0, "fallback_stage": 0,
+            "first_merger": "merger" if family == "qwen2vl" else "deepstack_0"}
+
+    # (1) visual.forward pre_hook: capture grid_thw -> per-image unit counts.
+    def _visual_prehook(module, args, kwargs):
+        g = kwargs.get("grid_thw")
+        if g is None and len(args) >= 2:
+            g = args[1]
+        if g is not None:
+            state["grid_thw"] = (g.detach() if torch.is_tensor(g)
+                                 else torch.as_tensor(g))
+    visual.register_forward_pre_hook(_visual_prehook, with_kwargs=True)
+
+    # (2) observe the FIRST merger pre-mode masks from; compute PRE unit scores
+    #     without touching the input (post path merges everything).
+    first_merger = (visual.merger if family == "qwen2vl"
+                    else visual.deepstack_merger_list[0])
+    orig_fwd = first_merger.forward
+
+    def _wrapped(*args, _orig=orig_fwd, **kwargs):
+        hs = args[0]                                   # [seq, 1, ctx]
+        if r != 0.0 and state["grid_thw"] is not None:
+            seq = hs.shape[0]
+            ctx = hs.shape[-1]
+            total_units = seq // unit
+            feats = hs.reshape(total_units, unit, ctx)
+            scores = _score_units(feats, selector)     # [total_units]
+            full_units = (state["grid_thw"].prod(-1) // unit).tolist()
+            if sum(full_units) == total_units:
+                off = 0
+                for f in full_units:
+                    state["queue"].append(scores[off:off + f])
+                    off += f
+                diag["score_passes"] += 1
+            else:                                      # defensive: grid mismatch
+                diag["fallback_stage"] += len(full_units)
+        return _orig(*args, **kwargs)
+    first_merger.forward = _wrapped
+    if hasattr(first_merger, "do_not_compile"):        # see _wrap_merger_forward
+        first_merger.do_not_compile = True
+
+    # (3) _process_image_input: same split contract as stock post mode, but the
+    #     top-k index set comes from the cached PRE ranking (per image, FIFO).
+    _orig_pii = model._process_image_input
+
+    def _patched(image_input):
+        splits = _orig_pii(image_input)
+        diag["fires"] += 1
+        if r == 0.0:
+            return splits
+        out = []
+        for s in splits:
+            n = int(s.shape[0])
+            k = max(1, int(round(n * (1.0 - r))))
+            pre_i = state["queue"].pop(0) if state["queue"] else None
+            if pre_i is not None and int(pre_i.shape[0]) == n:
+                diag["consumed"] += 1
+                idx = torch.topk(pre_i.to(device=s.device), k).indices.sort().values
+            else:
+                # encoder-cache replay or grid mismatch -> fall back to the
+                # stage (post) ranking rather than crash; diag exposes it.
+                diag["fallback_stage"] += 1
+                idx = torch.topk(_score_tokens(s, selector), k).indices.sort().values
+            out.append(s.index_select(0, idx).contiguous())
+        if len(diag["nk"]) < 8:
+            diag["nk"].append((int(splits[0].shape[0]), int(out[0].shape[0])))
+        return tuple(out)
+    model._process_image_input = _patched
+    return diag, state          # state exposed so main() can report queue balance
+
+
+# --------------------------------------------------------------------------- #
 # (C) PRE-merger: forward_pre_hooks on the 4 mergers + visual (to capture
 # grid_thw) + replace _process_image_input to split by pruned counts.
 # --------------------------------------------------------------------------- #
 class PreMergerPruner:
     def __init__(self, r: float, spatial_merge_size: int, selector: str = "l2",
-                 visionzip_style: bool = False, visionzip_dom_ratio: float = 0.7):
+                 visionzip_style: bool = False, visionzip_dom_ratio: float = 0.7,
+                 mask_ranking: str = "stage"):
         self.r = r
         self.sm = spatial_merge_size
         self.unit = spatial_merge_size ** 2          # 4
         self.selector = selector
         self.visionzip_style = visionzip_style
         self.visionzip_dom_ratio = visionzip_dom_ratio
+        self.mask_ranking = mask_ranking              # "stage" | "swap" (M3)
         self.full_units = None                        # list[int] per image
         self.k_units = None                           # list[int] per image
         self._mask = None                             # cached token mask
+        self.merger_origs = {}                        # tag -> orig forward (swap)
         self.diag = {"visual_calls": 0, "merger_calls": 0,
                      "mask_computed_at": None, "mask_compute_count": 0,
                      "per_tag_calls": {}, "nk": [], "selector": selector,
+                     "mask_ranking": mask_ranking,
                      "vz_dom": [], "vz_ctx": []}
 
     def begin_pass(self, grid_thw):
@@ -495,9 +621,22 @@ class PreMergerPruner:
         ctx = hs.shape[-1]
         num_units = seq // self.unit
         if self._mask is None:
-            # ---- compute per-unit L2 scores + top-k mask ----
-            feats = hs.reshape(num_units, self.unit, ctx)
-            scores = _score_units(feats, self.selector)        # [num_units]
+            # ---- compute per-unit scores + top-k mask ----
+            if self.mask_ranking == "swap":
+                # M3 control: pre forward path + POST ranking. Run the ORIGINAL
+                # (unwrapped) forward of EVERY merger on the FULL input (all
+                # mergers consume the same block-major hs), cat the per-unit
+                # outputs exactly as qwen3_vl.py visual.forward does, and score
+                # the merged tokens with _score_tokens -- i.e. the post ranking.
+                assert self.merger_origs, "swap requires merger_origs registered"
+                post_feat = torch.cat(
+                    [orig(hs) for orig in self.merger_origs.values()], dim=1)
+                scores = _score_tokens(post_feat, self.selector)   # [num_units]
+                where = f"swap:post-ranking@{tag}"
+            else:
+                feats = hs.reshape(num_units, self.unit, ctx)
+                scores = _score_units(feats, self.selector)        # [num_units]
+                where = tag
             keep = torch.zeros(num_units, dtype=torch.bool,
                                device=hs.device)
             off = 0
@@ -508,7 +647,7 @@ class PreMergerPruner:
                 off += f
             self._mask = keep.unsqueeze(-1).expand(-1, self.unit).reshape(-1)
             self._vz_scores = scores                 # cached for VisionZip-style
-            self.diag["mask_computed_at"] = tag
+            self.diag["mask_computed_at"] = where
             self.diag["mask_compute_count"] += 1
             self.diag["vz_dom"].clear()
             self.diag["vz_ctx"].clear()
@@ -718,10 +857,15 @@ def _install_qwen2vl_pre_visual_forward(visual, pruner):
 
 
 def setup_pre_merger(model, r: float, selector: str = "l2", family: str = "qwen3vl",
-                      visionzip_style: bool = False, visionzip_dom_ratio: float = 0.7):
+                      visionzip_style: bool = False, visionzip_dom_ratio: float = 0.7,
+                      mask_ranking: str = "stage"):
+    if mask_ranking == "swap" and visionzip_style:
+        raise SystemExit("--mask-ranking swap is not supported with "
+                         "--visionzip-style (dominant-only standard path only).")
     visual = model.visual
     sm = visual.spatial_merge_size
-    pruner = PreMergerPruner(r, sm, selector, visionzip_style, visionzip_dom_ratio)
+    pruner = PreMergerPruner(r, sm, selector, visionzip_style, visionzip_dom_ratio,
+                             mask_ranking=mask_ranking)
 
     # (1) visual.forward pre_hook: capture grid_thw -> plan k_units.
     def _visual_prehook(module, args, kwargs):
@@ -749,6 +893,7 @@ def setup_pre_merger(model, r: float, selector: str = "l2", family: str = "qwen3
             targets.append(m)
     for m in targets:
         orig = _wrap_merger_forward(m, pruner)
+        pruner.merger_origs[m._premerger_tag] = orig   # for mask_ranking=swap
         handles.append(orig)
 
     # ---- TEMP DIAG: wrap visual.forward + dump compiler/merger facts --------
@@ -824,7 +969,9 @@ def run_dry_check(family: str):
 
     class _DummyMerger(nn.Module):
         def forward(self, x):
-            return x
+            # real mergers: [seq, 1, ctx] -> [num_units, hidden]; mimic the
+            # 4-to-1 contraction so swap-mode cat/scoring shapes match.
+            return x.reshape(x.shape[0] // 4, -1)
 
     class _DummyVisual(nn.Module):
         def __init__(self, fam):
@@ -834,6 +981,9 @@ def run_dry_check(family: str):
             if fam == "qwen3vl":
                 self.deepstack_merger_list = nn.ModuleList(
                     [_DummyMerger() for _ in range(3)])
+
+        def forward(self, x, grid_thw=None):
+            return x
 
     class _DummyModel:
         def __init__(self, fam):
@@ -897,6 +1047,41 @@ def run_dry_check(family: str):
     print(f"[dry-check]   OK post-merger prune: splits [40,20] -> "
           f"{[s.shape[0] for s in out]} (r=0.75)")
 
+    # (e) M3 post+swap: POST forward path (nothing sliced) + PRE-ranking select.
+    #     grid (1,4,8) -> 8 units -> k=round(8*0.25)=2.
+    model3 = _DummyModel(family)
+    grid = torch.tensor([[1, 4, 8]])
+    full_hs = torch.randn(8 * unit, 1, 16)
+    def _fake_pii3(ii):
+        return (torch.randn(8, 32),)                # fully merged, 1 image
+    model3._process_image_input = _fake_pii3        # BEFORE setup: gets wrapped
+    diag3, _state3 = setup_post_merger_swap(model3, 0.75, "l2", family)
+    model3.visual(full_hs, grid_thw=grid)           # fires the grid pre_hook
+    first = (model3.visual.merger if family == "qwen2vl"
+             else model3.visual.deepstack_merger_list[0])
+    out_m = first(full_hs)                          # wrapped: queues PRE scores
+    assert out_m.shape[0] == 8, out_m.shape         # merger input untouched
+    assert diag3["score_passes"] == 1, diag3
+    out3 = model3._process_image_input(None)        # selects by PRE ranking
+    assert [s.shape[0] for s in out3] == [2], [s.shape for s in out3]
+    assert diag3["consumed"] == 1 and diag3["fallback_stage"] == 0, diag3
+    print(f"[dry-check]   OK post+swap control: merger untouched (8 units), "
+          f"split 8 -> {[s.shape[0] for s in out3]} by PRE ranking "
+          f"(consumed={diag3['consumed']}, fallback={diag3['fallback_stage']})")
+
+    # (f) M3 pre+swap: PRE (sliced) forward path + POST-ranking select.
+    model4 = _DummyModel(family)
+    pruner4, handles4 = setup_pre_merger(model4, 0.75, "l2", family,
+                                          mask_ranking="swap")
+    pruner4.begin_pass(grid)
+    out4 = pruner4.slice_input(full_hs, model4.visual.merger)
+    assert out4.shape[0] == pruner4.k_units[0] * unit == 8, out4.shape
+    assert str(pruner4.diag["mask_computed_at"]).startswith("swap:"), \
+        pruner4.diag["mask_computed_at"]
+    print(f"[dry-check]   OK pre+swap mask: selected by POST ranking "
+          f"(mask_computed_at={pruner4.diag['mask_computed_at']}); "
+          f"kept {out4.shape[0]} tokens")
+
     print(f"[dry-check] ALL PASS for family={family}")
 
 
@@ -932,6 +1117,8 @@ def main():
     r = args.r
     if args.mode == "none":
         r = 0.0
+        if args.mask_ranking == "swap":
+            raise SystemExit("--mask-ranking swap requires --mode post or pre")
     proc_log = patch_processor(r, family)
 
     from vllm import LLM, SamplingParams
@@ -963,12 +1150,19 @@ def main():
     model = llm.llm_engine.model_executor.driver_worker.model_runner.model
 
     diag = None
+    swap_state = None
     if args.mode == "post":
-        diag = setup_post_merger(model, r, args.selector)
+        if args.mask_ranking == "swap":
+            # M3: post forward path + PRE ranking selection.
+            diag, swap_state = setup_post_merger_swap(model, r, args.selector,
+                                                      family)
+        else:
+            diag = setup_post_merger(model, r, args.selector)
     elif args.mode == "pre":
         pruner, _handles = setup_pre_merger(model, r, args.selector, family,
                                              visionzip_style=args.visionzip_style,
-                                             visionzip_dom_ratio=args.visionzip_dom_ratio)
+                                             visionzip_dom_ratio=args.visionzip_dom_ratio,
+                                             mask_ranking=args.mask_ranking)
         diag = pruner.diag
 
     samples = load_subset(args.subset)[:args.n]
@@ -1030,9 +1224,16 @@ def main():
     req_s = n_scored / wall if wall > 0 else 0.0
     acc = correct / n_scored if n_scored else 0.0
 
+    if swap_state is not None and diag is not None:
+        # M3 bookkeeping: every queued PRE-ranking entry must be consumed by
+        # exactly one _process_image_input split (0 leftover, 0 fallback in a
+        # clean run); nonzero => visual()/pii pairing broke for some images.
+        diag["swap_queue_leftover"] = len(swap_state["queue"])
+
     result = {
         "model": model_id, "model_family": family,
-        "mode": args.mode, "benchmark": args.benchmark, "r": r,
+        "mode": args.mode, "mask_ranking": args.mask_ranking,
+        "benchmark": args.benchmark, "r": r,
         "max_num_seqs": args.max_num_seqs, "n": len(samples),
         "max_tokens": args.max_tokens, "max_model_len": args.max_model_len,
         "max_num_batched_tokens": args.max_num_batched_tokens,

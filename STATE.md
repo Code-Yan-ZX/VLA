@@ -1,7 +1,7 @@
 # STATE.md — 当前项目状态（主窗口维护，保持 ≤30 行）
 
 > 项目：VLM 视觉 token 压缩 · 目标 Q1/Q2 SCI · 详见 ORCHESTRATION.md
-> 最近更新：2026-07-22 · **SOTA 决胜小矩阵完成**：ChartQA/OCRBench n=200 建成+全跑（21 cell 零失败）、VisionZip 官方 audit(不可跑)、三方法 audit、`drafts/v3_sota_matrix.md` FINAL
+> 最近更新：2026-07-23 · **M3 机制因果验证完成**：runner `--mask-ranking swap`（post 前向+pre 排序）≡ pre 标准（DocVQA **完全** 200/200 答同、TextVQA 198/200），post 崩溃由 RANKING 100% 解释；M1 n=64/bench ρ 0.14–0.36（merger 重排）、M2 text-dense 反文本（DocVQA ρ(shift,edge)=0.44，组(a)边缘 0.64 vs(b)0.12）；`drafts/mechanism_verification_report.md` + fig + stats。机制升级为有因果证明。
 
 ## ★ 当前主线：创新型论文 — V3 pre-merger pruning ✅ GO（2026-07-14）
 方向：Qwen3-VL 原生 2×2 merger **之前**剪 token（prune merger input, preserve merger）—— 正交于全部失败尝试。Gate 全过：novelty=GO（VisionZip 源码核实为 POST-merger → pre-merger cell 空）② feasibility=GO ③ GPU go/no-go=GO 强结果。
@@ -13,7 +13,8 @@
 - **旧 bench 保持**：TextVQA +44pp(9.8σ) / DocVQA +33.5pp(7.0σ) @25%；GQA −6pp（object, post 胜）；误差棒 binomial。
 **✅ audit 两则**：① VisionZip 官方（`JIA-Lab-research/VisionZip` CVPR'25）判定 (c) 本机不可跑（无 Qwen3-VL/vLLM；Qwen 变体需 attn 物化 OOM）；代码级再确认 post-merger；**作者 README Qwen2.5 OCRBench@50% 81.5→70.5（−13%）= 官方数字内 text-dense onset** → SOTA 列 = 我方 same-model port + 官方 mismatched reference（`drafts/visionzip_gap_report.md`）。② QuietPrune/Hi-Lo/IF-Prune **均不可同 budget 公平复现**（无码/空仓/需训 20–60 GPU·h）；IF-Prune InternVL recipe 弃（模型失配）；**Hi-Lo Prune 挂 watch**（`drafts/baseline_methods_audit.md`）。
 **资产新增**：`eval/subsets/{chartqa,ocrbench}_200.jsonl` + lmms-eval 移植 scorer（commit f23841a）；cell `runs/v3_sota_matrix/`（21 json）；脚本 `src/v3_premerger/v3_sota_matrix{,_followup}.sh`；定性 10 例 `drafts/qualitative_examples.md`（"$1.3B→$1.3M" 单位错 post+VZ 同犯 pre 对）。
-**▶ 下一步**：证据骨架已齐（`drafts/v3_sota_matrix.md` §0–6 + caveats 红线）→ **① 可起草论文**（nature-writing/nature-figure skills；stage_law.png 精修 + retention-vs-compression 曲线 + 子技能显微镜图）或 **② 先补机制可视化**（便宜、强化 §4）。写作红线：ChartQA/GQA gap 只报方向（≤1.7σ）；scope=Qwen3-VL 单架构；within-tier inversion 如实报。升级找人：投稿前。
+**资产新增(M3)**：runner `--mask-ranking {stage,swap}`；`scripts/{mechanism_token_survival.py(resume+capture/analyze),rescore_swap.py,run_mechanism_verification.sh}`，`src/v3_premerger/v3_swap_control.sh`；cell `runs/v3_merger_aware/swap/`+`survival_capture/`；`drafts/figures/token_survival_m{1,2}_*.png`+stats.json（merge 保 legacy）。
+**▶ 下一步**：证据骨架已齐 + **机制有因果证明（M3）**（`drafts/v3_sota_matrix.md` §0–6 + `mechanism_verification_report.md`）→ **起草论文**（nature-writing/nature-figure；§4 机制节用 M1/M2/M3 三层 + swap≡pre 因果；stage_law + retention 曲线 + 子技能显微镜图）。写作红线：ChartQA/GQA gap 只报方向（≤1.7σ）；scope=Qwen3-VL 单架构；TextVQA 双层机制（M2 中等）+ budget 退化如实报；within-tier inversion 如实报。升级找人：投稿前。
 
 ## ★ method search 历史（均 GPU 证伪，作 negative 库）
 selector 三连败（CLS/LLM-cosine/CLIP，OCR 失败）｜load-adaptive controller（n=500 null）｜ElasticVis allocator（EV-1e 负）｜EV-VAR variance（负，p=0.84）。pre-merger = 正交新维度。
