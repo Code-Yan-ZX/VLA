@@ -1,0 +1,30 @@
+{
+  "docvqa": {
+    "num_units": 3780,
+    "k": 945,
+    "h": 140,
+    "w": 108,
+    "H": 2240,
+    "W": 1728,
+    "jaccard": 0.079,
+    "pre_edge_keep": 0.9314,
+    "pre_edge_drop": 0.0811,
+    "post_edge_keep": 0.1483,
+    "post_edge_drop": 0.3421,
+    "capture_answer": "Based on the text provided in the document, the amount spent on promotional meetings and events in 1998 was **$1.3 billion**."
+  },
+  "textvqa": {
+    "num_units": 480,
+    "k": 120,
+    "h": 30,
+    "w": 64,
+    "H": 480,
+    "W": 1024,
+    "jaccard": 0.257,
+    "pre_edge_keep": 0.3124,
+    "pre_edge_drop": 0.1917,
+    "post_edge_keep": 0.3062,
+    "post_edge_drop": 0.1937,
+    "capture_answer": "Based on the prominent yellow signs displayed on the front of the white building in the image, the name of the business is:\n\n**Auto Service Experts**\n\nThe name"
+  }
+}

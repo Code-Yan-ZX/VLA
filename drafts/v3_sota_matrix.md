@@ -81,4 +81,31 @@
 | 旧 bench cell | `runs/v3_premerger_cells/`（6-bench suite）· `runs/v3_tighten_cells/`（docvqa @12.5 clean） |
 | 运行脚本 | `src/v3_premerger/v3_sota_matrix.sh` + `v3_sota_matrix_followup.sh` |
 
+## 7. 效率（wall_s / req_per_s, 同 n=200 batched, mns 4–16）
+- **stage 吞吐中性**：同 ptid 下 pre≈post（±10% 内）：ChartQA @25% pre 4.53 vs post 5.34–5.49 req/s；OCRBench 1.74 vs 1.61；merger 本身仅 ~10% TTFT（v2 测量）→ pre 的收益是**精度**不是吞吐，如实报。
+- **压缩 vs baseline 提速**（req_per_s）：TextVQA 3.70→4.76（@25%, +28%）；DocVQA 0.51→0.74（@12.5%, +45%）；GQA 7.47→8.37（@25%, +12%）。ptid 越小提速越大。
+- 写作：效率节一小段 + 表，不 claim 吞吐优势（pre/post 同），claim = 同吞吐下 text-dense 精度大幅领先。
+
+## 8. 补强（2026-07-23）
+
+### 8.1 跨 selector 不变性（`--selector attn` = global-centroid 显著性，另一打分族；n=200 @25%）
+| bench | L2 pre/post | attn pre/post | 结论 |
+|---|---|---|---|
+| TextVQA | .695/.255 (+44) | .670/.292 (+37.8, n=500) | stage 效应跨 selector ✓ |
+| DocVQA | .725/.390 (+33.5) | .680/.365 (+31.5) | ✓（attn-post 旧崩溃已修） |
+| OCR-Bench | .580/.165 (+41.5) | .480/.170 (+31.0) | ✓ |
+| ChartQA | .190/.190 (0) | .190/.165 (≈0) | budget regime 跨 selector ✓ |
+| GQA | .320/.380 (−6) | .328/.380 (−5.2, n=500) | object 反转跨 selector ✓ |
+
+→ **stage law 与 budget regime 均 selector-invariant**（非 L2 打分器 artifact）。cell: `runs/v3_attn_robust/`（attn-docvqa 必须 BIG config，与 l2 同）。
+
+### 8.2 机制可视化 — 双层机制（`scripts/mechanism_token_survival.py`，几何已核：patch 16px→unit 32px，PRE 打 deepstack_0 merger 输入特征、POST 打 cat(main+ds0..2)，token↔unit 1:1）
+- **DocVQA（支持，selection-level）**：PRE 保留 unit 的 Sobel 边密度 **0.931** vs 丢弃 0.081（盯着文字笔画）；POST 保留 0.148 vs 丢弃 **0.342** → **post 系统性避开字形**；两保留集 Jaccard 0.079（近乎不交）。
+- **TextVQA（不支持 location-level，诚实报）**：PRE 0.312 vs POST 0.306（边密度相当，Jaccard 0.257）——post 的**选位**不差，但 acc 仍崩（.255）→ 损伤在**特征值退化**（2×2 均值抹掉笔画对比），非选位错误。
+- **机制因此升级为双层**：① 文档类=**选位错导**（在退化特征上选 → 避开文字，viz 直接可见）；② 场景文字类=**特征退化**（选位尚可、token 内容已损）。两者皆 post-merger 独有、pre-merger 皆免。图：`drafts/figures/token_survival_{docvqa,textvqa}.{png,pdf}` + stats json。
+- 写作：§4 机制节按双层写，TextVQA 反例如实呈现（reviewer-proof：我们不藏不利图）。
+
+### 8.3 retention 曲线 + 效率
+`drafts/figures/retention_curves.{png,pdf}`（5 bench small multiples, log2 depth, pre/post + binomial 误差棒）；效率见 §7。
+
 **Caveats（写作红线）**：① stage law 报 coarse 三层（text-dense +33~44 ≫ ChartQA ≈0 budget-regime > object −6），不 claim 完美单调；within-tier inversion（DocVQA +33.5 < TextVQA +44）如实报。② ChartQA/GQA gap 不显著（≤1.7σ），只报方向不报胜。③ OCRBench per-type n 小 → 定性机制证据、非推断基准。④ VZ-style = L2-scored dom+ctx proxy（非官方 attention），但 ctx 差异实证无关、stage 已对齐。⑤ claim scope = Qwen3-VL-8B 单架构（跨架构 future work）。
