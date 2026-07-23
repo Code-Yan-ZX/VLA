@@ -40,6 +40,14 @@ sliced pre path but selects with the POST ranking (PreMergerPruner(mask_ranking=
 equivalence, post+swap must reproduce pre-standard accuracy exactly and
 pre+swap must reproduce post-standard -- isolating RANKING as the only source
 of the pre/post gap.
+
+--mode hybrid (merger-aware selection, design §4c): post forward path
+(everything merged) + a per-image HYBRID unit mask = agreement(top-k PRE AND
+top-k POST) UNION contested budget routed to text: --hybrid-text-frac t of the
+contested slots go to the PRE ranking among high-Sobel-edge (text) units, the
+rest to the POST ranking among low-edge units. Keeps EXACTLY k units (iso-token
+with pre/post). --save-unit-scores stashes a per-image disagreement summary
+(Jaccard@k, Spearman(pre,post), mean edge) into per_sample.
 """
 from __future__ import annotations
 import os, sys, time, json, argparse
@@ -316,7 +324,7 @@ def parse_args():
     # --dry-check (which validates hook setup on dummy modules without a GPU).
     # main() enforces their presence when not dry-checking.
     ap.add_argument("--mode", required=False, default=None,
-                    choices=["none", "post", "pre"])
+                    choices=["none", "post", "pre", "hybrid"])
     ap.add_argument("--r", type=float, default=0.0,
                     help="prune ratio; k_i = round(full_i*(1-r)). "
                          "{0.5,0.75,0.875} -> keep {50,25,12.5}% of merge-units.")
@@ -376,6 +384,20 @@ def parse_args():
                          "reproduce pre-standard accuracy and pre+swap must "
                          "reproduce post-standard -- isolating RANKING as the only "
                          "source of the pre/post gap.")
+    ap.add_argument("--hybrid-text-frac", type=float, default=0.5,
+                    help="--mode hybrid ONLY (merger-aware selection, design §4c): "
+                         "fraction t in [0,1] of the CONTESTED budget (k - |agreement|) "
+                         "routed to the PRE ranking among high-edge (text) units; the "
+                         "rest goes to the POST ranking among low-edge units. t=1 -> "
+                         "all contested budget to pre/text (OCR-protective); t=0 -> all "
+                         "to post (object-friendly). Agreement units are always kept. "
+                         "Keeps exactly k units (iso-token with pre/post).")
+    ap.add_argument("--save-unit-scores", action="store_true",
+                    help="--mode hybrid ONLY: stash a per-image disagreement summary "
+                         "(n_units, k, agreement size, Jaccard@k, Spearman(pre,post), "
+                         "mean Sobel edge, routing branch) into per_sample[i]['unit_scores']. "
+                         "Recomputed grid counts guard the FIFO attachment against "
+                         "vLLM encoder-cache replays.")
     ap.add_argument("--seed", type=int, default=0,
                     help="vLLM/torch RNG seed (0 = default). For repeat runs; at "
                          "temp=0 variance comes from GPU-kernel non-determinism.")
@@ -570,6 +592,323 @@ def setup_post_merger_swap(model, r: float, selector: str = "l2",
         return tuple(out)
     model._process_image_input = _patched
     return diag, state          # state exposed so main() can report queue balance
+
+
+# --------------------------------------------------------------------------- #
+# (B-hybrid) MERGER-AWARE HYBRID SELECTION (Task 5 headline method;
+#   drafts/v3_merger_aware_design.md §4c). Forward path = POST (everything
+#   merged, numerically untouched -- same as mode=post/swap). Selection = a
+#   per-image HYBRID mask over the k kept 2x2 merge-units built from BOTH
+#   rankings at once:
+#     PRE  = deepstack[0]-input unit scores (_score_units, exactly as pre mode)
+#     POST = merged-token scores (_score_tokens on each split)
+#     EDGE = per-unit Sobel energy reconstructed from the visual encoder's OWN
+#            input pixels (text-stroke proxy; identical pooling convention as
+#            scripts/mechanism_token_survival.py:unit_edge_from_image -- 32px
+#            units, block-major -- but computed from the exact pixels the model
+#            sees, so it needs no image-file I/O and is immune to vLLM's
+#            encoder-cache replay pairing issues).
+#   Agreement set A = units in top-k under BOTH rankings (stage-robust; keep
+#   all). Contested budget (k - |A|) is ROUTED TO TEXT per --hybrid-text-frac
+#   t in [0,1]: round((k-|A|)*t) slots go to the PRE ranking among high-edge
+#   (above per-image contested-median edge; text) units, the rest to the POST
+#   ranking among low-edge units (overflow fills from the other pool). Keeps
+#   EXACTLY k units => iso-token with pre/post. t=1 => all contested budget to
+#   pre/text; t=0 => all to post. By unit equivalence (M3: swap==pre), running
+#   selection at the post stage with any unit mask is equivalent to pre-stage
+#   selection, so hybrid runs as "post forward + filter merged tokens".
+# --------------------------------------------------------------------------- #
+_CLIP_STD = (0.26862954, 0.26130258, 0.27577711)   # OPENAI_CLIP_STD, the Qwen-VL
+_LUMA = (0.299, 0.587, 0.114)                      # processor's normalization
+
+
+def _unit_edge_from_pixels(pixels, t: int, h: int, w: int):
+    """Per-32px-merge-unit Sobel edge energy from raw visual-encoder input
+    pixels. pixels: torch.Tensor [t*h*w, dim] (unit-major rows: groups of 4
+    consecutive rows = one 2x2 unit, inner order (ph,pw) raster; dim =
+    channels*temporal_patch*patch*patch, the HF Qwen-VL processor flatten
+    order). Returns float64 numpy [num_units] in block-major unit order.
+    Normalization is per-channel affine, so Sobel of the denormalized luma
+    equals Sobel of sum_c(luma_c*std_c*x_c) up to an irrelevant additive
+    constant -> we apply the (luma*std) weighting directly to normalized px."""
+    import numpy as np
+    from scipy.ndimage import sobel as _sobel
+    dim = int(pixels.shape[1])
+    p = int(round((dim / 6.0) ** 0.5))
+    if 6 * p * p != dim:
+        raise ValueError(f"pixel dim {dim} != 6*p^2 (patch layout unknown)")
+    m = 2                                            # spatial_merge_size
+    uh, uw = h // m, w // m
+    x = np.asarray(pixels.detach().float().cpu()).reshape(
+        t, uh, uw, m, m, 3, 2, p, p)
+    wgt = (np.array(_LUMA) * np.array(_CLIP_STD)).reshape(1, 1, 1, 1, 1, 3, 1, 1, 1)
+    g = (x * wgt).sum(axis=5).mean(axis=(0, 5))      # [uh,uw,m,m,p,p] (mean grid_t, temporal)
+    img = g.transpose(0, 2, 4, 1, 3, 5).reshape(uh * m * p, uw * m * p)
+    ex, ey = _sobel(img, axis=1), _sobel(img, axis=0)
+    edge = np.hypot(ex, ey)
+    unit_edge = edge.reshape(uh, m * p, uw, m * p).mean(axis=(1, 3))
+    return unit_edge.reshape(-1).astype(np.float64)  # unit-major
+
+
+def _spearman_np(a, b) -> float:
+    """Spearman rho between two 1-D numpy arrays (ties: average ranks)."""
+    import numpy as np
+    from scipy.stats import rankdata
+    if len(a) < 2:
+        return float("nan")
+    ra, rb = rankdata(a), rankdata(b)
+    if ra.std() == 0 or rb.std() == 0:
+        return float("nan")
+    return float(np.corrcoef(ra, rb)[0, 1])
+
+
+def _hybrid_select(pre, post, edge, k: int, text_frac: float):
+    """Per-image hybrid unit selection. pre/post/edge: 1-D tensors [num_units]
+    on the same device (edge may be float). Returns (idx [k] sorted long,
+    stats dict). Keeps EXACTLY k = min(k, num_units) units."""
+    f = int(pre.shape[0])
+    k = max(1, min(k, f))
+    dev = pre.device
+    pre_ord = torch.argsort(pre, descending=True)
+    post_ord = torch.argsort(post, descending=True)
+    in_pre = torch.zeros(f, dtype=torch.bool, device=dev)
+    in_post = torch.zeros(f, dtype=torch.bool, device=dev)
+    in_pre[pre_ord[:k]] = True
+    in_post[post_ord[:k]] = True
+    agree = in_pre & in_post
+    n_agree = int(agree.sum())
+    if n_agree >= k:
+        # agreement set already covers the budget: keep the k best-consensus
+        # units (smallest summed rank across BOTH rankings).
+        pre_rank = torch.empty(f, device=dev)
+        post_rank = torch.empty(f, device=dev)
+        arange_f = torch.arange(f, device=dev, dtype=pre_rank.dtype)
+        pre_rank[pre_ord] = arange_f
+        post_rank[post_ord] = arange_f
+        cand = agree.nonzero().squeeze(-1)
+        order = cand[torch.argsort((pre_rank + post_rank)[cand])][:k]
+        return order.sort().values, {"branch": "agree_ge_k", "agree_n": n_agree,
+                                     "pre_taken": -1, "post_taken": -1}
+    # ---- contested budget routed to text ----
+    picked = agree.clone()
+    contested = (in_pre ^ in_post).nonzero().squeeze(-1)
+    b = k - n_agree
+    n_pre = int(round(b * float(text_frac)))
+    if contested.numel():
+        c_edge = edge.index_select(0, contested)
+        med = c_edge.median()
+        high = contested[c_edge > med]       # text units
+        low = contested[c_edge <= med]       # non-text units
+    else:
+        high = low = contested
+
+    def _take(pool, scores, want):
+        if want <= 0 or pool.numel() == 0:
+            return 0
+        avail = pool[~picked.index_select(0, pool)]
+        if avail.numel() == 0:
+            return 0
+        m = min(want, int(avail.numel()))
+        sel = avail[torch.topk(scores.index_select(0, avail), m).indices]
+        picked[sel] = True
+        return int(sel.numel())
+
+    got_pre = _take(high, pre, n_pre)        # pre ranking among text units
+    if got_pre < n_pre:                      # text pool exhausted -> pre on low-edge
+        got_pre += _take(low, pre, n_pre - got_pre)
+    rem = k - int(picked.sum())
+    got_post = _take(low, post, rem)         # post ranking among non-text units
+    if got_post < rem:                       # low-edge pool exhausted -> post on high
+        got_post += _take(high, post, rem - got_post)
+    assert int(picked.sum()) == k, \
+        f"hybrid mask size {int(picked.sum())} != k={k}"
+    idx = picked.nonzero().squeeze(-1)       # ascending
+    return idx, {"branch": "routed", "agree_n": n_agree,
+                 "pre_taken": got_pre, "post_taken": k - n_agree - got_pre}
+
+
+def setup_hybrid(model, r: float, selector: str = "l2", family: str = "qwen3vl",
+                 text_frac: float = 0.5, save_scores: bool = False):
+    """POST forward path (everything merged) + hybrid pre/post/edge mask
+    selection. Returns (diag, state); state["stats_log"] (when save_scores)
+    holds one summary dict per popped image (FIFO; first entry = warmup)."""
+    visual = model.visual
+    unit = visual.spatial_merge_size ** 2
+    state = {"grid_thw": None, "pre_queue": [], "edge_queue": [],
+             "stats_log": []}
+    diag = {"fires": 0, "nk": [], "selector": selector,
+            "mask": "hybrid", "hybrid_text_frac": text_frac,
+            "save_unit_scores": save_scores,
+            "score_passes": 0, "consumed": 0, "fallback_stage": 0,
+            "edge_fallback": 0, "n_agree_ge_k": 0, "agree_fracs": [],
+            "first_merger": "merger" if family == "qwen2vl" else "deepstack_0"}
+
+    # (1) visual.forward pre_hook: capture grid_thw AND compute per-unit Sobel
+    #     edge from the encoder's OWN input pixels (per image, FIFO).
+    def _visual_prehook(module, args, kwargs):
+        g = kwargs.get("grid_thw")
+        px = kwargs.get("hidden_states")
+        if (g is None or px is None) and len(args) >= 1:
+            px = args[0] if px is None else px
+            if g is None and len(args) >= 2:
+                g = args[1]
+        if g is None:
+            return
+        if not torch.is_tensor(g):
+            g = torch.as_tensor(g)
+        state["grid_thw"] = g.detach() if torch.is_tensor(g) else g
+        if r == 0.0:
+            return
+        try:
+            off = 0
+            for row in g.tolist():
+                t_i, h_i, w_i = int(row[0]), int(row[1]), int(row[2])
+                n_patch = t_i * h_i * w_i
+                edge = _unit_edge_from_pixels(px[off:off + n_patch], t_i, h_i, w_i)
+                off += n_patch
+                state["edge_queue"].append(edge)
+        except Exception as e:                     # defensive: never break the
+            diag["edge_fallback"] += 1             # engine on edge computation
+            import numpy as np
+            if torch.is_tensor(px):
+                for row in g.tolist():
+                    state["edge_queue"].append(
+                        np.zeros(int(row[0] * row[1] * row[2]) // unit,
+                                 dtype=np.float64))
+            print(f"[hybrid] edge fallback ({type(e).__name__}: {str(e)[:120]})",
+                  file=sys.stderr, flush=True)
+    visual.register_forward_pre_hook(_visual_prehook, with_kwargs=True)
+
+    # (2) observe the first merger pre-mode ranks from; compute PRE unit scores
+    #     without touching the input (post path merges everything) -- identical
+    #     to setup_post_merger_swap.
+    first_merger = (visual.merger if family == "qwen2vl"
+                    else visual.deepstack_merger_list[0])
+    orig_fwd = first_merger.forward
+
+    def _wrapped(*args, _orig=orig_fwd, **kwargs):
+        hs = args[0]                                   # [seq, 1, ctx]
+        if r != 0.0 and state["grid_thw"] is not None:
+            seq = hs.shape[0]
+            ctx = hs.shape[-1]
+            total_units = seq // unit
+            feats = hs.reshape(total_units, unit, ctx)
+            scores = _score_units(feats, selector)     # [total_units]
+            full_units = (state["grid_thw"].prod(-1) // unit).tolist()
+            if sum(full_units) == total_units:
+                off = 0
+                for f in full_units:
+                    state["pre_queue"].append(scores[off:off + f])
+                    off += f
+                diag["score_passes"] += 1
+            else:                                      # defensive: grid mismatch
+                diag["fallback_stage"] += len(full_units)
+        return _orig(*args, **kwargs)
+    first_merger.forward = _wrapped
+    if hasattr(first_merger, "do_not_compile"):
+        first_merger.do_not_compile = True
+
+    # (3) _process_image_input: per split, pop (PRE scores, edge) FIFO, compute
+    #     POST scores from the merged tokens, build the hybrid mask, filter.
+    _orig_pii = model._process_image_input
+
+    def _patched(image_input):
+        splits = _orig_pii(image_input)
+        diag["fires"] += 1
+        if r == 0.0:
+            return splits
+        out = []
+        for s in splits:
+            n = int(s.shape[0])
+            k = max(1, int(round(n * (1.0 - r))))
+            pre_i = state["pre_queue"].pop(0) if state["pre_queue"] else None
+            edge_i = state["edge_queue"].pop(0) if state["edge_queue"] else None
+            if (pre_i is not None and edge_i is not None
+                    and int(pre_i.shape[0]) == n and len(edge_i) == n):
+                diag["consumed"] += 1
+                post_i = _score_tokens(s, selector)
+                pre_d = pre_i.to(device=s.device)
+                edge_t = torch.as_tensor(edge_i, device=s.device,
+                                         dtype=torch.float32)
+                idx, st = _hybrid_select(pre_d, post_i, edge_t, k, text_frac)
+                if st["branch"] == "agree_ge_k":
+                    diag["n_agree_ge_k"] += 1
+                if len(diag["agree_fracs"]) < 16:
+                    diag["agree_fracs"].append(
+                        round(st["agree_n"] / max(1, k), 3))
+                if save_scores:
+                    import numpy as np
+                    pre_np = pre_d.float().cpu().numpy()
+                    post_np = post_i.float().cpu().numpy()
+                    state["stats_log"].append({
+                        "n_units": n, "k": k, "agree_n": st["agree_n"],
+                        "jaccard_topk": round(st["agree_n"] / max(1, k), 4),
+                        "spearman_pre_post": round(_spearman_np(pre_np, post_np), 4),
+                        "mean_edge": round(float(np.mean(edge_i)), 5),
+                        "branch": st["branch"], "pre_taken": st["pre_taken"],
+                        "post_taken": st["post_taken"]})
+            else:
+                # encoder-cache replay or grid mismatch -> fall back to the
+                # post (stage) ranking rather than crash; diag exposes it.
+                diag["fallback_stage"] += 1
+                if save_scores:
+                    state["stats_log"].append(
+                        {"n_units": n, "k": k, "fallback": True})
+                idx = torch.topk(_score_tokens(s, selector), k).indices.sort().values
+            out.append(s.index_select(0, idx).contiguous())
+        if len(diag["nk"]) < 8:
+            diag["nk"].append((int(splits[0].shape[0]), int(out[0].shape[0])))
+        return tuple(out)
+    model._process_image_input = _patched
+    return diag, state
+
+
+def attach_hybrid_unit_scores(state, samples, per_sample, model_id: str,
+                              max_pixels: int, diag):
+    """Best-effort attachment of state["stats_log"] entries to per_sample by
+    FIFO order, guarded by per-image num_units. vLLM V1's encoder-cache replay
+    serves some requests without firing visual()/merger/pii (both hooks skipped
+    together -> the stats queue stays balanced but is missing exactly those
+    requests), so a bare positional zip can misalign after a replay: we recompute
+    each sample's full unit count offline with the SAME HF processor vLLM uses
+    and only attach when it matches the queue head. stats_log[0] = the warmup
+    request (dropped). Sets diag["stats_attached"]/["stats_total"]."""
+    stats = state["stats_log"][1:]                 # drop warmup entry
+    import numpy as np
+    full_units = [None] * len(samples)
+    try:
+        from PIL import Image
+        from transformers import AutoProcessor
+        proc = AutoProcessor.from_pretrained(model_id)
+        for i, smp in enumerate(samples):
+            kw = {}
+            if max_pixels and max_pixels > 0:
+                kw["max_pixels"] = max_pixels
+            g = proc.image_processor(Image.open(smp.image),
+                                     return_tensors="pt", **kw)["image_grid_thw"]
+            full_units[i] = int(g[0].prod()) // 4
+    except Exception as e:
+        print(f"[hybrid] offline grid recompute failed "
+              f"({type(e).__name__}: {str(e)[:160]}); unit scores NOT attached",
+              file=sys.stderr, flush=True)
+        diag["stats_attached"] = 0
+        diag["stats_total"] = len(stats)
+        return
+    ptr = 0
+    attached = 0
+    for i, smp in enumerate(samples):
+        if i >= len(per_sample):
+            break
+        if (ptr < len(stats) and full_units[i] is not None
+                and stats[ptr].get("n_units") == full_units[i]):
+            per_sample[i]["unit_scores"] = stats[ptr]
+            ptr += 1
+            attached += 1
+    diag["stats_attached"] = attached
+    diag["stats_total"] = len(stats)
+    diag["stats_attach_note"] = (
+        "FIFO matched on per-image num_units; unmatched samples were served "
+        "from vLLM's encoder-cache replay (no vision forward fired).")
 
 
 # --------------------------------------------------------------------------- #
@@ -1082,6 +1421,58 @@ def run_dry_check(family: str):
           f"(mask_computed_at={pruner4.diag['mask_computed_at']}); "
           f"kept {out4.shape[0]} tokens")
 
+    # (g) HYBRID: post forward path + hybrid pre/post/edge mask. grid (1,4,8)
+    #     -> 8 units -> k=2. Pixels [32, 24] = 6*p^2 with p=2. Checks: edge
+    #     queue + PRE queue populate from the hooks, the mask keeps EXACTLY k
+    #     merged tokens, diag counters balance, save_scores logs one entry.
+    model5 = _DummyModel(family)
+    grid5 = torch.tensor([[1, 4, 8]])
+    p_pix = 2
+    pixels5 = torch.randn(8 * unit, 6 * p_pix * p_pix)
+
+    def _fake_pii5(ii):
+        return (torch.randn(8, 32),)                # fully merged, 1 image
+    model5._process_image_input = _fake_pii5
+    diag5, state5 = setup_hybrid(model5, 0.75, "l2", family,
+                                 text_frac=1.0, save_scores=True)
+    model5.visual(pixels5, grid_thw=grid5)          # prehook: grid + edge
+    assert len(state5["edge_queue"]) == 1 and state5["edge_queue"][0].shape[0] == 8, \
+        [a.shape for a in state5["edge_queue"]]
+    first5 = (model5.visual.merger if family == "qwen2vl"
+              else model5.visual.deepstack_merger_list[0])
+    out5m = first5(torch.randn(8 * unit, 1, 16))    # wrapped: queues PRE scores
+    assert out5m.shape[0] == 8 and diag5["score_passes"] == 1
+    out5 = model5._process_image_input(None)        # hybrid selection
+    assert [s.shape[0] for s in out5] == [2], [s.shape for s in out5]
+    assert diag5["consumed"] == 1 and diag5["fallback_stage"] == 0, diag5
+    assert diag5["edge_fallback"] == 0, diag5
+    assert len(state5["stats_log"]) == 1 and \
+        state5["stats_log"][0]["n_units"] == 8 and state5["stats_log"][0]["k"] == 2
+    # exactly-k also at text_frac=0.0 and on a 2nd image (queue continues)
+    model5.visual(pixels5, grid_thw=grid5)
+    _ = first5(torch.randn(8 * unit, 1, 16))
+    diag5b, _ = diag5, None
+    out5b = model5._process_image_input(None)
+    assert [s.shape[0] for s in out5b] == [2] and diag5["consumed"] == 2
+    print(f"[dry-check]   OK hybrid selection: splits 8 -> {[s.shape[0] for s in out5]} "
+          f"by agreement+text-routed mask (consumed={diag5['consumed']}, "
+          f"fallback={diag5['fallback_stage']}, edge_fallback={diag5['edge_fallback']}, "
+          f"stats={state5['stats_log'][0]['jaccard_topk']})")
+
+    # (h) _hybrid_select unit test: agreement/routing/overflow branches, all
+    #     keep exactly k on random inputs (text_frac in {0, 0.5, 1}).
+    torch.manual_seed(0)
+    for f_u, k_u in [(40, 10), (41, 7), (9, 9), (16, 1)]:
+        for tf in (0.0, 0.5, 1.0):
+            pre_r = torch.randn(f_u)
+            post_r = pre_r + torch.randn(f_u) * 2.0
+            edge_r = torch.rand(f_u)
+            idx_r, st_r = _hybrid_select(pre_r, post_r, edge_r, k_u, tf)
+            assert idx_r.numel() == k_u and idx_r.unique().numel() == k_u, \
+                (f_u, k_u, tf, idx_r.numel())
+    print(f"[dry-check]   OK _hybrid_select: exactly-k masks across shapes/"
+          f"text_frac (branch example: {_hybrid_select(torch.randn(40), torch.randn(40), torch.rand(40), 10, 1.0)[1]['branch']})")
+
     print(f"[dry-check] ALL PASS for family={family}")
 
 
@@ -1119,6 +1510,15 @@ def main():
         r = 0.0
         if args.mask_ranking == "swap":
             raise SystemExit("--mask-ranking swap requires --mode post or pre")
+    if args.mode == "hybrid":
+        if args.mask_ranking == "swap":
+            raise SystemExit("--mask-ranking swap is not applicable to "
+                             "--mode hybrid (hybrid IS a crossed-ranking mask)")
+        if args.visionzip_style:
+            raise SystemExit("--visionzip-style is not supported with "
+                             "--mode hybrid (dominant-only standard path only)")
+        if not 0.0 <= args.hybrid_text_frac <= 1.0:
+            raise SystemExit("--hybrid-text-frac must be in [0,1]")
     proc_log = patch_processor(r, family)
 
     from vllm import LLM, SamplingParams
@@ -1151,6 +1551,7 @@ def main():
 
     diag = None
     swap_state = None
+    hybrid_state = None
     if args.mode == "post":
         if args.mask_ranking == "swap":
             # M3: post forward path + PRE ranking selection.
@@ -1158,6 +1559,11 @@ def main():
                                                       family)
         else:
             diag = setup_post_merger(model, r, args.selector)
+    elif args.mode == "hybrid":
+        # Merger-aware selection: post forward path + hybrid pre/post/edge mask.
+        diag, hybrid_state = setup_hybrid(model, r, args.selector, family,
+                                          args.hybrid_text_frac,
+                                          args.save_unit_scores)
     elif args.mode == "pre":
         pruner, _handles = setup_pre_merger(model, r, args.selector, family,
                                              visionzip_style=args.visionzip_style,
@@ -1229,6 +1635,13 @@ def main():
         # exactly one _process_image_input split (0 leftover, 0 fallback in a
         # clean run); nonzero => visual()/pii pairing broke for some images.
         diag["swap_queue_leftover"] = len(swap_state["queue"])
+    if hybrid_state is not None and diag is not None:
+        # Same FIFO-balance bookkeeping for the hybrid queues.
+        diag["hybrid_queue_leftover"] = (len(hybrid_state["pre_queue"])
+                                         + len(hybrid_state["edge_queue"]))
+        if args.save_unit_scores:
+            attach_hybrid_unit_scores(hybrid_state, samples, per_sample,
+                                      model_id, args.max_pixels, diag)
 
     result = {
         "model": model_id, "model_family": family,
@@ -1250,6 +1663,9 @@ def main():
         "vllm": vllm.__version__,
         "per_sample": per_sample,
     }
+    if args.mode == "hybrid":
+        result["hybrid_text_frac"] = args.hybrid_text_frac
+        result["save_unit_scores"] = args.save_unit_scores
     os.makedirs(os.path.dirname(args.out), exist_ok=True)
     with open(args.out, "w") as f:
         json.dump(result, f, indent=2)
