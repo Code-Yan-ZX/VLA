@@ -2,9 +2,9 @@
 
 _Generated 2026-07-23 · offline · CPU-only · scorer: `src/v3_premerger/official_scorers.py`_
 
-**Metrics applied:** TextVQA → official VQA accuracy; DocVQA → official ANLS. GQA/ChartQA/OCRBench/MME/MMBench/ScienceQA keep their existing stored metric (unchanged).
+**Metrics applied:** TextVQA → official VQA accuracy; DocVQA → official ANLS; GQA → official normalized exact match; OCRBench → official per-category containment rolled into the 5 skills (/1000). ChartQA/MME/MMBench/ScienceQA keep their stored metric.
 
-**Important caveat:** VQA-acc and ANLS are computed on the RAW stored generations (`per_sample[].answer`, often verbose multi-sentence text). No answer extraction is applied, so these are an *honest lower bound* of the official metric for these runs.
+**Important caveat:** VQA-acc and ANLS are computed on the RAW stored generations (`per_sample[].answer`, often verbose multi-sentence text). No answer extraction is applied, so these are an *honest lower bound* of the official metric for these runs. GQA/OCRBench generations are short (single-word prompts), so the official metric is meaningful there (see dedicated sections below).
 
 ### Root cause of the near-zero official scores
 
@@ -16,8 +16,6 @@ The router-probe runs were generated with a free-form prompt (no short-answer co
 
 - 🔄 **FLIP** **textvqa** (VQA-acc): OLD containment pre>post (0.695 vs 0.255) → NEW tie (0.000 vs 0.000)
 - ✅ hold **docvqa** (ANLS): OLD containment pre>post (0.725 vs 0.390) → NEW pre>post (0.019 vs 0.000)
-- ✅ hold **gqa** (stored): OLD containment post>pre (0.320 vs 0.380) → NEW post>pre (0.320 vs 0.380)
-- ✅ hold **ocrbench** (stored): OLD containment pre>post (0.580 vs 0.165) → NEW pre>post (0.580 vs 0.165)
 - ✅ hold **chartqa** (stored): OLD containment tie (0.190 vs 0.190) → NEW tie (0.190 vs 0.190)
 
 ## VERDICT at keep=25% (r=0.75)
@@ -26,11 +24,9 @@ The router-probe runs were generated with a free-form prompt (no short-answer co
 |---|---|---|---|---|---|---|---|---|---|
 | textvqa | VQA-acc | 0.695 | 0.255 | 0.000 | 0.000 | pre>post | tie | +0.0 | **FLIP** ⚠near-floor |
 | docvqa | ANLS | 0.725 | 0.390 | 0.019 | 0.000 | pre>post | pre>post | +1.9 | HOLD ⚠near-floor |
-| gqa | stored | 0.320 | 0.380 | 0.320 | 0.380 | post>pre | post>pre | -6.0 | HOLD |
-| ocrbench | stored | 0.580 | 0.165 | 0.580 | 0.165 | pre>post | pre>post | +41.5 | HOLD |
 | chartqa | stored | 0.190 | 0.190 | 0.190 | 0.190 | tie | tie | +0.0 | HOLD |
 
-Interpretation: **textvqa/docvqa** NEW pre/post use the official metric; **gqa/chartqa/ocrbench** NEW == OLD (existing metric, so direction cannot change).
+Interpretation: **textvqa/docvqa** NEW pre/post use the official metric; **chartqa** NEW == OLD (existing metric, direction cannot change). **GQA / OCRBench** are rescored officially in their dedicated sections below.
 
 ## Full per-cell table (OLD containment vs NEW official)
 

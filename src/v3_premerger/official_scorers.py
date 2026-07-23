@@ -187,6 +187,225 @@ def score_docvqa_anls(pred: str, gt_str: str) -> float:
 
 
 # ---------------------------------------------------------------------------
+# GQA -- official accuracy = normalized EXACT match.
+#
+# The OFFICIAL GQA eval script (nlp.stanford.edu/data/gqa/eval.zip -> eval.py,
+# header "Evaluation code for GQA", scoring loop L347-351) does
+#       gold = question["answer"]; predicted = predictions[qid]
+#       correct = (predicted == gold)            # eval.py L350
+# i.e. a RAW string exact match: the reference script assumes the predictions
+# file is already cleaned (the dataset gold answers are clean single tokens,
+# e.g. "no", "traffic light"). For (often verbose) VLM generations we first
+# canonicalize BOTH sides with the VQA-eval normalization (vqa_normalize above:
+# lowercase, strip, remove punctuation, drop articles a/an/the, number-word ->
+# digit, expand contractions). This is the standard VLM GQA evaluation
+# (lmms-eval / LLaVA) and a superset of the "lowercase + de-punctuate +
+# de-article" cleanup; on already-clean GQA outputs it is a NO-OP, so it
+# reproduces the official raw-exact number while staying robust to verbose
+# generations. Returns 1.0 if the normalized prediction equals ANY ';'-joined
+# normalized gold variant, else 0.0.
+# ---------------------------------------------------------------------------
+
+def score_gqa(pred: str, gt_str: str) -> float:
+    """GQA official per-sample accuracy (normalized exact match). 0.0/1.0.
+
+    gt_str: gold answer (single token for GQA; ';'-joined variants tolerated).
+    """
+    if not str(gt_str).strip():
+        return 0.0
+    if pred is None:
+        pred = ""
+    pred_n = vqa_normalize(pred)
+    for g in str(gt_str).split(";"):
+        if vqa_normalize(g) == pred_n:
+            return 1.0
+    return 0.0
+
+
+# ---------------------------------------------------------------------------
+# OCRBench -- official accuracy: per-sample containment keyed on question_type,
+# rolled up into the 5 official skills (each /200, total /1000).
+#
+# Ported from the official OCRBench evaluation (Yuliang-Liu/OCRBench). The
+# canonical implementation is mirrored VERBATIM in VLMEvalKit
+# (vlmeval/dataset/utils/ocrbench.py:OCRBench_eval, L8-60), used as reference:
+#   * For EACH sample the model output `predict` is compared against the list
+#     of acceptable answers; the sample is correct if ANY answer is *contained*
+#     in the normalized output (L33 / L40:  `if answer in predict`).
+#   * Normalization depends on the (fine) question_type (L29-42):
+#       - "Handwritten Mathematical Expression Recognition" (HME100k LaTeX):
+#             strip + "\n"->" " + remove ALL spaces on BOTH sides, and NO
+#             lowercasing (case-SENSITIVE).            (L31-32)
+#       - every other type:
+#             lower() + strip() + "\n"->" " on BOTH sides.   (L38-39)
+#   * The 10 fine question_types roll up into 5 categories. We use the
+#     DATA-SIDE grouping (eval/full_splits/ocrbench.jsonl `category`, 200 each):
+#       Text Recognition (TR)  = Regular+Irregular+Artistic+Digit String
+#       Handwriting Text Recognition (HTR) = Handwriting+HME+Non-Semantic
+#       Scene Text-centric VQA (ST-VQA), Document Text-centric VQA (DT-VQA),
+#       Key Information Extraction (KIE)            (each 1:1).
+#     (VLMEvalKit instead bundles all 6 recognition types under "Text
+#     Recognition" and keeps HMER separate; the per-sample MATCHING rule above
+#     is identical either way -- only the reporting roll-up differs.)
+#   * Final Score = sum of the 5 category counts = /1000 on the FULL 1000-sample
+#     benchmark (200 per category);  Final Score Norm = Final Score / 10. (L55-60)
+#
+# NOTE: this is the SAME containment rule the runner already applies
+# (serve_bench.py / v3_premerger_runner.score_ocrbench). The ONLY behavioural
+# difference is that the official HME branch is case-SENSITIVE while the runner
+# lowercases HME too -- empirically identical on our cells (0 disagreeing
+# samples; see experiments/j0b_official_scorers.md).
+# ---------------------------------------------------------------------------
+
+# fine question_type that drives the per-sample MATCHING rule (nospace +
+# case-sensitive branch). NOTE: a FINE type, NOT one of the 5 categories.
+OCRBENCH_HME = "Handwritten Mathematical Expression Recognition"
+
+# data-side official 5 categories (eval/full_splits/ocrbench.jsonl `category`;
+# 200 samples each, total 1000). Abbrevs: TR / HTR / ST-VQA / DT-VQA / KIE.
+# NB this grouping differs from VLMEvalKit's: Handwriting/HME/Non-Semantic are
+# bundled into "Handwriting Text Recognition" (HTR) and there is no separate
+# HMER category -- we follow the data-side `category` (authoritative here).
+OCRBENCH_CATEGORIES = [
+    "Text Recognition",
+    "Handwriting Text Recognition",
+    "Scene Text-centric VQA",
+    "Document Text-centric VQA",
+    "Key Information Extraction",
+]
+
+# deterministic fine question_type -> category (verified on ocrbench.jsonl:
+# TR={Regular,Irregular,Artistic,Digit String}; HTR={Handwriting,HME,
+# Non-Semantic}; the 3 VQA/KIE types map 1:1).
+OCRBENCH_QT_TO_CAT = {
+    "Regular Text Recognition": "Text Recognition",
+    "Irregular Text Recognition": "Text Recognition",
+    "Artistic Text Recognition": "Text Recognition",
+    "Digit String Recognition": "Text Recognition",
+    "Handwriting Recognition": "Handwriting Text Recognition",
+    OCRBENCH_HME: "Handwriting Text Recognition",
+    "Non-Semantic Text Recognition": "Handwriting Text Recognition",
+    "Scene Text-centric VQA": "Scene Text-centric VQA",
+    "Doc-oriented VQA": "Document Text-centric VQA",
+    "Key Information Extraction": "Key Information Extraction",
+}
+
+
+def ocrbench_category(question_type: str = "", category: str = None) -> str:
+    """Resolve a sample's official 5-category (for /1000 aggregation). Prefer
+    the explicit data-side `category` field; else map the fine question_type."""
+    if category in OCRBENCH_CATEGORIES:
+        return category
+    return OCRBENCH_QT_TO_CAT.get(question_type, "Unknown")
+
+
+# back-compat alias (older callers used the VLMEvalKit 'skill' naming)
+ocrbench_skill = ocrbench_category
+
+
+def score_ocrbench(pred: str, gt_str: str, question_type: str = "",
+                   nospace: bool = None) -> int:
+    """OCRBench official per-sample score (0/1).
+
+    gt_str: ';'-joined acceptable answers (OCRBench `answer` list).
+    question_type: fine OCRBench question_type; selects the HME branch.
+    nospace: explicit override for the space-insensitive HME rule; if None it
+        is inferred as (question_type == HME). Lets callers that only carry the
+        runner's choices=["__nospace__"] flag (not the question_type) still hit
+        the official HME branch.
+    """
+    if not str(gt_str).strip():
+        return 0
+    if pred is None:
+        pred = ""
+    if nospace is None:
+        nospace = (question_type == OCRBENCH_HME)
+    answers = str(gt_str).split(";")
+    if nospace:
+        p = str(pred).strip().replace("\n", " ").replace(" ", "")
+        for a in answers:
+            a = a.strip().replace("\n", " ").replace(" ", "")
+            if a and a in p:
+                return 1
+        return 0
+    p = str(pred).lower().strip().replace("\n", " ")
+    for a in answers:
+        a = a.lower().strip().replace("\n", " ")
+        if a and a in p:
+            return 1
+    return 0
+
+
+def score_ocrbench_total(per_cat_counts: dict) -> dict:
+    """Roll per-CATEGORY CORRECT COUNTS into the official 5-category table +
+    Final Score. Input maps category -> #correct (each category = 200 on the
+    full benchmark). Returns {<5 categories>: count, 'Final Score': int,
+    'Final Score Norm': float}."""
+    out = {c: per_cat_counts.get(c, 0) for c in OCRBENCH_CATEGORIES}
+    final = sum(out.values())
+    out["Final Score"] = final
+    out["Final Score Norm"] = float(final) / 10.0
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Batch wrappers: pure functions, input pred/gt lists -> {acc, n, per_item, ...}
+# (convenience for standalone rescoring; the rescore script may also loop the
+# per-sample functions directly, as it does for textvqa/docvqa).
+# ---------------------------------------------------------------------------
+
+def score_gqa_batch(preds: list, gts: list) -> dict:
+    """Batch GQA accuracy. preds[i] vs gts[i] (gts may be ';'-joined variants).
+    Returns {'acc','n','per_item'}."""
+    per = [score_gqa(p, g) for p, g in zip(preds, gts)]
+    n = len(per)
+    return {"acc": (sum(per) / n if n else 0.0), "n": n, "per_item": per}
+
+
+def score_ocrbench_batch(items: list) -> dict:
+    """Batch OCRBench accuracy + official 5-category breakdown.
+
+    items: list of (pred, gt_str, question_type[, category]).
+    Returns {'acc','n','per_item','categories':{cat:{correct,total,acc}},
+             'final_score','final_score_norm','official_total_1000_extrap'}.
+    `official_total_1000_extrap` scales each present category's accuracy to the
+    official 200-samples-per-category basis -- the /1000-scale number a
+    (possibly unbalanced) subset implies; on the full balanced benchmark it ==
+    the raw Final Score."""
+    per, cat_correct, cat_total = [], {}, {}
+    for it in items:
+        pred, gt = it[0], it[1]
+        qt = it[2] if len(it) > 2 else ""
+        category = it[3] if len(it) > 3 else None
+        c = score_ocrbench(pred, gt, qt)
+        per.append(c)
+        cat = ocrbench_category(qt, category)
+        cat_total[cat] = cat_total.get(cat, 0) + 1
+        if c:
+            cat_correct[cat] = cat_correct.get(cat, 0) + 1
+    n = len(per)
+    categories = {}
+    extrap = 0.0
+    for cat in OCRBENCH_CATEGORIES:
+        tot = cat_total.get(cat, 0)
+        cor = cat_correct.get(cat, 0)
+        acc = (cor / tot) if tot else 0.0
+        categories[cat] = {"correct": cor, "total": tot, "acc": acc}
+        if tot:
+            extrap += acc * 200.0  # official 200-per-category basis
+    total = score_ocrbench_total(cat_correct)
+    return {
+        "acc": (sum(per) / n if n else 0.0),
+        "n": n,
+        "per_item": per,
+        "categories": categories,
+        "final_score": total["Final Score"],
+        "final_score_norm": total["Final Score Norm"],
+        "official_total_1000_extrap": extrap,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Self-test (hand-checked cases).
 # ---------------------------------------------------------------------------
 
@@ -243,6 +462,70 @@ if __name__ == "__main__":
 
     # 5) dissimilar below threshold -> 0.0
     check("docvqa below-threshold", score_docvqa_anls("xyz", "charles d. nesbit"), 0.0)
+
+    # ---- GQA normalized exact match ------------------------------------
+    # (a) case-insensitive: "No" vs "no"
+    check("gqa case-insens", score_gqa("No", "no"), 1.0)
+    # (b) article removal: "the tree" vs "tree"
+    check("gqa article-drop", score_gqa("the tree", "tree"), 1.0)
+    # (c) trailing punctuation: "cat." vs "cat"
+    check("gqa trailing-punct", score_gqa("cat.", "cat"), 1.0)
+    # (d) number-word -> digit: "three cats" vs "3 cats"
+    check("gqa digit-article", score_gqa("three cats", "3 cats"), 1.0)
+    # (e) wrong answer -> 0 (containment would WRONGLY pass: "no" in "I don't know")
+    check("gqa no-contain-leak", score_gqa("I don't know", "no"), 0.0)
+    # (f) ';'-joined variants: matches second variant
+    check("gqa variant-match", score_gqa("bus", "car;bus"), 1.0)
+    # batch wrapper
+    gb = score_gqa_batch(["No", "dog", "the tree"], ["no", "cat", "tree"])
+    check("gqa batch-acc", gb["acc"], 2.0 / 3.0)
+
+    # ---- OCRBench official per-sample rules ----------------------------
+    # (1) non-HME containment (case-insensitive): answer inside verbose output
+    check("ocr docvqa-contain", score_ocrbench("The city is Paris.", "paris",
+                                               "Doc-oriented VQA"), 1.0)
+    # (2) non-HME no-match
+    check("ocr docvqa-nomatch", score_ocrbench("cat", "dog",
+                                              "Scene Text-centric VQA"), 0.0)
+    # (3) HME space-insensitive: spaces stripped on both sides
+    check("ocr hme-nospace", score_ocrbench("x ^ 2 + 1", "x^2+1",
+                                           "Handwritten Mathematical Expression Recognition"), 1.0)
+    # (4) HME is CASE-SENSITIVE (official, no lowercase): "X^2" != "x^2"
+    check("ocr hme-case-sensitive", score_ocrbench("X^2", "x^2",
+                                                  "Handwritten Mathematical Expression Recognition"), 0.0)
+    # (5) HME matching case -> 1
+    check("ocr hme-exact", score_ocrbench("x^2", "x^2",
+                                         "Handwritten Mathematical Expression Recognition"), 1.0)
+    # (6) ';'-joined answers: OR over acceptable answers
+    check("ocr or-answers", score_ocrbench("2,112", "2112;2 112;2,112",
+                                          "Doc-oriented VQA"), 1.0)
+    # (7) nospace override via flag (no question_type) -> space-insensitive
+    check("ocr nospace-flag", score_ocrbench("a + b", "a+b", "", nospace=True), 1.0)
+
+    # category roll-up + official /1000 aggregation.
+    # Full balanced benchmark = 200 per CATEGORY (5 categories); all correct -> 1000.
+    full = {c: 200 for c in OCRBENCH_CATEGORIES}
+    tot = score_ocrbench_total(full)
+    check("ocr total-1000", float(tot["Final Score"]), 1000.0)
+    check("ocr total-norm", tot["Final Score Norm"], 100.0)
+
+    # question_type -> category resolver (data-side grouping)
+    assert ocrbench_category("Non-Semantic Text Recognition") == "Handwriting Text Recognition"
+    assert ocrbench_category(OCRBENCH_HME) == "Handwriting Text Recognition"
+    assert ocrbench_category("Doc-oriented VQA") == "Document Text-centric VQA"
+    assert ocrbench_category("", category="Key Information Extraction") == "Key Information Extraction"
+    print("[OK ] ocr category-resolver (TR/HTR/ST-VQA/DT-VQA/KIE mapping)")
+
+    # batch on a tiny unbalanced subset -> acc + extrapolation sanity
+    ob = score_ocrbench_batch([
+        ("Paris", "paris", "Doc-oriented VQA"),          # correct (cat DT-VQA)
+        ("x^2", "x^2", OCRBENCH_HME),                    # correct (cat HTR)
+        ("dog", "cat", "Regular Text Recognition"),      # wrong  (cat TR)
+    ])
+    check("ocr batch-acc", ob["acc"], 2.0 / 3.0)
+    # extrap: DT-VQA 1/1*200 + HTR 1/1*200 + TR 0/1*200 = 400
+    check("ocr batch-extrap", ob["official_total_1000_extrap"], 400.0)
+    check("ocr batch-cat-HTR", ob["categories"]["Handwriting Text Recognition"]["acc"], 1.0)
 
     print()
     if failures:
