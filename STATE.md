@@ -1,7 +1,7 @@
 # STATE.md — 当前项目状态（主窗口维护，保持 ≤30 行）
 
 > 项目：VLM 视觉 token 压缩 · /goal 锁定：Rank-Before-Merge → **CCF-B 主（CCF-A 扩展）submission-ready 方法论文**
-> 最近更新：2026-07-24 · **J1 PASS：Qwen2.5-VL-7B 修通**（mrope 修复验证：GQA n50 pre 0.680/post 0.640 均≥0.40、TextVQA pre 0.780、qwen3vl 回归不变；早期信号 Qwen2.5 GQA pre≥post 弱占优与 Qwen3 同模式）。J0a 完整 split/J0b 官方 scorer（GQA tie 0.470 官方口径保持）/J4 HF baseline harness 均已交付 commit。**J2 跨代矩阵运行中**（21 cell + GQA tie n200 双模型 + 官方 rescore）。digest experiments/j1_qwen2vl_mrope_fix.md。
+> 最近更新：2026-07-24 · **J2 完成：跨代一致性成立**（Qwen2.5-VL 官方指标 n200：TextVQA pre−post +32.0pp / DocVQA +18.8pp / OCRBench +28.5pp 均≥5σ；GQA tie +1.0pp、@12.5% exact tie；vz≡post 字节一致）。goal 条件①（双模型结论一致）subset 尺度达成。**J4 等价性 gate 运行中**（HF vs vLLM ≥15/16 → FastV/Pyramid 冒烟）。下一步：J5 QA 止损 gate → J7 完整 split 主表。digest experiments/j2_crossgen_matrix.md。
 
 ## ★ 完成条件（user）：Qwen3-VL-8B + Qwen2.5-VL-7B 结论一致 / 官方完整 split（TextVQA·DocVQA·OCRBench·GQA）/ 强 baseline 充分（FastV·VisionZip-port·PyramidDrop）/ 机制+效率消融闭环 / 论文 submission-ready。**不跨模型宣 SOTA；仅同模型同 harness 领先才写"超现有方法"**。
 ## ★ 队列（串行 A40，每 job<6GPU·h）：J1 修通 Qwen2.5-VL → J2 跨代矩阵+官方 rescore+GQA n=200 tie 双模型确证 → J3 机制跨代复制 → J4 FastV/PyramidDrop port 探针 → **J5 QA 单次止损 gate（预注册：均值≥RBM+1pp 且 ≥3/4 基准不回退>0.5pp 且 z≥1.5，否则冻结 plain RBM、不再搜 hybrid/router，≤2GPU·h）** → J6 效率表 → J7 官方完整 split 主表（headline 先行，~50–60h 断点续跑）→ J8 消融闭环 → J9 paper_v4+venue（投稿前升级 user）。
