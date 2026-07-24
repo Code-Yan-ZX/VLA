@@ -352,25 +352,43 @@ def _find_embed_tokens(model):
     Returns (embed_module, path_str) or (None, note)."""
     import torch.nn as nn
     candidates = [
-        "language_model.model.embed_tokens",          # qwen3vl / qwen2.5vl
+        "model.language_model.model.embed_tokens",    # qwen3vl top-level wrapper
+        "language_model.model.embed_tokens",          # qwen2.5vl
         "model.language_model.embed_tokens",
         "language_model.embed_tokens",
         "model.model.embed_tokens",
         "model.embed_tokens",
         "embed_tokens",
     ]
+
+    def _is_word_embed(m):
+        # vLLM serves the LLM word embedding as VocabParallelEmbedding (NOT an
+        # nn.Embedding subclass); accept any 2-D weight with a vocab-scale row
+        # count (Qwen text vocab ~152k >> ViT pos_embed 2304).
+        w = getattr(m, "weight", None)
+        return (w is not None and getattr(w, "ndim", 0) == 2
+                and w.shape[0] >= 100000)
+
     for path in candidates:
         obj = model
         for part in path.split("."):
             obj = getattr(obj, part, None)
             if obj is None:
                 break
-        if isinstance(obj, nn.Embedding):
+        if obj is not None and _is_word_embed(obj):
             return obj, path
+    # name-suffix scan: '*.embed_tokens' with the largest vocab row count
     best, best_path = None, None
     for name, mod in model.named_modules():
-        if isinstance(mod, nn.Embedding) and (
-                best is None or mod.num_embeddings > best.num_embeddings):
+        if name.split(".")[-1] == "embed_tokens" and _is_word_embed(mod):
+            if best is None or mod.weight.shape[0] > best.weight.shape[0]:
+                best, best_path = mod, name
+    if best is not None:
+        return best, f"named_modules:{best_path}"
+    # final fallback: largest nn.Embedding (HF-style weights)
+    for name, mod in model.named_modules():
+        if isinstance(mod, nn.Embedding) and mod.num_embeddings >= 100000 and (
+                best is None or mod.num_embeddings > best.weight.shape[0]):
             best, best_path = mod, name
     if best is not None:
         return best, f"named_modules:{best_path}"
@@ -447,12 +465,31 @@ def _qa_precompute(model, tokenizer, samples, embed_cache: bool,
             return cache[question]
         ids = _qa_tokenize_question(tokenizer, question)
         emb = None
+        nv = int(embed.num_embeddings)
+        if not diag.get("nv_printed"):
+            print(f"[qa] embed path={embed_path} num_embeddings={nv} "
+                  f"first_q_ids={len(ids)} max_id={max(ids) if ids else -1}",
+                  file=sys.stderr, flush=True)
+            diag["nv_printed"] = True
         if ids:
-            with torch.no_grad():
-                ids_t = torch.as_tensor(ids, dtype=torch.long,
-                                        device=embed.weight.device)
-                e = embed(ids_t).float()                 # [nqt, hidden_llm]
-                emb = F.normalize(e, dim=-1).contiguous()
+            oob = [i for i in ids if not (0 <= i < nv)]
+            if oob:
+                diag["oob_ids"] = diag.get("oob_ids", 0) + len(oob)
+                ids = [i for i in ids if 0 <= i < nv]
+        if ids:
+            try:
+                with torch.no_grad():
+                    ids_t = torch.as_tensor(ids, dtype=torch.long,
+                                            device=embed.weight.device)
+                    e = embed(ids_t).float()             # [nqt, hidden_llm]
+                    emb = F.normalize(e, dim=-1).contiguous()
+            except Exception as ex:
+                diag["embed_errors"] = diag.get("embed_errors", 0) + 1
+                if diag["embed_errors"] <= 3:
+                    print(f"[qa] embed() failed ({type(ex).__name__}: "
+                          f"{str(ex)[:120]}) -- qsim disabled for this question",
+                          file=sys.stderr, flush=True)
+                emb = None
         else:
             diag["n_empty_question"] += 1
         if embed_cache:
