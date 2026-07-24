@@ -557,6 +557,10 @@ def parse_args():
                     help="prune ratio; k_i = round(full_i*(1-r)). "
                          "{0.5,0.75,0.875} -> keep {50,25,12.5}% of merge-units.")
     ap.add_argument("--max-num-seqs", type=int, default=16)
+    ap.add_argument("--chunk-size", type=int, default=1000,
+                    help="split generation into chunks of this many requests "
+                         "(bounds host RAM and failure blast radius; "
+                         "0/<=0 = single batch)")
     ap.add_argument("--gpu-memory-utilization", type=float, default=0.90,
                     help="vLLM gpu_memory_utilization. Lower on a shared GPU "
                          "(e.g. 0.55 when another user holds ~18GB on A40-46G).")
@@ -751,23 +755,34 @@ def patch_processor(r: float, family: str = "qwen3vl"):
 # byte-identical to stock vLLM; the qwen3vl branch is never touched.
 # --------------------------------------------------------------------------- #
 def _capped_image_path(path: str, max_pixels: int) -> str:
-    """Enforce a pixel budget by PIL pre-resize, because vLLM 0.19 V1 ignores
-    BOTH engine-level and per-request mm_processor_kwargs={'max_pixels':...}
-    for Qwen3-VL (verified: DocVQA ptid identical with/without either), and
-    transformers 4.57's processor ignores the kwarg too. Edges round to
-    multiples of 32 (= patch 16 x merge 2); results cached under
-    runs/data/_capped_cache (jpeg q=95). No-op when max_pixels<=0 or the
-    image is already within budget."""
-    if not max_pixels or max_pixels <= 0:
-        return path
+    """PIL pre-resize enforcing BOTH the pixel CAP (vLLM 0.19 V1 and
+    transformers 4.57 ignore every max_pixels kwarg -- verified) and a pixel
+    FLOOR (tiny images produce sub-merge-unit ViT grids, e.g. 2 patches,
+    which crash the merger and poison the whole vLLM engine). Edges round to
+    multiples of 32 (the processor does final factor rounding); cached under
+    runs/data/_capped_cache (jpeg q=95). No-op when already within
+    [FLOOR_PIXELS, max_pixels] with sides >= FLOOR_SIDE."""
+    FLOOR_PIXELS = 6272          # ~6-8 merge units of area, both families
+    FLOOR_SIDE = 64              # >= 2 merge rows after processor rounding
     try:
         from PIL import Image
         import math, hashlib
         with Image.open(path) as im:
             w, h = im.size
-            if w * h <= max_pixels:
+            need_cap = bool(max_pixels and max_pixels > 0
+                            and w * h > max_pixels)
+            need_floor = (w * h < FLOOR_PIXELS or w < FLOOR_SIDE
+                          or h < FLOOR_SIDE)
+            if not need_cap and not need_floor:
                 return path
-            scale = math.sqrt(max_pixels / float(w * h))
+            if need_cap:
+                scale = math.sqrt(max_pixels / float(w * h))
+            else:
+                scale = max(
+                    FLOOR_SIDE / w if w < FLOOR_SIDE else 1.0,
+                    FLOOR_SIDE / h if h < FLOOR_SIDE else 1.0,
+                    math.sqrt(FLOOR_PIXELS / float(w * h))
+                    if w * h < FLOOR_PIXELS else 1.0)
             nw = max(32, round(w * scale / 32) * 32)
             nh = max(32, round(h * scale / 32) * 32)
             key = hashlib.md5(f"{path}|{nw}x{nh}".encode()).hexdigest()
@@ -1335,6 +1350,22 @@ class PreMergerPruner:
         seq = hs.shape[0]
         ctx = hs.shape[-1]
         num_units = seq // self.unit
+        if num_units == 0:
+            # Sub-unit grid (< spatial_merge_size**2 patches; tiny/odd
+            # images): cannot prune -- hand the rows to the original merger
+            # unchanged (mode-none behavior; vLLM skips the sample if the
+            # placeholder contract mismatches, but the batch stays alive).
+            self.diag["degraded_subunit"] = \
+                self.diag.get("degraded_subunit", 0) + 1
+            return hs
+        if seq % self.unit != 0:
+            # Dangling partial-unit patches (grid dims not merge-divisible):
+            # drop them (<= unit-1 patches out of seq; negligible) so the
+            # reshape into (num_units, unit, ctx) is exact.
+            self.diag["trimmed_patches"] = \
+                self.diag.get("trimmed_patches", 0) + (seq % self.unit)
+            hs = hs[:num_units * self.unit]
+            seq = num_units * self.unit
         if self._mask is None:
             # ---- compute per-unit scores + top-k mask ----
             if self.mask_ranking == "swap":
@@ -1363,7 +1394,7 @@ class PreMergerPruner:
             off = 0
             for f, k in zip(self.full_units, self.k_units):
                 s_i = scores[off:off + f]
-                idx = torch.topk(s_i, k).indices
+                idx = torch.topk(s_i, min(k, f)).indices   # k<=f: never over-ask
                 keep[off + idx] = True
                 off += f
             self._mask = keep.unsqueeze(-1).expand(-1, self.unit).reshape(-1)
@@ -2024,15 +2055,17 @@ def main():
     # Loaded early (before mode setup) so the J5 QA-pre path can embed the
     # questions before generation; reused unchanged by the chat loop below.
     samples = load_subset(args.subset)[:args.n]
-    if args.max_pixels and args.max_pixels > 0:
-        n_cap = 0
-        for s in samples:
-            new = _capped_image_path(s.image, args.max_pixels)
-            if new != s.image:
-                n_cap += 1
-            s.image = new
-        print(f"[cap] {n_cap}/{len(samples)} images pre-resized to <= "
-              f"{args.max_pixels} px (vLLM ignores max_pixels kwargs; "
+    # Always run the pre-resize pass: it enforces the pixel CAP when
+    # --max-pixels>0 AND the pixel FLOOR (tiny images crash the merger).
+    n_cap = 0
+    for s in samples:
+        new = _capped_image_path(s.image, args.max_pixels)
+        if new != s.image:
+            n_cap += 1
+        s.image = new
+    if n_cap:
+        print(f"[cap] {n_cap}/{len(samples)} images pre-resized "
+              f"(cap={args.max_pixels or 'off'}, floor=6272px/64side; "
               f"cache runs/data/_capped_cache)", flush=True)
 
     diag = None
@@ -2099,24 +2132,33 @@ def main():
 
     t0 = time.perf_counter()
     n_skip = 0
-    try:
-        outs = llm.chat(msgs_all, sampling_params=sp, **chat_kw)
-        wall = time.perf_counter() - t0
-    except Exception as e:
-        # Batched call aborts if ANY single prompt exceeds max_model_len (or
-        # another per-sample failure). Re-run per-sample, skip the failures so
-        # one huge document cannot abort the whole DocVQA run.
-        print(f"[v3] batched chat failed ({type(e).__name__}: {str(e)[:200]}); "
-              f"falling back to per-sample (skip-on-error).", flush=True)
-        outs = [None] * len(msgs_all)
-        t0 = time.perf_counter()
-        for i, m in enumerate(msgs_all):
-            try:
-                outs[i] = llm.chat([m], sampling_params=sp, **chat_kw)[0]
-            except Exception:
-                outs[i] = None
-                n_skip += 1
-        wall = time.perf_counter() - t0
+    # Chunked generation: (1) bounds host RAM -- a single 5349-sample DocVQA
+    # batch drove vLLM to ~56GB RSS and got SIGKILLed by the host OOM-killer
+    # (no traceback); (2) bounds blast radius -- one poisoned request only
+    # kills its chunk, the per-sample fallback rescues the rest.
+    outs = [None] * len(msgs_all)
+    chunk = args.chunk_size if args.chunk_size and args.chunk_size > 0 \
+        else len(msgs_all)
+    for c0 in range(0, len(msgs_all), chunk):
+        part = msgs_all[c0:c0 + chunk]
+        try:
+            outs[c0:c0 + len(part)] = llm.chat(part, sampling_params=sp,
+                                               **chat_kw)
+        except Exception as e:
+            # Batched call aborts if ANY single prompt in the chunk exceeds
+            # max_model_len (or another per-sample failure). Re-run the chunk
+            # per-sample, skip the failures.
+            print(f"[v3] batched chat failed on chunk @{c0} "
+                  f"({type(e).__name__}: {str(e)[:200]}); "
+                  f"falling back to per-sample (skip-on-error).", flush=True)
+            for j, m in enumerate(part):
+                try:
+                    outs[c0 + j] = llm.chat([m], sampling_params=sp,
+                                            **chat_kw)[0]
+                except Exception:
+                    outs[c0 + j] = None
+                    n_skip += 1
+    wall = time.perf_counter() - t0
 
     n_ok = 0
     correct = 0
