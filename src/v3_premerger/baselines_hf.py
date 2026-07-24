@@ -355,6 +355,30 @@ def rank_keep_indices(attn_w: torch.Tensor, image_mask: torch.Tensor,
 # rotary_emb / layernorms / MLP / lm_head -- the ONLY thing we drive manually is
 # the layer iteration order and the token pruning between layers (which vLLM V1
 # cannot express).
+#
+# TRANSFORMERS 4.57 LAYER-API COMPAT (root cause of the J4 STEP2 crash):
+#   * Qwen2.5-VL decoder layers use the LEGACY API: forward(...,
+#     output_attentions=...) -> (hidden, [attn_weights]);
+#   * Qwen3-VL decoder layers use the MODERN API: forward(...) returns a BARE
+#     hidden tensor and SILENTLY DROPS output_attentions (the layer does
+#     `hidden, _ = self.self_attn(...)` and never surfaces weights).  Indexing
+#     that bare tensor with out[0]/out[1] silently takes sequence rows, loses the
+#     batch dim, and the next layer's RoPE broadcast fails with
+#     "size of tensor a (32) must match b (128)" (num_heads vs head_dim).
+#   => at prune layers we ALWAYS replicate the pre-norm block ourselves and call
+#   `layer.self_attn(..., output_attentions=True, use_cache=True)` directly:
+#   the ATTENTION module (both families, eager impl) returns (output, weights)
+#   unconditionally.  Identical math: standard pre-norm residual block,
+#   attention_dropout=0 at eval.  Verified by the dry-check r=0 equivalence.
+#
+# Qwen3-VL DEEPSTACK: the native TextModel.forward ADDS deepstack_visual_embeds
+# (a list of [n_img, H] features tapped from vision-encoder layers) to the LLM
+# hidden states at the IMAGE positions right after the first
+# len(deepstack_visual_embeds) decoder layers (8B: after layers 0,1,2).  The
+# capture stub therefore also grabs visual_pos_masks + deepstack_visual_embeds
+# and the manual loop replays the addition (through the img_ord map, so an
+# already-pruned set of image tokens gets exactly its own rows).  Qwen2.5-VL
+# has no deepstack -> None -> skipped.
 # --------------------------------------------------------------------------- #
 def _cache_kv(cache, li: int):
     """(keys, values) tensors of cache layer li -- portable across transformers
@@ -386,11 +410,51 @@ def _split_mrope_pos(position_ids: torch.Tensor) -> torch.Tensor:
     return position_ids
 
 
+def _layer_step(layer, hidden, attn_mask, pos_emb, cache, need_attn: bool):
+    """Run ONE decoder layer; returns (hidden_out, attn_weights_or_None).
+
+    need_attn=False -> native layer call; normalises both return APIs (legacy
+    tuple (Qwen2.5-VL) / modern bare tensor (Qwen3-VL 4.57, which drops
+    output_attentions entirely)).
+    need_attn=True  -> replicate the pre-norm block and call self_attn directly
+    so the softmaxed weights are available under BOTH families (the attention
+    module always returns (output, weights); the Qwen3-VL LAYER does not)."""
+    if not need_attn:
+        out = layer(
+            hidden,
+            attention_mask=attn_mask,
+            position_ids=None,                # eager RoPE uses position_embeddings
+            past_key_values=cache,
+            use_cache=True,
+            cache_position=None,
+            position_embeddings=pos_emb,
+        )
+        return (out[0] if isinstance(out, tuple) else out), None
+    residual = hidden
+    h_norm = layer.input_layernorm(hidden)
+    attn_out, attn_w = layer.self_attn(
+        hidden_states=h_norm,
+        attention_mask=attn_mask,
+        position_embeddings=pos_emb,
+        past_key_values=cache,
+        cache_position=None,
+        output_attentions=True,               # Qwen2.5-VL named kwarg; Qwen3-VL
+        use_cache=True,                       # absorbed by **kwargs (harmless)
+    )
+    hidden = residual + attn_out
+    residual = hidden
+    hidden = residual + layer.mlp(layer.post_attention_layernorm(hidden))
+    return hidden, attn_w
+
+
 def prefill_pruned(model, inputs_embeds: torch.Tensor, position_ids: torch.Tensor,
-                   image_mask_1d: torch.Tensor, mode: str, cfg: dict):
+                   image_mask_1d: torch.Tensor, mode: str, cfg: dict,
+                   deepstack=None):
     """Run the pruned prefill.  Returns (hidden_normed [1,L',H],
     position_ids_reduced [3,1,L'], cache, image_mask_reduced [L'], diag dict).
-    L' == L when no effective pruning (r=0 / keep-all)."""
+    L' == L when no effective pruning (r=0 / keep-all).
+    deepstack: optional list of [n_img_full, H] Qwen3-VL visual features to ADD
+    at image positions after the first len(deepstack) layers (native parity)."""
     from transformers import DynamicCache
 
     LM = model.model.language_model
@@ -409,28 +473,31 @@ def prefill_pruned(model, inputs_embeds: torch.Tensor, position_ids: torch.Tenso
     plan = build_prune_plan(mode, len(LM.layers), n_image0, cfg["r"],
                             cfg["fastv_k"], cfg["ratios"])
     image_mask = image_mask_1d.clone()
+    # img_ord[i] = index of current position i in the ORIGINAL image-token list
+    # (valid at image positions); lets deepstack replay survive pruning.
+    img_ord = image_mask.cumsum(0) - 1
     pos_emb = LM.rotary_emb(hidden, position_ids)               # (cos,sin) [1,L,hd]
     n_image_kept = n_image0
     fired = []
+    n_deepstack = len(deepstack) if deepstack is not None else 0
     attn_mask = make_causal_mask(int(hidden.shape[1]), device, dtype)
     for idx, layer in enumerate(LM.layers):
         need = idx in plan
-        out = layer(
-            hidden,
-            attention_mask=attn_mask,
-            position_ids=None,                # eager RoPE uses position_embeddings
-            past_key_values=cache,
-            output_attentions=need,
-            use_cache=True,
-            cache_position=None,
-            position_embeddings=pos_emb,
-        )
-        hidden = out[0]
+        hidden, attn_w = _layer_step(layer, hidden, attn_mask, pos_emb, cache, need)
+        # Qwen3-VL deepstack: native adds visual features after the first
+        # n_deepstack layers (at image positions) -- replay before any prune at
+        # this layer so the ranking sees the same hidden the next layer would.
+        if idx < n_deepstack:
+            sel = img_ord[image_mask]
+            emb = deepstack[idx].to(device=device, dtype=hidden.dtype)
+            emb = emb.index_select(0, sel)
+            hidden[:, image_mask] = hidden[:, image_mask] + emb
         if need and hidden.shape[1] > 1:
-            keep = rank_keep_indices(out[1], image_mask, plan[idx])
+            keep = rank_keep_indices(attn_w, image_mask, plan[idx])
             hidden = hidden.index_select(1, keep)
             position_ids = position_ids.index_select(2, keep)
             image_mask = image_mask.index_select(0, keep)
+            img_ord = img_ord.index_select(0, keep)
             pos_emb = LM.rotary_emb(hidden, position_ids)       # recompute (== index_select)
             attn_mask = make_causal_mask(int(hidden.shape[1]), device, dtype)
             # crop the KV already written by layers 0..idx to the kept positions
@@ -443,20 +510,22 @@ def prefill_pruned(model, inputs_embeds: torch.Tensor, position_ids: torch.Tenso
     hidden = LM.norm(hidden)
     diag = {"n_image_full": n_image0, "n_image_kept": n_image_kept,
             "n_text": n_text, "L0": L0, "L_after": int(image_mask.numel()),
-            "prune_plan": {str(k): v for k, v in plan.items()}, "fired": fired}
+            "prune_plan": {str(k): v for k, v in plan.items()}, "fired": fired,
+            "n_deepstack": n_deepstack}
     return hidden, position_ids, cache, image_mask, diag
 
 
 @torch.no_grad()
 def generate_pruned(model, inputs_embeds, position_ids, image_mask_1d, mode,
-                    cfg, max_new_tokens, eos_ids):
+                    cfg, max_new_tokens, eos_ids, deepstack=None):
     """Pruned prefill + greedy autoregressive decode (KV-cache reused; the cache
     is already cropped to L', so decode just appends one token/step)."""
     LM = model.model.language_model
     device = inputs_embeds.device
     dtype = inputs_embeds.dtype
     hidden, position_ids, cache, image_mask, diag = prefill_pruned(
-        model, inputs_embeds, position_ids, image_mask_1d, mode, cfg)
+        model, inputs_embeds, position_ids, image_mask_1d, mode, cfg,
+        deepstack=deepstack)
     logits = model.lm_head(hidden)
     next_tok = int(logits[0, -1].argmax(-1))
     gen = [next_tok]
@@ -475,9 +544,9 @@ def generate_pruned(model, inputs_embeds, position_ids, image_mask_1d, mode,
         h = tok_emb
         for layer in LM.layers:
             o = layer(h, attention_mask=dec_mask, position_ids=None,
-                      past_key_values=cache, output_attentions=False,
-                      use_cache=True, cache_position=None, position_embeddings=pe)
-            h = o[0]
+                      past_key_values=cache, use_cache=True, cache_position=None,
+                      position_embeddings=pe)
+            h = o[0] if isinstance(o, tuple) else o   # legacy tuple / modern bare
         kv_len += 1
         h = LM.norm(h)
         next_tok = int(model.lm_head(h)[0, -1].argmax(-1))
@@ -496,7 +565,9 @@ class _Captured(Exception):
 
 
 def capture_prepared_inputs(model, model_inputs: dict):
-    """Returns (inputs_embeds [1,L,H], position_ids [3or4,1,L], n_image_tokens).
+    """Returns (inputs_embeds [1,L,H], position_ids [3or4,1,L], deepstack).
+    deepstack: list of [n_img,H] Qwen3-VL deepstack visual features (added at
+    image positions after the first decoder layers) or None (Qwen2.5-VL).
     Stubs language_model.forward to grab the prepared tensors, then restores it.
     No forward compute is wasted (we raise immediately on capture)."""
     LM = model.model.language_model
@@ -507,6 +578,8 @@ def capture_prepared_inputs(model, model_inputs: dict):
         box["inputs_embeds"] = kwargs.get(
             "inputs_embeds", args[0] if args else None)
         box["position_ids"] = kwargs.get("position_ids")
+        box["deepstack_visual_embeds"] = kwargs.get("deepstack_visual_embeds")
+        box["visual_pos_masks"] = kwargs.get("visual_pos_masks")
         raise _Captured()
 
     LM.forward = stub
@@ -519,7 +592,8 @@ def capture_prepared_inputs(model, model_inputs: dict):
         LM.forward = orig
     if box.get("inputs_embeds") is None:
         raise RuntimeError("capture failed: language_model.forward never called")
-    return box["inputs_embeds"], box["position_ids"]
+    return (box["inputs_embeds"], box["position_ids"],
+            box.get("deepstack_visual_embeds"))
 
 
 # --------------------------------------------------------------------------- #
@@ -697,6 +771,19 @@ def run_dry_check():
     print(f"[dry-check]   OK Pyramid keeps {exp} (final img {dp['n_image_kept']}, "
           f"L 12->{hid.shape[1]}, fired={dp['fired']})")
 
+    # (B6) deepstack replay is a no-op for zero features (index plumbing sane).
+    hid_ref, _, _, _, _ = prefill_pruned(
+        m, X.clone(), P.clone(), img.clone(), "fastv",
+        {"r": 0.5, "fastv_k": 2, "ratios": [1, .75, .5, .25]})
+    hid_ds, _, _, _, dd = prefill_pruned(
+        m, X.clone(), P.clone(), img.clone(), "fastv",
+        {"r": 0.5, "fastv_k": 2, "ratios": [1, .75, .5, .25]},
+        deepstack=[torch.zeros(6, hidden_size), torch.zeros(6, hidden_size)])
+    assert dd["n_deepstack"] == 2, dd
+    assert torch.equal(hid_ds, hid_ref), "zero deepstack must not change hidden"
+    print("[dry-check]   OK deepstack replay (n_deepstack=2, zero-add identity, "
+          "img_ord survives pruning)")
+
     # (B4) end-to-end greedy generation runs and terminates.
     eos = {cfg.text_config.eos_token_id if hasattr(cfg.text_config, 'eos_token_id')
            else 1}
@@ -711,10 +798,11 @@ def run_dry_check():
     pv = torch.randn(16, 3 * 2 * 14 * 14)            # t=1,h=4,w=4 -> 16 patches
     grid = torch.tensor([[1, 4, 4]])                 # -> 16/4 = 4 image tokens
     ids = torch.tensor([[5, 6, 150, 151, 151, 151, 151, 149, 7, 8, 9]])
-    ie, pos = capture_prepared_inputs(
+    ie, pos, ds = capture_prepared_inputs(
         m, {"input_ids": ids, "attention_mask": torch.ones_like(ids),
             "pixel_values": pv, "image_grid_thw": grid})
     assert ie.shape == (1, 11, hidden_size) and pos.shape[0] == 3, (ie.shape, pos.shape)
+    assert ds is None, "Qwen2.5-VL has no deepstack"
     emb0 = m.get_input_embeddings()(ids)
     assert (ie - emb0).abs().sum().item() > 0        # vision embeds were scattered
     print("[dry-check]   OK capture: native vision+merger+get_rope_index "
@@ -802,11 +890,11 @@ def main():
             else:
                 # MANUAL pruned prefill + greedy decode.
                 image_mask = (inputs["input_ids"][0] == image_token_id)
-                inputs_embeds, position_ids = capture_prepared_inputs(
+                inputs_embeds, position_ids, deepstack = capture_prepared_inputs(
                     model, {k: v for k, v in inputs.items()})
                 gen, diag = generate_pruned(
                     model, inputs_embeds, position_ids, image_mask, args.mode,
-                    cfg, args.max_tokens, eos_ids)
+                    cfg, args.max_tokens, eos_ids, deepstack=deepstack)
                 ans = processor.decode(gen, skip_special_tokens=True).strip()
                 # effective tokens through the LLM: fastv -> post-prune length;
                 # pyramid -> band-weighted average (text + image*keep_equiv).
