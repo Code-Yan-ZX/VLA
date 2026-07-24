@@ -599,21 +599,38 @@ def capture_prepared_inputs(model, model_inputs: dict):
 # --------------------------------------------------------------------------- #
 # Input construction -- SAME prompt/pixels as the runner's llm.chat.
 # --------------------------------------------------------------------------- #
+def _cap_image_pixels(image, max_pixels):
+    """PIL pre-resize enforcing the pixel budget BEFORE the processor:
+    transformers 4.57's Qwen3-VL processor SILENTLY IGNORES the per-call
+    max_pixels kwarg (verified: identical image_grid_thw with and without the
+    kwarg, both via image_processor(...) and via images_kwargs). Edges are
+    rounded to multiples of 32 (= patch 16 x merge 2), aspect preserved."""
+    if not max_pixels or max_pixels <= 0:
+        return image
+    w, h = image.size
+    if w * h <= max_pixels:
+        return image
+    import math
+    scale = math.sqrt(max_pixels / float(w * h))
+    nw = max(32, round(w * scale / 32) * 32)
+    nh = max(32, round(h * scale / 32) * 32)
+    return image.resize((nw, nh))
+
+
 def build_inputs(processor, image, question: str, max_pixels: int, device):
     """One image + the verbatim question through the Qwen chat template
     (add_generation_prompt=True == the runner's generation setup).  max_pixels>0
-    -> processor max_pixels; ==0 -> processor default (runner parity)."""
+    -> PIL pre-resize to the pixel budget (processor kwargs are ignored by
+    transformers 4.57, see _cap_image_pixels); ==0 -> native resolution."""
+    image = _cap_image_pixels(image, max_pixels)
     messages = [{"role": "user", "content": [
         {"type": "image", "image": image},
         {"type": "text", "text": question},
     ]}]
     text = processor.apply_chat_template(
         messages, tokenize=False, add_generation_prompt=True)
-    kw = {}
-    if max_pixels and max_pixels > 0:
-        kw["max_pixels"] = int(max_pixels)
     inputs = processor(images=[image], text=[text], return_tensors="pt",
-                       padding=True, **kw)
+                       padding=True)
     return {k: v.to(device) for k, v in inputs.items()}
 
 

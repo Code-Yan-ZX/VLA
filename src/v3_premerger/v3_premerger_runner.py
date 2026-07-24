@@ -750,6 +750,44 @@ def patch_processor(r: float, family: str = "qwen3vl"):
 # catastrophic trailing-text corruption is removed.  For r=0 (k==full) this is
 # byte-identical to stock vLLM; the qwen3vl branch is never touched.
 # --------------------------------------------------------------------------- #
+def _capped_image_path(path: str, max_pixels: int) -> str:
+    """Enforce a pixel budget by PIL pre-resize, because vLLM 0.19 V1 ignores
+    BOTH engine-level and per-request mm_processor_kwargs={'max_pixels':...}
+    for Qwen3-VL (verified: DocVQA ptid identical with/without either), and
+    transformers 4.57's processor ignores the kwarg too. Edges round to
+    multiples of 32 (= patch 16 x merge 2); results cached under
+    runs/data/_capped_cache (jpeg q=95). No-op when max_pixels<=0 or the
+    image is already within budget."""
+    if not max_pixels or max_pixels <= 0:
+        return path
+    try:
+        from PIL import Image
+        import math, hashlib
+        with Image.open(path) as im:
+            w, h = im.size
+            if w * h <= max_pixels:
+                return path
+            scale = math.sqrt(max_pixels / float(w * h))
+            nw = max(32, round(w * scale / 32) * 32)
+            nh = max(32, round(h * scale / 32) * 32)
+            key = hashlib.md5(f"{path}|{nw}x{nh}".encode()).hexdigest()
+            ext = os.path.splitext(path)[1].lower() or ".jpg"
+            cache = os.path.join("runs", "data", "_capped_cache", key + ext)
+            if not os.path.exists(cache):
+                os.makedirs(os.path.dirname(cache), exist_ok=True)
+                im2 = im.resize((nw, nh))
+                if ext in (".jpg", ".jpeg"):
+                    im2.convert("RGB").save(cache, quality=95)
+                else:
+                    im2.save(cache)
+            return os.path.abspath(cache)
+    except Exception as e:
+        print(f"[cap] pre-resize failed for {path} ({type(e).__name__}: "
+              f"{str(e)[:120]}); using native image", file=sys.stderr,
+              flush=True)
+        return path
+
+
 def setup_qwen2vl_mrope_fix(model):
     import numpy as _np
     config = model.config
@@ -1986,6 +2024,16 @@ def main():
     # Loaded early (before mode setup) so the J5 QA-pre path can embed the
     # questions before generation; reused unchanged by the chat loop below.
     samples = load_subset(args.subset)[:args.n]
+    if args.max_pixels and args.max_pixels > 0:
+        n_cap = 0
+        for s in samples:
+            new = _capped_image_path(s.image, args.max_pixels)
+            if new != s.image:
+                n_cap += 1
+            s.image = new
+        print(f"[cap] {n_cap}/{len(samples)} images pre-resized to <= "
+              f"{args.max_pixels} px (vLLM ignores max_pixels kwargs; "
+              f"cache runs/data/_capped_cache)", flush=True)
 
     diag = None
     swap_state = None
@@ -2040,14 +2088,19 @@ def main():
 
     msgs_all = [make_msgs(s) for s in samples]
     sp = SamplingParams(max_tokens=args.max_tokens, temperature=0.0)
+    # vLLM 0.19 V1 IGNORES engine-level mm_processor_kwargs (verified: DocVQA
+    # ptid identical with/without the engine kwarg) -> pass it per request.
+    chat_kw = {}
+    if args.max_pixels and args.max_pixels > 0:
+        chat_kw["mm_processor_kwargs"] = {"max_pixels": args.max_pixels}
 
     # warmup 1 fwd (not timed) so eager kernels are primed
-    llm.chat([msgs_all[0]], sampling_params=sp)
+    llm.chat([msgs_all[0]], sampling_params=sp, **chat_kw)
 
     t0 = time.perf_counter()
     n_skip = 0
     try:
-        outs = llm.chat(msgs_all, sampling_params=sp)
+        outs = llm.chat(msgs_all, sampling_params=sp, **chat_kw)
         wall = time.perf_counter() - t0
     except Exception as e:
         # Batched call aborts if ANY single prompt exceeds max_model_len (or
@@ -2059,7 +2112,7 @@ def main():
         t0 = time.perf_counter()
         for i, m in enumerate(msgs_all):
             try:
-                outs[i] = llm.chat([m], sampling_params=sp)[0]
+                outs[i] = llm.chat([m], sampling_params=sp, **chat_kw)[0]
             except Exception:
                 outs[i] = None
                 n_skip += 1
