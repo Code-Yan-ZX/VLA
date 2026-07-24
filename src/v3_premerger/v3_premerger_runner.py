@@ -318,6 +318,197 @@ def _score_units(feats, selector: str):
     return (uf - uf.mean(dim=0, keepdim=True)).norm(dim=-1)
 
 
+# --------------------------------------------------------------------------- #
+# J5 query-aware (QA) pre-merger saliency helpers (notes/j5_qa_gate_design.md).
+#   qsim_i = max_{t in question tokens} cos( merger(unit_feat_i), embed(q_t) )
+#     - merger(unit_feat_i): the NATIVE merger MLP run on the unit's input rows
+#       -> one LLM-space row per unit (the merger's main forward, reusing the
+#       already-registered PreMergerPruner merger handle; no extra hook).
+#     - embed(q_t): question token q_t through the LLM word-embedding layer
+#       (shared space: the merger output is exactly what enters the LLM at
+#       layer 0, alongside word embeddings). Read in-process off the vLLM
+#       model (enforce_eager=True keeps weights addressable).
+#   Combination (per image): s_i = (1-λ)·minmax(sel_i) + λ·minmax(qsim_i),
+#   each path min-max normalized to [0,1] BEFORE weighting so λ is a genuine
+#   trade-off knob (top-k is rank-based, so the absolute scale is irrelevant).
+# All helpers are NO-OPs unless qa_lambda>0 -- the plain pre-merger path never
+# touches them (bit-identical at λ=0).
+# --------------------------------------------------------------------------- #
+def _minmax(x):
+    """Per-vector min-max to [0,1]; constant vectors -> zeros (safe div)."""
+    lo, hi = x.min(), x.max()
+    if hi > lo:
+        return (x - lo) / (hi - lo)
+    return torch.zeros_like(x)
+
+
+def _find_embed_tokens(model):
+    """Locate the LLM word-embedding nn.Embedding on the in-process vLLM model.
+    Qwen2.5-VL and Qwen3-VL both expose it at ``language_model.model.
+    embed_tokens`` (verified against vLLM 0.19: qwen2_5_vl.py L1143/L1472,
+    qwen3_vl.py Qwen3LLMForCausalLM.model -> Qwen3LLMModel.embed_tokens). We try
+    that + a few common variants, then fall back to a named_modules scan for the
+    LARGEST nn.Embedding (the text vocab >> any vision position embedding).
+    Returns (embed_module, path_str) or (None, note)."""
+    import torch.nn as nn
+    candidates = [
+        "language_model.model.embed_tokens",          # qwen3vl / qwen2.5vl
+        "model.language_model.embed_tokens",
+        "language_model.embed_tokens",
+        "model.model.embed_tokens",
+        "model.embed_tokens",
+        "embed_tokens",
+    ]
+    for path in candidates:
+        obj = model
+        for part in path.split("."):
+            obj = getattr(obj, part, None)
+            if obj is None:
+                break
+        if isinstance(obj, nn.Embedding):
+            return obj, path
+    best, best_path = None, None
+    for name, mod in model.named_modules():
+        if isinstance(mod, nn.Embedding) and (
+                best is None or mod.num_embeddings > best.num_embeddings):
+            best, best_path = mod, name
+    if best is not None:
+        return best, f"named_modules:{best_path}"
+    return None, "NOT_FOUND"
+
+
+def _qa_tokenize_question(tokenizer, question: str) -> list:
+    """Tokenize the RAW question text (no chat template, no special tokens) into
+    token ids. The question is what carries the query intent; the baked
+    instruction suffix ('Answer the question using a single word...') is shared
+    boilerplate and is harmless to include, so we embed the full string as-is."""
+    try:
+        return list(tokenizer(question, add_special_tokens=False)["input_ids"])
+    except Exception:
+        return list(tokenizer.encode(question, add_special_tokens=False))
+
+
+def _qa_offline_unit_counts(samples, max_pixels: int, model_id: str):
+    """Per-sample full merge-unit counts, recomputed offline with the SAME HF
+    image processor vLLM uses (no model weights, no GPU -- mirrors the guard in
+    attach_hybrid_unit_scores). Needed to key question embeddings by unit count
+    so the blend survives vLLM's batch reordering + warmup encoder-cache replay
+    (the warmup request re-encodes sample 0). Returns list[int] or None on
+    failure (caller falls back to ordered FIFO)."""
+    try:
+        from PIL import Image
+        from transformers import AutoProcessor
+        proc = AutoProcessor.from_pretrained(model_id)
+        counts = []
+        for smp in samples:
+            kw = {}
+            if max_pixels and max_pixels > 0:
+                kw["max_pixels"] = max_pixels
+            g = proc.image_processor(Image.open(smp.image),
+                                     return_tensors="pt", **kw)["image_grid_thw"]
+            counts.append(int(g[0].prod()) // 4)   # spatial_merge_size**2 == 4
+        return counts
+    except Exception as e:
+        print(f"[qa] offline unit-count recompute failed "
+              f"({type(e).__name__}: {str(e)[:160]}); using ordered FIFO fallback",
+              file=sys.stderr, flush=True)
+        return None
+
+
+def _qa_precompute(model, tokenizer, samples, embed_cache: bool,
+                   max_pixels: int, model_id: str):
+    """Build the J5 QA state BEFORE generation (CPU/embed-read only, no forward
+    through the LLM). Computes each question's normalized word-embedding tokens
+    (optionally cached by question string) and keys them by the sample's offline
+    unit count for robust pop-during-generation. Returns a state dict consumed
+    by PreMergerPruner._qa_blend_scores. ``main_merger_orig`` is filled in by
+    setup_pre_merger (it owns the merger handle)."""
+    import torch.nn.functional as F
+    embed, embed_path = _find_embed_tokens(model)
+    diag = {"embed_found": embed is not None, "embed_path": embed_path,
+            "n_samples": len(samples), "cache_hits": 0,
+            "grid_recompute_ok": False, "blends": 0, "blend_fallback": 0,
+            "pops": 0, "pop_fallback": 0, "pop_miss": 0,
+            "n_empty_question": 0}
+    state = {"embed": embed, "main_merger_orig": None,
+             "count_queues": {}, "ordered": [], "qsim_log": [],
+             "sample_counts": None, "diag": diag}
+    if embed is None:
+        print("[qa] word-embedding layer NOT found -- qsim disabled, pre-merger "
+              "falls back to the plain selector (λ effectively 0).",
+              file=sys.stderr, flush=True)
+        return state
+
+    cache = {}
+
+    def _q_embed(question):
+        if embed_cache and question in cache:
+            diag["cache_hits"] += 1
+            return cache[question]
+        ids = _qa_tokenize_question(tokenizer, question)
+        emb = None
+        if ids:
+            with torch.no_grad():
+                ids_t = torch.as_tensor(ids, dtype=torch.long,
+                                        device=embed.weight.device)
+                e = embed(ids_t).float()                 # [nqt, hidden_llm]
+                emb = F.normalize(e, dim=-1).contiguous()
+        else:
+            diag["n_empty_question"] += 1
+        if embed_cache:
+            cache[question] = emb
+        return emb
+
+    qembeds = [_q_embed(s.question) for s in samples]
+    counts = _qa_offline_unit_counts(samples, max_pixels, model_id)
+    state["sample_counts"] = counts
+    if counts is not None:
+        diag["grid_recompute_ok"] = True
+        for c, qe in zip(counts, qembeds):
+            state["count_queues"].setdefault(c, []).append(qe)
+        # extra copy of sample-0's embedding for the WARMUP request (it encodes
+        # sample 0 once before the timed batch, popping one entry).
+        if qembeds and counts:
+            state["count_queues"][counts[0]] = \
+                [qembeds[0]] + state["count_queues"][counts[0]]
+    # ordered FIFO fallback (used only if a runtime count has no queued match,
+    # e.g. offline recompute failed or a processor/count mismatch).
+    state["ordered"] = ([qembeds[0]] if qembeds else []) + list(qembeds)
+    return state
+
+
+def attach_qa_per_sample(qa_state, samples, per_sample, diag):
+    """Best-effort attach of the per-image mean qsim (recorded during generation
+    in qa_state['qsim_log'] as (unit_count, mean_qsim)) to per_sample. qsim_log[0]
+    is the warmup request (dropped). When offline unit counts are available we
+    greedily match each sample to the next unconsumed log entry with the same
+    unit count (order-preserving; robust to batch reordering and the warmup
+    replay, same guard idea as attach_hybrid_unit_scores); otherwise we zip in
+    order. Attachment is ANALYSIS-ONLY (the gate reads answer/gt, not qsim).
+    Sets diag['qa_attached']/['qa_total']."""
+    log = qa_state.get("qsim_log", [])
+    entries = list(log[1:]) if log else []              # drop warmup entry
+    total = len(entries)
+    counts = qa_state.get("sample_counts")
+    attached = 0
+    if counts is not None and len(counts) == len(per_sample):
+        for i in range(len(per_sample)):
+            c = counts[i]
+            for j in range(len(entries)):               # first matching count
+                if entries[j][0] == c:
+                    per_sample[i]["qa_mean_qsim"] = entries[j][1]
+                    del entries[j]
+                    attached += 1
+                    break
+    else:
+        for i in range(len(per_sample)):
+            if i < len(entries):
+                per_sample[i]["qa_mean_qsim"] = entries[i][1]
+                attached += 1
+    diag["qa_attached"] = attached
+    diag["qa_total"] = total
+
+
 def parse_args():
     ap = argparse.ArgumentParser()
     # --mode/--benchmark/--subset are required for a real run but NOT for
@@ -401,6 +592,22 @@ def parse_args():
                          "mean Sobel edge, routing branch) into per_sample[i]['unit_scores']. "
                          "Recomputed grid counts guard the FIFO attachment against "
                          "vLLM encoder-cache replays.")
+    ap.add_argument("--qa-lambda", type=float, default=0.0,
+                    help="J5 query-aware pre-merger saliency (QA-pre), --mode pre "
+                         "ONLY (stage ranking, standard dominant-only path). 0.0 "
+                         "(default) = qsim OFF: the qsim code path is never entered "
+                         "and behavior is BIT-IDENTICAL to plain pre-merger (zero "
+                         "overhead). >0 blends a query-similarity signal into the "
+                         "per-image pre ranking: s_i = (1-λ)·minmax(sel_i) + "
+                         "λ·minmax(qsim_i), where qsim_i = max_t cos(merger(unit_i), "
+                         "embed(q_t)) -- each unit's native-merger LLM-space embedding "
+                         "vs the question's word-embedding tokens (cos-max). λ is "
+                         "chosen on a held-out dev slice (scripts/j5_qa_dev_select.py).")
+    ap.add_argument("--qa-embed-cache", action="store_true",
+                    help="--qa-lambda>0 ONLY: cache each question's normalized token "
+                         "embeddings keyed by the raw question string, so repeated "
+                         "questions in a subset (n=200 sets reuse prompts) are embedded "
+                         "once. Pure compute saving; no effect on the selection math.")
     ap.add_argument("--seed", type=int, default=0,
                     help="vLLM/torch RNG seed (0 = default). For repeat runs; at "
                          "temp=0 variance comes from GPU-kernel non-determinism.")
@@ -1009,7 +1216,8 @@ def attach_hybrid_unit_scores(state, samples, per_sample, model_id: str,
 class PreMergerPruner:
     def __init__(self, r: float, spatial_merge_size: int, selector: str = "l2",
                  visionzip_style: bool = False, visionzip_dom_ratio: float = 0.7,
-                 mask_ranking: str = "stage"):
+                 mask_ranking: str = "stage",
+                 qa_lambda: float = 0.0, qa_state=None):
         self.r = r
         self.sm = spatial_merge_size
         self.unit = spatial_merge_size ** 2          # 4
@@ -1017,6 +1225,8 @@ class PreMergerPruner:
         self.visionzip_style = visionzip_style
         self.visionzip_dom_ratio = visionzip_dom_ratio
         self.mask_ranking = mask_ranking              # "stage" | "swap" (M3)
+        self.qa_lambda = float(qa_lambda)             # J5: 0 = qsim OFF (plain RBM)
+        self.qa_state = qa_state                      # J5: from _qa_precompute
         self.full_units = None                        # list[int] per image
         self.k_units = None                           # list[int] per image
         self._mask = None                             # cached token mask
@@ -1067,6 +1277,12 @@ class PreMergerPruner:
                 feats = hs.reshape(num_units, self.unit, ctx)
                 scores = _score_units(feats, self.selector)        # [num_units]
                 where = tag
+                # ---- J5 QA-pre: blend query-similarity into the pre ranking ----
+                # Only entered when qa_lambda>0 (λ=0 => bit-identical plain RBM).
+                # Stage ranking only; swap/visionzip paths are guarded out in main.
+                if self.qa_lambda > 0.0 and self.qa_state is not None \
+                        and self.qa_state.get("embed") is not None:
+                    scores = self._qa_blend_scores(hs, scores, num_units)
             keep = torch.zeros(num_units, dtype=torch.bool,
                                device=hs.device)
             off = 0
@@ -1129,6 +1345,70 @@ class PreMergerPruner:
                 return combined_out
         # ---- standard pre-merger (dominant-only) ----
         return hs[self._mask]                           # [num_kept, 1, ctx]
+
+    # ---- J5 QA-pre helpers (only active when qa_lambda>0) ------------------ #
+    def _qa_pop_embedding(self, f: int):
+        """Pop the next normalized question-embedding tensor for an image of `f`
+        merge-units. Count-keyed queue first (robust to vLLM batch reordering and
+        the warmup encoder-cache replay of sample 0); ordered FIFO fallback.
+        Returns [nqt, hidden_llm] (already L2-normalized) or None."""
+        qs = self.qa_state
+        cq = qs.get("count_queues", {})
+        lst = cq.get(f)
+        if lst:
+            qs["diag"]["pops"] += 1
+            return lst.pop(0)
+        ordered = qs.get("ordered", [])
+        if ordered:
+            qs["diag"]["pop_fallback"] += 1
+            return ordered.pop(0)
+        qs["diag"]["pop_miss"] += 1
+        return None
+
+    def _qa_blend_scores(self, hs, base_scores, num_units):
+        """Combine the base pre-ranking with query similarity, per image:
+            s_i = (1-λ)·minmax(base_i) + λ·minmax(qsim_i)
+        qsim_i = max_t cos( merger(unit_i), embed(q_t) ), where merger is the
+        NATIVE main merger run once on the full input (reuses the registered
+        merger handle; no extra hook) and embed(q_t) are the question's
+        normalized word-embedding tokens. Both paths are min-maxed to [0,1] per
+        image before weighting, so λ is a real trade-off knob (top-k is
+        rank-based). On ANY failure returns base_scores unchanged (safe: the run
+        degrades to plain pre-merger rather than crashing the engine)."""
+        import torch.nn.functional as F
+        qs = self.qa_state
+        try:
+            merger_orig = qs.get("main_merger_orig")
+            if merger_orig is None:
+                return base_scores
+            merger_out = merger_orig(hs)                # [num_units, hidden_llm]
+            m_norm = F.normalize(merger_out.float(), dim=-1)
+            combined = base_scores.float().clone()
+            off = 0
+            for f in self.full_units:
+                base_i = base_scores[off:off + f].float()
+                qe = self._qa_pop_embedding(int(f))
+                if qe is None:
+                    # no question embedding for this image (empty queue / empty
+                    # question) -> keep the plain base ranking for it.
+                    off += f
+                    continue
+                qe = qe.to(device=hs.device, non_blocking=True)
+                sim = m_norm[off:off + f] @ qe.t()      # [f, nqt]
+                qsim_i = sim.max(dim=-1).values         # [f]
+                combined[off:off + f] = \
+                    (1.0 - self.qa_lambda) * _minmax(base_i) \
+                    + self.qa_lambda * _minmax(qsim_i)
+                qs["qsim_log"].append(
+                    (int(f), round(float(qsim_i.mean()), 5)))
+                off += f
+            qs["diag"]["blends"] += 1
+            return combined
+        except Exception as e:
+            qs["diag"]["blend_fallback"] += 1
+            print(f"[qa] blend fallback ({type(e).__name__}: {str(e)[:120]}); "
+                  f"using plain selector ranking", file=sys.stderr, flush=True)
+            return base_scores
 
 
 def _wrap_merger_forward(merger, pruner: "PreMergerPruner"):
@@ -1288,14 +1568,16 @@ def _install_qwen2vl_pre_visual_forward(visual, pruner):
 
 def setup_pre_merger(model, r: float, selector: str = "l2", family: str = "qwen3vl",
                       visionzip_style: bool = False, visionzip_dom_ratio: float = 0.7,
-                      mask_ranking: str = "stage"):
+                      mask_ranking: str = "stage",
+                      qa_lambda: float = 0.0, qa_state=None):
     if mask_ranking == "swap" and visionzip_style:
         raise SystemExit("--mask-ranking swap is not supported with "
                          "--visionzip-style (dominant-only standard path only).")
     visual = model.visual
     sm = visual.spatial_merge_size
     pruner = PreMergerPruner(r, sm, selector, visionzip_style, visionzip_dom_ratio,
-                             mask_ranking=mask_ranking)
+                             mask_ranking=mask_ranking,
+                             qa_lambda=qa_lambda, qa_state=qa_state)
 
     # (1) visual.forward pre_hook: capture grid_thw -> plan k_units.
     def _visual_prehook(module, args, kwargs):
@@ -1325,6 +1607,14 @@ def setup_pre_merger(model, r: float, selector: str = "l2", family: str = "qwen3
         orig = _wrap_merger_forward(m, pruner)
         pruner.merger_origs[m._premerger_tag] = orig   # for mask_ranking=swap
         handles.append(orig)
+
+    # J5 QA-pre: the qsim signal runs the NATIVE main merger on the unit inputs
+    # to reach LLM space. Reuse the already-registered original (unwrapped)
+    # main-merger forward -- no extra hook. ("main" tag is set on visual.merger
+    # for BOTH families above.) Calling it inside slice_input is side-effect-free
+    # and never re-enters the wrap (it is the captured orig forward).
+    if qa_state is not None and "main" in pruner.merger_origs:
+        qa_state["main_merger_orig"] = pruner.merger_origs["main"]
 
     # ---- TEMP DIAG: wrap visual.forward + dump compiler/merger facts --------
     _mg = visual.merger
@@ -1610,6 +1900,21 @@ def main():
                              "--mode hybrid (dominant-only standard path only)")
         if not 0.0 <= args.hybrid_text_frac <= 1.0:
             raise SystemExit("--hybrid-text-frac must be in [0,1]")
+    # J5 QA-pre is defined for the STANDARD pre path only (stage ranking,
+    # dominant-only). Guard the other paths so λ>0 can never silently touch
+    # post/hybrid/swap/visionzip behavior. λ=0 is always allowed (no-op).
+    if args.qa_lambda > 0.0:
+        if not (0.0 <= args.qa_lambda <= 1.0):
+            raise SystemExit("--qa-lambda must be in [0,1]")
+        if args.mode != "pre":
+            raise SystemExit("--qa-lambda>0 requires --mode pre (QA-pre is a "
+                             "pre-merger saliency signal)")
+        if args.mask_ranking == "swap":
+            raise SystemExit("--qa-lambda>0 is not supported with "
+                             "--mask-ranking swap (stage ranking only)")
+        if args.visionzip_style:
+            raise SystemExit("--qa-lambda>0 is not supported with "
+                             "--visionzip-style (dominant-only standard path)")
     proc_log = patch_processor(r, family)
 
     from vllm import LLM, SamplingParams
@@ -1641,9 +1946,14 @@ def main():
     load_s = time.perf_counter() - t0
     model = llm.llm_engine.model_executor.driver_worker.model_runner.model
 
+    # Loaded early (before mode setup) so the J5 QA-pre path can embed the
+    # questions before generation; reused unchanged by the chat loop below.
+    samples = load_subset(args.subset)[:args.n]
+
     diag = None
     swap_state = None
     hybrid_state = None
+    qa_state = None
     if args.mode == "post":
         if args.mask_ranking == "swap":
             # M3: post forward path + PRE ranking selection.
@@ -1657,10 +1967,23 @@ def main():
                                           args.hybrid_text_frac,
                                           args.save_unit_scores)
     elif args.mode == "pre":
+        # J5 QA-pre: build the query-similarity state (embed questions, key by
+        # offline unit count) ONLY when λ>0. λ=0 -> qa_state stays None and
+        # setup_pre_merger behaves bit-identically to plain pre-merger.
+        if args.qa_lambda > 0.0:
+            try:
+                tokenizer = llm.get_tokenizer()
+            except Exception:
+                tokenizer = llm.llm_engine.tokenizer.tokenizer
+            qa_state = _qa_precompute(model, tokenizer, samples,
+                                      args.qa_embed_cache, args.max_pixels,
+                                      model_id)
         pruner, _handles = setup_pre_merger(model, r, args.selector, family,
                                              visionzip_style=args.visionzip_style,
                                              visionzip_dom_ratio=args.visionzip_dom_ratio,
-                                             mask_ranking=args.mask_ranking)
+                                             mask_ranking=args.mask_ranking,
+                                             qa_lambda=args.qa_lambda,
+                                             qa_state=qa_state)
         diag = pruner.diag
 
     # Qwen2.5-VL ONLY: fix the mrope-position overshoot that collapses pruned
@@ -1670,7 +1993,6 @@ def main():
     if family == "qwen2vl" and r > 0.0:
         mrope_fix_diag = setup_qwen2vl_mrope_fix(model)
 
-    samples = load_subset(args.subset)[:args.n]
     scorer = SCORERS[args.benchmark]
 
     def make_msgs(s: Sample):
@@ -1741,6 +2063,12 @@ def main():
         if args.save_unit_scores:
             attach_hybrid_unit_scores(hybrid_state, samples, per_sample,
                                       model_id, args.max_pixels, diag)
+    if qa_state is not None and args.qa_lambda > 0.0:
+        # J5 QA-pre: stamp qa_lambda on every sample (analysis) + best-effort
+        # per-image mean qsim; expose the qsim bookkeeping counters.
+        for p in per_sample:
+            p["qa_lambda"] = args.qa_lambda
+        attach_qa_per_sample(qa_state, samples, per_sample, diag)
 
     result = {
         "model": model_id, "model_family": family,
@@ -1765,6 +2093,10 @@ def main():
     if args.mode == "hybrid":
         result["hybrid_text_frac"] = args.hybrid_text_frac
         result["save_unit_scores"] = args.save_unit_scores
+    if qa_state is not None and args.qa_lambda > 0.0:
+        result["qa_lambda"] = args.qa_lambda
+        result["qa_embed_cache"] = args.qa_embed_cache
+        result["qa"] = qa_state["diag"]                 # embed path + qsim counters
     if mrope_fix_diag is not None:
         result["mrope_fix"] = mrope_fix_diag
     os.makedirs(os.path.dirname(args.out), exist_ok=True)
