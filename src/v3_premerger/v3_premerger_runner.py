@@ -329,6 +329,9 @@ def parse_args():
                     help="prune ratio; k_i = round(full_i*(1-r)). "
                          "{0.5,0.75,0.875} -> keep {50,25,12.5}% of merge-units.")
     ap.add_argument("--max-num-seqs", type=int, default=16)
+    ap.add_argument("--gpu-memory-utilization", type=float, default=0.90,
+                    help="vLLM gpu_memory_utilization. Lower on a shared GPU "
+                         "(e.g. 0.55 when another user holds ~18GB on A40-46G).")
     ap.add_argument("--max-model-len", type=int, default=32768,
                     help="vLLM max_model_len. Raise for huge-image benchmarks "
                          "(DocVQA documents); baseline was hardcoded 8192.")
@@ -474,6 +477,94 @@ def patch_processor(r: float, family: str = "qwen3vl"):
     _patched._vtc_patched = True
     ProcCls._get_prompt_updates = _patched
     return log
+
+
+# --------------------------------------------------------------------------- #
+# Qwen2.5-VL-ONLY M-RoPE fix (root cause of the pre/post acc~0.004 collapse).
+#
+# vLLM's Qwen2_5_VLForConditionalGeneration.get_mrope_input_positions advances
+# the position cursor by the FULL image grid (llm_grid_t*llm_grid_h*llm_grid_w)
+# per image, but patch_processor scales the image placeholder to
+# k = round(full*(1-r)) tokens.  The returned position array (text + FULL grid)
+# is therefore LONGER than the scaled prompt; gpu_model_runner._calc_mrope_-
+# positions silently truncates it to num_prompt_tokens, so every TEXT token that
+# follows the image inherits a 2-D grid position (constant t-axis, small h/w)
+# instead of a diagonal text position.  Qwen2.5-VL's BLOCK mrope ([16,24,24])
+# concentrates that error into whole dim-blocks -> incoherent/garbage answers
+# (acc~0.004, n_answered~31/500).  Qwen3-VL's INTERLEAVED mrope ([24,20,20])
+# spreads the identical overshoot across dims and tolerates it (acc~0.38), which
+# is why only the qwen2vl branch collapsed.  Verified empirically via DBG_MROPE:
+# both families overshoot identically; qwen2vl trailing-text tokens get e.g.
+# [15,20,25] (t frozen) and emit '' / 'addCriterion...', qwen3vl gets [4,9,4]
+# and still emits real words.
+#
+# Fix: recompute positions with the ACTUAL placeholder count k per image (count
+# the image_token_id run at each offset) so the cursor advances by k.  Trailing
+# text then gets correct diagonal positions.  Image tokens keep the first k grid
+# positions -- bitwise identical to what truncation already assigned (the kept
+# tokens are index-sorted, so this mapping is order-preserving) -- so ONLY the
+# catastrophic trailing-text corruption is removed.  For r=0 (k==full) this is
+# byte-identical to stock vLLM; the qwen3vl branch is never touched.
+# --------------------------------------------------------------------------- #
+def setup_qwen2vl_mrope_fix(model):
+    import numpy as _np
+    config = model.config
+    image_token_id = config.image_token_id
+    spatial_merge_size = config.vision_config.spatial_merge_size
+    _orig = model.get_mrope_input_positions
+    diag = {"calls": 0, "pruned_images": 0}
+
+    def _fixed(input_tokens, mm_features):
+        # Any non-image media (runner is image-only) -> defer to stock path.
+        if any(getattr(f, "modality", "image") != "image" for f in mm_features):
+            return _orig(input_tokens, mm_features)
+        toks = list(input_tokens)
+        n = len(toks)
+        llm_pos_ids_list = []
+        st = 0
+        for mm_feature in sorted(mm_features, key=lambda f: f.mm_position.offset):
+            offset = mm_feature.mm_position.offset
+            t, h, w = mm_feature.data["image_grid_thw"].data.tolist()
+            llm_grid_t = int(t)
+            llm_grid_h = int(h) // spatial_merge_size
+            llm_grid_w = int(w) // spatial_merge_size
+            full = llm_grid_t * llm_grid_h * llm_grid_w
+            # actual placeholder count = run of image_token_id starting @ offset
+            k = 0
+            i = offset
+            while i < n and toks[i] == image_token_id:
+                k += 1
+                i += 1
+            if k <= 0 or k >= full:
+                k = full                       # r=0 -> identical to stock vLLM
+            else:
+                diag["pruned_images"] += 1
+            text_len = offset - st
+            st_idx = (llm_pos_ids_list[-1].max() + 1
+                      if len(llm_pos_ids_list) > 0 else 0)
+            llm_pos_ids_list.append(
+                _np.broadcast_to(_np.arange(text_len), (3, text_len)) + st_idx)
+            grid_indices = _np.indices(
+                (llm_grid_t, llm_grid_h, llm_grid_w)).reshape(3, -1)
+            llm_pos_ids_list.append(
+                grid_indices[:, :k] + text_len + st_idx)
+            st = offset + k                    # advance by KEPT count, not full
+        if st < n:
+            st_idx = (llm_pos_ids_list[-1].max() + 1
+                      if len(llm_pos_ids_list) > 0 else 0)
+            text_len = n - st
+            llm_pos_ids_list.append(
+                _np.broadcast_to(_np.arange(text_len), (3, text_len)) + st_idx)
+        llm_positions = _np.concatenate(llm_pos_ids_list, axis=1).reshape(3, -1)
+        delta = (llm_positions.max() + 1 - n).item()
+        diag["calls"] += 1
+        return torch.from_numpy(llm_positions), delta
+
+    # Instance attribute: the worker calls model.get_mrope_input_positions(...)
+    # on this same in-process object, so the bare function (no implicit self)
+    # is invoked with (input_tokens, mm_features).
+    model.get_mrope_input_positions = _fixed
+    return diag
 
 
 # --------------------------------------------------------------------------- #
@@ -1526,7 +1617,8 @@ def main():
     torch.manual_seed(args.seed)
     llm_kwargs = dict(
         model=model_id, dtype="bfloat16", tensor_parallel_size=1,
-        gpu_memory_utilization=0.90, max_model_len=args.max_model_len,
+        gpu_memory_utilization=args.gpu_memory_utilization,
+        max_model_len=args.max_model_len,
         trust_remote_code=False, enforce_eager=True,
         limit_mm_per_prompt={"image": 1},
         allowed_local_media_path=os.path.abspath(
@@ -1570,6 +1662,13 @@ def main():
                                              visionzip_dom_ratio=args.visionzip_dom_ratio,
                                              mask_ranking=args.mask_ranking)
         diag = pruner.diag
+
+    # Qwen2.5-VL ONLY: fix the mrope-position overshoot that collapses pruned
+    # acc to ~0.004 (see setup_qwen2vl_mrope_fix docstring).  No-op for r=0 and
+    # never installed for qwen3vl -> baseline + qwen3vl behavior untouched.
+    mrope_fix_diag = None
+    if family == "qwen2vl" and r > 0.0:
+        mrope_fix_diag = setup_qwen2vl_mrope_fix(model)
 
     samples = load_subset(args.subset)[:args.n]
     scorer = SCORERS[args.benchmark]
@@ -1666,6 +1765,8 @@ def main():
     if args.mode == "hybrid":
         result["hybrid_text_frac"] = args.hybrid_text_frac
         result["save_unit_scores"] = args.save_unit_scores
+    if mrope_fix_diag is not None:
+        result["mrope_fix"] = mrope_fix_diag
     os.makedirs(os.path.dirname(args.out), exist_ok=True)
     with open(args.out, "w") as f:
         json.dump(result, f, indent=2)
