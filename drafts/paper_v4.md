@@ -151,30 +151,30 @@ question—exactly where FastV operates.
 
 **Token pruning and merging in VLMs.** Most methods score visual tokens and drop the least
 important before or within the early LLM layers. **FastV** prunes at the second LLM layer using
-attention the visual tokens receive, observing many receive negligible attention [CITE: fastv];
+attention the visual tokens receive, observing many receive negligible attention \cite{chen2024fastv};
 *relation*: it is our primary same-model baseline and the empirical instance of a
 query-conditioned scorer that wins scene-text/object but cannot rescue merger-destroyed OCR
 (Section 5). **PyramidDrop** drops tokens progressively across LLM layers in a pyramid schedule
-[CITE: pyramiddrop]; *relation*: a second same-model baseline whose canonical schedule occupies a
+\cite{xing2024pyramiddrop}; *relation*: a second same-model baseline whose canonical schedule occupies a
 different budget point, and whose mechanism degenerates to collapse at an iso-25% budget. **FasterVLM**
-pushes attention-based pruning toward faster convergence [CITE: fastervlm]. **SparseVLM** and
-related work explore query-conditioned sparsification of the visual stream [CITE: sparsevlm].
+pushes attention-based pruning toward faster convergence \cite{zhang2024fastervlm}. **SparseVLM** and
+related work explore query-conditioned sparsification of the visual stream \cite{zhang2024sparsevlm}.
 **PruMerge** merges tokens by attention-derived importance rather than dropping them
-[CITE: prumerge]. **FitPrune** fits lightweight predictors of token importance [CITE: fitprune].
+\cite{shang2024prumerge}. **FitPrune** fits lightweight predictors of token importance \cite{ye2024fitprune}.
 All of these operate on tokens that have *already* passed the encoder's native pooling; none treats
 the pooling stage itself as a design variable, and none of the query-conditioned variants is
 available as a runnable same-model baseline on our stack except FastV and PyramidDrop.
 
 **Qwen-family-specific compression.** Qwen-VL models introduce a PatchMerger that already compresses
-visual tokens, and a line of work targets this family directly. **GlimpsePrune** [CITE: glimpseprune]
-and **VScan** [CITE: vscan] prune or scan visual tokens within Qwen-VL inference; *relation*: they
+visual tokens, and a line of work targets this family directly. **GlimpsePrune** \cite{zeng2025glimpseprune}
+and **VScan** \cite{zhang2025vscan} prune or scan visual tokens within Qwen-VL inference; *relation*: they
 confirm the Qwen family is an active compression target, but like the methods above they select
 *after* the native merger, i.e. on the post-merger side of the stage axis we study.
 
 **Dominant-plus-contextual selection.** **VisionZip** selects "dominant" tokens by CLS-to-patch
 attention at the penultimate ViT layer and merges the remainder into "contextual" tokens by
 key-cosine assignment and count-averaging, reporting strong general-task retention at aggressive
-budgets on LLaVA models [CITE: visionzip-yang2024]. A line-reading of the official code confirms
+budgets on LLaVA models \cite{yang2024visionzip}. A line-reading of the official code confirms
 both the LLaVA and the Qwen2.5-VL paths select *after* the native pooling—for Qwen2.5-VL,
 explicitly after the PatchMerger, inside the LLM forward on `inputs_embeds` [E: visionzip_gap_report
 §1]. *Relation*: we reconstruct its dominant+contextual principle at the post-merger stage with a
@@ -197,7 +197,7 @@ stage axis we study is not the axis any of the three varies.
 
 **Efficiency evaluation of VLMs.** Reported speedups depend heavily on the serving engine and the
 measurement protocol (offline batch vs continuous-batching serving, time-to-first-token vs
-throughput). We adopt the lmms-eval family of *official* scorers for accuracy [CITE: lmms-eval]
+throughput). We adopt the lmms-eval family of *official* scorers for accuracy \cite{zhang2024lmmseval}
 (VQA-accuracy, ANLS, OCR-Bench official five-category scoring, GQA word-normalized exact match) so
 that our accuracy claims use community-standard metrics, and we disclose the engine of every
 efficiency number, confining throughput claims to a single engine (Section 5.7).
@@ -217,8 +217,8 @@ paper's claim is that, for text-dense workloads, this stage axis dominates the s
 
 ### 3.1 Problem setup
 
-We study two merger-equipped VLMs, **Qwen3-VL-8B-Instruct** [CITE: qwen3vl] and
-**Qwen2.5-VL-7B-Instruct** [CITE: qwen25vl], in bf16 with eager attention, served by vLLM 0.19
+We study two merger-equipped VLMs, **Qwen3-VL-8B-Instruct** \cite{bai2025qwen3vl} and
+**Qwen2.5-VL-7B-Instruct** \cite{bai2025qwen25vl}, in bf16 with eager attention, served by vLLM 0.19
 (V1 engine) on a single A40 (46 GB). Their shared vision pipeline is: image → ViT patch tokens
 (effective 16 px patch footprint) → native 2×2 merger (four patch features projected into one
 *unit*, 32 px footprint) → (Qwen3-VL) additional deepstack mergers that merge intermediate-depth
@@ -306,7 +306,7 @@ Post-merger selection (the contrast, = VisionZip-type stage): replace lines 3-5 
 
 ### 3.4 VisionZip-style dominant+contextual proxy (post-merger principle port)
 
-To ask whether a dominant+contextual recipe [CITE: visionzip-yang2024] rescues post-merger
+To ask whether a dominant+contextual recipe \cite{yang2024visionzip} rescues post-merger
 selection, we implement its *principle* at the matched (post-merger) stage. Per image, the cached
 per-unit scores split the kept budget k into `k_dom = round(k·0.7)` dominant units (top-scored,
 kept natively) and `k_ctx = k − k_dom` contextual units (the remainder split into k_ctx contiguous
@@ -462,10 +462,10 @@ most concrete structural difference we have between the two generations [E: j1_q
 **Models.** Qwen3-VL-8B-Instruct and Qwen2.5-VL-7B-Instruct, bf16, enforce_eager, 1× A40 46 GB,
 vLLM 0.19 V1, greedy decoding (temperature 0).
 
-**Benchmarks and metrics (official).** TextVQA (VQA-accuracy) [CITE: textvqa], DocVQA (ANLS)
-[CITE: docvqa], OCR-Bench (official five-category score /1000) [CITE: ocrbench], and GQA
-(word-normalized exact match) [CITE: gqa]. All scorers are verbatim ports of the lmms-eval family
-[CITE: lmms-eval], with ground-truth self-test passing 200/200. Each TextVQA/DocVQA/GQA question
+**Benchmarks and metrics (official).** TextVQA (VQA-accuracy) \cite{singh2019textvqa}, DocVQA (ANLS)
+\cite{mathew2021docvqa}, OCR-Bench (official five-category score /1000) \cite{liu2024ocrbench}, and GQA
+(word-normalized exact match) \cite{hudson2019gqa}. All scorers are verbatim ports of the lmms-eval family
+\cite{zhang2024lmmseval}, with ground-truth self-test passing 200/200. Each TextVQA/DocVQA/GQA question
 carries the canonical short-answer instruction ("Answer the question using a single word or
 phrase.") baked into the subset, which is required for VQA-acc/ANLS/exact-match to be meaningful.
 
