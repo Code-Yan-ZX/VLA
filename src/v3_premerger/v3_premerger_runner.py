@@ -628,11 +628,16 @@ def parse_args():
                          "to post (object-friendly). Agreement units are always kept. "
                          "Keeps exactly k units (iso-token with pre/post).")
     ap.add_argument("--save-unit-scores", action="store_true",
-                    help="--mode hybrid ONLY: stash a per-image disagreement summary "
+                    help="Diagnostic stash (measurement only; selection math "
+                         "untouched). --mode hybrid: per-image disagreement summary "
                          "(n_units, k, agreement size, Jaccard@k, Spearman(pre,post), "
                          "mean Sobel edge, routing branch) into per_sample[i]['unit_scores']. "
-                         "Recomputed grid counts guard the FIFO attachment against "
-                         "vLLM encoder-cache replays.")
+                         "--mode pre and --mode post --mask-ranking swap (R1-1): per-image "
+                         "kept unit-index sets into per_sample[i]['kept_indices'] "
+                         "(+kept_n_units/kept_k; kept_fallback flags swap stage-ranking "
+                         "fallbacks) for the pre-vs-swap kept-set Jaccard. Recomputed "
+                         "grid counts guard the FIFO attachment against vLLM "
+                         "encoder-cache replays.")
     ap.add_argument("--qa-lambda", type=float, default=0.0,
                     help="J5 query-aware pre-merger saliency (QA-pre), --mode pre "
                          "ONLY (stage ranking, standard dominant-only path). 0.0 "
@@ -905,10 +910,15 @@ def setup_post_merger(model, r: float, selector: str = "l2"):
 #   would have produced, so post+swap must reproduce pre-standard accuracy.
 # --------------------------------------------------------------------------- #
 def setup_post_merger_swap(model, r: float, selector: str = "l2",
-                           family: str = "qwen3vl"):
+                           family: str = "qwen3vl", save_kept: bool = False):
     visual = model.visual
     unit = visual.spatial_merge_size ** 2
-    state = {"grid_thw": None, "queue": []}   # queue: per-image PRE unit scores
+    state = {"grid_thw": None, "queue": [],
+             "kept_log": []}   # queue: per-image PRE unit scores; kept_log:
+                               # R1-1 per-image kept merged-token indices
+                               # (merged token i <-> unit i is 1:1, so the
+                               # indices live in the same unit space as pre
+                               # mode's kept_log -> Jaccard is well-defined)
     diag = {"fires": 0, "nk": [], "selector": selector,
             "mask_ranking": "swap:post-path+pre-ranking",
             "score_passes": 0, "consumed": 0, "fallback_stage": 0,
@@ -966,6 +976,7 @@ def setup_post_merger_swap(model, r: float, selector: str = "l2",
             n = int(s.shape[0])
             k = max(1, int(round(n * (1.0 - r))))
             pre_i = state["queue"].pop(0) if state["queue"] else None
+            fb = False
             if pre_i is not None and int(pre_i.shape[0]) == n:
                 diag["consumed"] += 1
                 idx = torch.topk(pre_i.to(device=s.device), k).indices.sort().values
@@ -974,6 +985,14 @@ def setup_post_merger_swap(model, r: float, selector: str = "l2",
                 # stage (post) ranking rather than crash; diag exposes it.
                 diag["fallback_stage"] += 1
                 idx = torch.topk(_score_tokens(s, selector), k).indices.sort().values
+                fb = True
+            if save_kept:
+                # R1-1 diagnostic (measurement only): per-image kept merged-token
+                # indices (== unit indices; 1:1 unit<->merged token). FIFO per
+                # split; entry 0 = warmup, dropped at attach; n_units guard.
+                state["kept_log"].append(
+                    {"n_units": n, "k": k, "kept": idx.tolist(),
+                     "fallback": fb})
             out.append(s.index_select(0, idx).contiguous())
         if len(diag["nk"]) < 8:
             diag["nk"].append((int(splits[0].shape[0]), int(out[0].shape[0])))
@@ -1299,6 +1318,54 @@ def attach_hybrid_unit_scores(state, samples, per_sample, model_id: str,
         "from vLLM's encoder-cache replay (no vision forward fired).")
 
 
+def attach_kept_indices(kept_log, samples, per_sample, model_id: str,
+                        max_pixels: int, diag):
+    """R1-1 diagnostic: FIFO-attach per-image kept unit-index lists to
+    per_sample[i]["kept_indices"] (+ kept_n_units/kept_k, kept_fallback when a
+    swap fallback entry was used). Source queues: PreMergerPruner.kept_log
+    (mode=pre) or setup_post_merger_swap state["kept_log"] (mode=post +
+    mask_ranking=swap). Same alignment contract as attach_hybrid_unit_scores:
+    entry 0 = warmup (dropped); per-image unit counts recomputed offline with
+    the SAME HF processor vLLM uses guard against encoder-cache replays.
+    Best-effort: unmatched samples simply get no kept_indices key."""
+    log = kept_log[1:]                        # drop warmup entry
+    from transformers import AutoProcessor
+    full_units = [None] * len(samples)
+    try:
+        from PIL import Image
+        proc = AutoProcessor.from_pretrained(model_id)
+        for i, smp in enumerate(samples):
+            kw = {}
+            if max_pixels and max_pixels > 0:
+                kw["max_pixels"] = max_pixels
+            g = proc.image_processor(Image.open(smp.image),
+                                     return_tensors="pt", **kw)["image_grid_thw"]
+            full_units[i] = int(g[0].prod()) // 4
+    except Exception as e:
+        print(f"[kept] offline grid recompute failed "
+              f"({type(e).__name__}: {str(e)[:160]}); kept_indices NOT attached",
+              file=sys.stderr, flush=True)
+        diag["kept_attached"] = 0
+        diag["kept_total"] = len(log)
+        return
+    ptr = 0
+    attached = 0
+    for i, smp in enumerate(samples):
+        if i >= len(per_sample):
+            break
+        if (ptr < len(log) and full_units[i] is not None
+                and log[ptr].get("n_units") == full_units[i]):
+            per_sample[i]["kept_indices"] = log[ptr]["kept"]
+            per_sample[i]["kept_n_units"] = log[ptr]["n_units"]
+            per_sample[i]["kept_k"] = log[ptr]["k"]
+            if log[ptr].get("fallback"):
+                per_sample[i]["kept_fallback"] = True
+            ptr += 1
+            attached += 1
+    diag["kept_attached"] = attached
+    diag["kept_total"] = len(log)
+
+
 # --------------------------------------------------------------------------- #
 # (C) PRE-merger: forward_pre_hooks on the 4 mergers + visual (to capture
 # grid_thw) + replace _process_image_input to split by pruned counts.
@@ -1307,7 +1374,8 @@ class PreMergerPruner:
     def __init__(self, r: float, spatial_merge_size: int, selector: str = "l2",
                  visionzip_style: bool = False, visionzip_dom_ratio: float = 0.7,
                  mask_ranking: str = "stage",
-                 qa_lambda: float = 0.0, qa_state=None):
+                 qa_lambda: float = 0.0, qa_state=None,
+                 save_kept: bool = False):
         self.r = r
         self.sm = spatial_merge_size
         self.unit = spatial_merge_size ** 2          # 4
@@ -1317,6 +1385,8 @@ class PreMergerPruner:
         self.mask_ranking = mask_ranking              # "stage" | "swap" (M3)
         self.qa_lambda = float(qa_lambda)             # J5: 0 = qsim OFF (plain RBM)
         self.qa_state = qa_state                      # J5: from _qa_precompute
+        self.save_kept = save_kept                    # R1-1: log kept unit sets
+        self.kept_log = []                            # R1-1: per-image entries
         self.full_units = None                        # list[int] per image
         self.k_units = None                           # list[int] per image
         self._mask = None                             # cached token mask
@@ -1396,6 +1466,18 @@ class PreMergerPruner:
                 s_i = scores[off:off + f]
                 idx = torch.topk(s_i, min(k, f)).indices   # k<=f: never over-ask
                 keep[off + idx] = True
+                if self.save_kept:
+                    # R1-1 diagnostic (measurement only): per-image kept unit
+                    # indices, LOCAL to the image and sorted, for the
+                    # pre-vs-swap kept-set Jaccard. The mask is computed once
+                    # per visual pass (cached in self._mask), so the log grows
+                    # by exactly one entry per image in request order (FIFO);
+                    # entry 0 = warmup, dropped at attach time; n_units guards
+                    # the alignment (attach_kept_indices, same contract as
+                    # attach_hybrid_unit_scores). Off unless --save-unit-scores.
+                    self.kept_log.append(
+                        {"n_units": int(f), "k": int(min(k, f)),
+                         "kept": sorted(idx.tolist())})
                 off += f
             self._mask = keep.unsqueeze(-1).expand(-1, self.unit).reshape(-1)
             self._vz_scores = scores                 # cached for VisionZip-style
@@ -1675,7 +1757,8 @@ def _install_qwen2vl_pre_visual_forward(visual, pruner):
 def setup_pre_merger(model, r: float, selector: str = "l2", family: str = "qwen3vl",
                       visionzip_style: bool = False, visionzip_dom_ratio: float = 0.7,
                       mask_ranking: str = "stage",
-                      qa_lambda: float = 0.0, qa_state=None):
+                      qa_lambda: float = 0.0, qa_state=None,
+                      save_kept: bool = False):
     if mask_ranking == "swap" and visionzip_style:
         raise SystemExit("--mask-ranking swap is not supported with "
                          "--visionzip-style (dominant-only standard path only).")
@@ -1683,7 +1766,8 @@ def setup_pre_merger(model, r: float, selector: str = "l2", family: str = "qwen3
     sm = visual.spatial_merge_size
     pruner = PreMergerPruner(r, sm, selector, visionzip_style, visionzip_dom_ratio,
                              mask_ranking=mask_ranking,
-                             qa_lambda=qa_lambda, qa_state=qa_state)
+                             qa_lambda=qa_lambda, qa_state=qa_state,
+                             save_kept=save_kept)
 
     # (1) visual.forward pre_hook: capture grid_thw -> plan k_units.
     def _visual_prehook(module, args, kwargs):
@@ -2076,7 +2160,8 @@ def main():
         if args.mask_ranking == "swap":
             # M3: post forward path + PRE ranking selection.
             diag, swap_state = setup_post_merger_swap(model, r, args.selector,
-                                                      family)
+                                                      family,
+                                                      save_kept=args.save_unit_scores)
         else:
             diag = setup_post_merger(model, r, args.selector)
     elif args.mode == "hybrid":
@@ -2101,7 +2186,8 @@ def main():
                                              visionzip_dom_ratio=args.visionzip_dom_ratio,
                                              mask_ranking=args.mask_ranking,
                                              qa_lambda=args.qa_lambda,
-                                             qa_state=qa_state)
+                                             qa_state=qa_state,
+                                             save_kept=args.save_unit_scores)
         diag = pruner.diag
 
     # Qwen2.5-VL ONLY: fix the mrope-position overshoot that collapses pruned
@@ -2195,6 +2281,15 @@ def main():
         if args.save_unit_scores:
             attach_hybrid_unit_scores(hybrid_state, samples, per_sample,
                                       model_id, args.max_pixels, diag)
+    if args.save_unit_scores and diag is not None:
+        # R1-1: attach per-image kept unit sets for the pre-vs-swap Jaccard
+        # (mode=pre -> pruner.kept_log; mode=post+swap -> swap_state kept_log).
+        if args.mode == "pre":
+            attach_kept_indices(pruner.kept_log, samples, per_sample,
+                                model_id, args.max_pixels, diag)
+        elif swap_state is not None:
+            attach_kept_indices(swap_state["kept_log"], samples, per_sample,
+                                model_id, args.max_pixels, diag)
     if qa_state is not None and args.qa_lambda > 0.0:
         # J5 QA-pre: stamp qa_lambda on every sample (analysis) + best-effort
         # per-image mean qsim; expose the qsim bookkeeping counters.
@@ -2224,7 +2319,8 @@ def main():
     }
     if args.mode == "hybrid":
         result["hybrid_text_frac"] = args.hybrid_text_frac
-        result["save_unit_scores"] = args.save_unit_scores
+    if args.save_unit_scores:
+        result["save_unit_scores"] = True
     if qa_state is not None and args.qa_lambda > 0.0:
         result["qa_lambda"] = args.qa_lambda
         result["qa_embed_cache"] = args.qa_embed_cache
