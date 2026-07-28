@@ -2,9 +2,10 @@
 
 > Drafted 2026-07-24 · writing sub-agent (CPU-only). Language = English (paper body).
 > Scope of this draft: **all sections that do NOT depend on the full-split main table** are
-> written out; the full-split headline **Table 1 is now filled** (J7 complete, 2026-07-28;
-> FastV/Pyramid columns still `[HF-n500 pending]`), while the efficiency table (Table 3) remains
-> **PENDING J6**. All *interim* numbers are n=200 seed-0 subsets under **official metrics** and
+> written out; the full-split headline **Table 1 is now filled** (J7 complete, 2026-07-28), and its
+> **FastV/Pyramid columns are now filled from the independent HF-transformers n=500 headline subset**
+> (J7hf, 2026-07-28; footnotes ʰ/ⁱ), leaving only the efficiency table (Table 3) **PENDING J6**.
+> All *interim* numbers are n=200 seed-0 subsets under **official metrics** and
 > are flagged `[interim]`; the submission version keeps only the J7 full-split numbers. Old
 > containment figures are void. *Full-split GQA (n=12578) supersedes the older n=200 "tie"
 > wording: post-merger selection leads GQA by +2.6–2.8 pp (z = 4.1–4.5 independent-binomial;
@@ -45,13 +46,17 @@ selection by **+18.8 to +38.3 pp** (Qwen3-VL-8B and Qwen2.5-VL-7B, n=200, offici
 object-centric GQA it **trails slightly but significantly** (post +2.6–2.8 pp, full n=12578,
 z ≈ 4–8; 1/10–1/14 the text-dense margin), with **no text-dense crossover**, and the gap widens
 under deeper compression. In a
-same-model, iso-budget comparison, the query-conditioned FastV wins three benchmarks, yet RBM alone
-holds OCR-Bench (**+42.5 pp** over FastV); RBM is the **robust default**. Three pre-registered
-negative results close the design space: pre-merger selection **must remain query-blind**.
+same-model, iso-budget comparison, the query-conditioned FastV wins the query-relevant benchmarks,
+yet RBM alone holds dense OCR-Bench (**+25.9 pp** over FastV at n=500; z ≈ 9.5) and is the **robust
+default**, not uniformly optimal. Three pre-registered negative results close the design space:
+pre-merger selection **must remain query-blind**.
 
 <!-- NUMBERS: M1 ρ 0.14–0.36 (mechanism_verification §1); M2 Sobel 0.641 vs 0.124 (mechanism §2);
      M3 swap≡pre 200/200 & 198/200 (mechanism §3); +18.8~+38.3pp cross-gen n=200 (j2 +
-     rescore_rerun); OCR +42.5pp = RBM 0.580 vs FastV 0.155 (j4_probe); GQA full n=12578 post
+     rescore_rerun); abstract OCR margin now the n=500 headline +25.9pp = RBM 0.547 vs FastV 0.288
+     (z≈9.5, j7hf_baselines_n500), superseding the n=200 +42.5pp (0.580 vs 0.155, j4_probe) which is
+     retained in Table 1b/§5.3; "FastV wins query-relevant benchmarks" = TextVQA both models + GQA
+     Q3 + same-pixel DocVQA (§5.3, model-dependent); GQA full n=12578 post
      0.477/0.585 vs pre 0.449/0.559 → +2.8/+2.6pp, z 4.5/4.1 (indep), McNemar 8.1/7.1 (paired)
      (j7_main_table; DECISIONS 2026-07-28 supersedes the n=200 tie); 1/10–1/14 of text-dense Δ.
      Abstract ≤200 words (wc-verified). -->
@@ -98,8 +103,10 @@ corroboration of the ranking law (Section 4).
 **Positioning by fair comparison.** We compare RBM against same-model, same-budget, runnable
 baselines—FastV (one-shot attention pruning at LLM layer 2) and PyramidDrop (progressive in-LLM
 dropping)—plus a faithful same-stage principle-port of VisionZip. The comparison is deliberately
-honest about where RBM does *not* lead: FastV, being query-conditioned, wins TextVQA, DocVQA, and
-GQA, while RBM is the *only* method that retains OCR-Bench. We therefore position RBM not as a
+honest about where RBM does *not* lead: FastV, being query-conditioned, wins the query-relevant
+benchmarks (TextVQA on both models, Qwen3-VL GQA, and same-pixel DocVQA), while RBM is the *only*
+method that robustly retains OCR-Bench (Section 5.3; the wins are model-dependent—RBM in turn wins
+Qwen2.5-VL GQA). We therefore position RBM not as a
 method that "beats" the field but as the **robust default, not uniformly optimal**—it never
 collapses, it concedes only a narrow significant margin on object-centric GQA (+2.6–2.8 pp,
 z ≈ 4–8; 1/10–1/14 the text-dense Δ), and it uniquely preserves dense OCR that every post-merger
@@ -459,12 +466,13 @@ phrase.") baked into the subset, which is required for VQA-acc/ANLS/exact-match 
 **Budget.** Retention κ over per-image merge units (Section 3.1); same κ ⇒ iso-token per image
 (verified via mean post-merger token count).
 
-**Subset vs full split.** Table 1 (§5.2) is the headline and is now reported on the **official full
-splits** (TextVQA val 5000; DocVQA val 5349; OCR-Bench 1000; GQA test-dev 12578). Tables 1b–2 retain
-seed-0 **n=200 subsets**, flagged `[interim]`—they are kept because they are the only place where
-FastV/PyramidDrop numbers exist yet (pending HF-harness n=500 runs, §5.2) and as a cross-split
-consistency check (§5.2, paragraph 4); the two scopes are never mixed in a single table, and the
-submission version keeps the full-split numbers as headline.
+**Subset vs full split.** Table 1 (§5.2) is the headline and is reported on the **official full
+splits** (TextVQA val 5000; DocVQA val 5349; OCR-Bench 1000; GQA test-dev 12578) for the
+RBM/post/none columns; its **FastV/Pyramid columns are the independent HF-harness n=500 headline
+subset** (J7hf complete, footnote ʰ), same model and seed. Tables 1b–2 retain seed-0 **n=200
+subsets**, flagged `[interim]`, now kept only as a cross-split consistency check (§5.2, paragraph 4;
+§5.3); the two scopes are never mixed in a single table, and the submission version keeps the
+full-split numbers as headline.
 
 **Baseline engines and fairness protocol (disclosure, R7).** FastV and PyramidDrop are run in an
 independent HuggingFace transformers 4.57.6 eager harness (they have no vLLM path); RBM and the
@@ -492,20 +500,26 @@ work); `post ≡ VZ-port` = post-merger L2 selection, byte-identical to the Visi
 dominant+contextual principle-port on both generations (§3.4). Parentheses give the binomial
 standard error √(p(1−p)/n) with p the official metric (footnote d); OCR-Bench cells report the
 official Final/1000 with the rate ± stderr in parentheses. Δ₂₅ = pre − post at κ = 0.25;
-** = significant pre-merger lead (z ≥ 1.96); † = significant post-merger lead. **No cell falls in
-the direction-only (1.5 ≤ z < 1.96) or non-significant (z < 1.5) bands** (smallest |z| = 4.1).
-[E: runs/full_matrix/j7_main_table.json, 26/26 cells zero missing; experiments/j7_main_table.md]
+** = significant pre-merger lead (z ≥ 1.96); † = significant post-merger lead. **No full-split
+Δ cell falls in the direction-only (1.5 ≤ z < 1.96) or non-significant (z < 1.5) bands**
+(smallest |z| = 4.1). The **FastV @25% ʰ and Pyramid @62.5% ʰ columns are an independent
+HF-transformers n=500 headline subset** (same model; FastV iso-budget at κ = 0.25, Pyramid at its
+canonical keep_equiv 0.625 ≈ 2.1× budget), distinct in scope from the full-split our-method
+columns; their stderrs use n = 500, and the Δ₂₅ significance band above does **not** apply to the
+cross-method, cross-scope baseline contrasts (reported with their own pooled z in §5.3)
+[E: runs/full_matrix/j7_main_table.json, 26/26 cells zero missing; experiments/j7_main_table.md;
+runs/full_matrix/j7hf_official_summary.json; experiments/j7hf_baselines_n500.md]
 
-| Model | Benchmark (metric, n) | none | RBM @25% | RBM @12.5% | post ≡ VZ-port @25% | post @12.5% | Δ₂₅ (pre − post) | FastV @25% | Pyramid |
+| Model | Benchmark (metric, n) | none | RBM @25% | RBM @12.5% | post ≡ VZ-port @25% | post @12.5% | Δ₂₅ (pre − post) | FastV @25% ʰ | Pyramid @62.5% ʰ |
 |---|---|---|---|---|---|---|---|---|---|
-| Qwen3-VL-8B | TextVQA (VQA-acc, 5000) | 0.844 (±.005) | 0.605 (±.007) | 0.472 (±.007) | 0.222 (±.006) | 0.132 (±.005) | **+38.4 pp** (z=42.3) | [HF-n500 pending] | [HF-n500 pending] |
-| | DocVQA (ANLS, 5349) | — ᵃ | 0.481 (±.007) | 0.352 (±.007) | 0.238 (±.006) | 0.103 (±.004) | **+24.3 pp** (z=27.1) | [HF-n500 pending] | [HF-n500 pending] |
-| | OCR-Bench (Final/1000, 1000) | 760 (.760 ±.014) ᵇ | 547 (.547 ±.016) | 350 (.350 ±.015) | 184 (.184 ±.012) | 53 (.053 ±.007) | **+363 pts** (z=18.2) | [HF-n500 pending] | [HF-n500 pending] |
-| | GQA (exact match, 12578) | 0.616 (±.004) | 0.449 (±.004) | — ᶜ | 0.477 (±.004) | — ᶜ | −2.8 pp † (z=4.5; McNemar 8.1) | [HF-n500 pending] | [HF-n500 pending] |
-| Qwen2.5-VL-7B | TextVQA (VQA-acc, 5000) | 0.862 (±.005) | 0.702 (±.006) | 0.597 (±.007) | 0.442 (±.007) | 0.319 (±.007) | **+26.1 pp** (z=27.3) | [HF-n500 pending] | [HF-n500 pending] |
-| | DocVQA (ANLS, 5349) | 0.949 (±.003) | 0.636 (±.007) | 0.455 (±.007) | 0.526 (±.007) | 0.245 (±.006) | **+11.0 pp** (z=11.6) | [HF-n500 pending] | [HF-n500 pending] |
-| | OCR-Bench (Final/1000, 1000) | 817 (.817 ±.012) ᵇ | 476 (.476 ±.016) ᶠ | 335 (.335 ±.015) | 183 (.183 ±.012) | 67 (.067 ±.008) | **+293 pts** (z=14.7) | [HF-n500 pending] | [HF-n500 pending] |
-| | GQA (exact match, 12578) | 0.604 (±.004) | 0.559 (±.004) | — ᶜ | 0.585 (±.004) | — ᶜ | −2.6 pp † (z=4.1; McNemar 7.1) | [HF-n500 pending] | [HF-n500 pending] |
+| Qwen3-VL-8B | TextVQA (VQA-acc, 5000) | 0.844 (±.005) | 0.605 (±.007) | 0.472 (±.007) | 0.222 (±.006) | 0.132 (±.005) | **+38.4 pp** (z=42.3) | 0.646 (±.021) | 0.835 (±.017) |
+| | DocVQA (ANLS, 5349) | — ᵃ | 0.481 (±.007) | 0.352 (±.007) | 0.238 (±.006) | 0.103 (±.004) | **+24.3 pp** (z=27.1) | 0.486 (±.022) ⁱ | 0.882 (±.014) ⁱ |
+| | OCR-Bench (Final/1000, 1000) | 760 (.760 ±.014) ᵇ | 547 (.547 ±.016) | 350 (.350 ±.015) | 184 (.184 ±.012) | 53 (.053 ±.007) | **+363 pts** (z=18.2) | 288 (.288 ±.020) | 746 (.746 ±.019) |
+| | GQA (exact match, 12578) | 0.616 (±.004) | 0.449 (±.004) | — ᶜ | 0.477 (±.004) | — ᶜ | −2.8 pp † (z=4.5; McNemar 8.1) | 0.510 (±.022) | 0.606 (±.022) |
+| Qwen2.5-VL-7B | TextVQA (VQA-acc, 5000) | 0.862 (±.005) | 0.702 (±.006) | 0.597 (±.007) | 0.442 (±.007) | 0.319 (±.007) | **+26.1 pp** (z=27.3) | 0.757 (±.019) | 0.779 (±.019) |
+| | DocVQA (ANLS, 5349) | 0.949 (±.003) | 0.636 (±.007) | 0.455 (±.007) | 0.526 (±.007) | 0.245 (±.006) | **+11.0 pp** (z=11.6) | 0.481 (±.022) ⁱ | 0.818 (±.017) ⁱ |
+| | OCR-Bench (Final/1000, 1000) | 817 (.817 ±.012) ᵇ | 476 (.476 ±.016) ᶠ | 335 (.335 ±.015) | 183 (.183 ±.012) | 67 (.067 ±.008) | **+293 pts** (z=14.7) | 484 (.484 ±.022) | 604 (.604 ±.022) |
+| | GQA (exact match, 12578) | 0.604 (±.004) | 0.559 (±.004) | — ᶜ | 0.585 (±.004) | — ᶜ | −2.6 pp † (z=4.1; McNemar 7.1) | 0.498 (±.022) | 0.562 (±.022) |
 
 **Footnotes.**
 - ᵃ The Qwen3-VL **none** DocVQA full-split cell was **not completed**: a subset of giant document
@@ -529,19 +543,42 @@ the direction-only (1.5 ≤ z < 1.96) or non-significant (z < 1.5) bands** (smal
   κ have identical mean post-merger token counts (ptid) and unlimited pixel caps, with **one
   exception**: the Qwen2.5-VL OCR-Bench @25% RBM cell is a safety-flagged rerun that used a 4 M-pixel
   cap (mean ptid 229.6 vs post 282.0), so its +293 pt gap is, if anything, **conservative**.
-- ᵍ **FastV @25% and Pyramid columns are placeholders**: both will be filled from the independent
-  HF-transformers harness (§5.1) at an n=500 headline subset, same model and same budget, on both
-  models. Until then, the ready Qwen3-VL n=200 numbers (FastV 0.680 / 0.518@600k px / 0.155 / 0.490;
-  Pyramid canonical 0.852 / 0.878 at keep_equiv 0.625, iso-25% `[1,0,0,0]` collapses to
-  0.073 / 0.305 / 0.005) appear in Table 1b. Pyramid's canonical schedule is a *different budget
-  point* (≈2.1× ours) and is reported as a retention-curve point, not a same-budget win.
+- ʰ **FastV and Pyramid columns — independent HF-transformers n=500 headline subset.** These two
+  columns come from a HuggingFace transformers 4.57.6 eager harness (§5.1), seed-0 **n = 500** subset
+  per benchmark, on **both** models, greedy decoding, official metrics; their binomial stderrs use
+  n = 500 (footnote d). They are a **subset headline**, deliberately distinct in scope from the
+  full-split (n = 5000 / 5349 / 1000 / 12578) RBM/post/none columns, so no cross-column Δ is claimed
+  inside this table; cross-method contrasts carry their own pooled z in §5.3. **FastV** = one-shot
+  attention pruning at LLM **layer K = 2** (drop the visual tokens receiving the least layer-2
+  attention, a query-conditioned scorer), run at the iso-budget κ = 0.25 (drop ratio r = 0.75).
+  **Pyramid** = PyramidDrop at its **canonical progressive schedule [1, .75, .5, .25]**, i.e.
+  equivalent mean retention **keep_equiv = 0.625 (≈2.1× our budget)**; it is a *different budget
+  point* reported as a retention-curve point, **not** a same-budget win (its honest iso-25%
+  degenerate schedule `[1,0,0,0]` collapses — Table 1b). HF-harness fairness is validated: it
+  bit-degrades to native at r = 0 (per-sample anchor **8/8** identical; manual pre-norm vs native
+  max-diff = 0) and HF-vs-vLLM **none** cells agree **16/16** [E: j4_step2_fix]. OCR-Bench HF cells
+  skip ≤ 1 of 500 long-OCR images (scored 0, conservative); the printed integer is the estimated
+  Final/1000 = acc × 1000 with the official acc ± stderr in parentheses
+  [E: runs/full_matrix/j7hf_official_summary.json; experiments/j7hf_baselines_n500.md].
+- ⁱ **DocVQA iso-pixel disclosure.** The HF baselines cannot honor a pixel cap through the engine
+  (attention materialization), so the two **HF DocVQA cells (FastV, Pyramid) run under a PIL
+  pre-scaled 600k-pixel cap** (all skip 0), whereas the full-split **RBM / post / none DocVQA columns
+  are at native resolution** (footnote a config) — the two are therefore **not iso-pixel** and must
+  not be read as a same-configuration DocVQA contrast inside this table. The matched-configuration
+  cross-check is the j4d same-pixel 600k table at n = 200 (Qwen3-VL): **none 0.951 / RBM 0.424 /
+  post ≡ VZ 0.251** (all 600k, skip 0), against which the HF FastV 600k cell (0.518) and Pyramid 600k
+  cell (0.878) are directly comparable; the Qwen2.5-VL same-pixel 600k cross-check for the RBM/post
+  cells is pending (J8) [E: experiments/j4_probe_qwen3vl.md 补遗; experiments/j7hf_baselines_n500.md].
 
-**Mandatory table note (printed, R1).** *FastV wins TextVQA, DocVQA, and GQA at the same model and
-budget (Table 1b); this table does **not** support "RBM outperforms existing methods". The RBM claim
-is robustness (it never collapses on any benchmark and never loses to the post-merger family) plus a
-large text-dense/OCR lead over the post-merger family. GQA is the only benchmark on which
-post-merger selection leads pre-merger selection—by a small (≤ 2.8 pp) though statistically
-significant margin—and no text-dense benchmark shows any crossover.*
+**Mandatory table note (printed, R1).** *At the same model and budget the query-conditioned FastV
+leads RBM on TextVQA (both models) and on Qwen3-VL GQA, and on same-pixel DocVQA (Table 1 ʰ columns;
+Table 1b); RBM in turn leads FastV on OCR-Bench (Qwen3-VL +25.9 pp, z ≈ 9.5) and on Qwen2.5-VL GQA,
+and ties it on Qwen2.5-VL OCR-Bench. There is **no** universal winner, and this table does **not**
+support "RBM outperforms existing methods". The RBM claim is robustness (it never collapses on any
+benchmark and never loses to the post-merger family) plus a large text-dense/OCR lead over the
+post-merger family. GQA is the only benchmark on which post-merger selection leads pre-merger
+selection—by a small (≤ 2.8 pp) though statistically significant margin—and no text-dense benchmark
+shows any crossover.*
 
 <details><summary>LaTeX rendering (kept in sync with the markdown table above)</summary>
 
@@ -550,23 +587,26 @@ significant margin—and no text-dense benchmark shows any crossover.*
 \caption{Official full-split headline. RBM = pre-merger L2 (ours); post $\equiv$ VZ-port =
 post-merger L2, byte-identical to the VisionZip principle-port on both generations. Parentheses:
 binomial s.e.\ $\sqrt{p(1-p)/n}$. $\Delta_{25}=$ pre $-$ post at $\kappa{=}0.25$;
-$^{**}$ significant pre lead ($z\ge1.96$); $\dagger$ significant post lead. No cell is
-direction-only or n.s.\ (min $|z|{=}4.1$). FastV/Pyramid: pending HF-harness $n{=}500$, same model
-and budget.}
+$^{**}$ significant pre lead ($z\ge1.96$); $\dagger$ significant post lead. No full-split
+$\Delta$ cell is direction-only or n.s.\ (min $|z|{=}4.1$). The FastV$^{h}$ and Pyramid$^{h}$
+columns are an independent HF-transformers $n{=}500$ headline subset (FastV iso-budget
+$\kappa{=}0.25$; Pyramid canonical keep\_equiv $0.625\approx2.1\times$ budget), distinct in scope
+from the full-split columns; their s.e.\ use $n{=}500$, and the $\Delta_{25}$ band does not apply to
+the cross-method contrasts ($z$ in \S5.3). $^{i}$HF DocVQA cells at 600k px (our columns native).}
 \label{tab:main}
 \begin{tabular}{llccccccll}
 \toprule
-Model & Benchmark (metric, $n$) & none & RBM @25\% & RBM @12.5\% & post$\equiv$VZ @25\% & post @12.5\% & $\Delta_{25}$ & FastV @25\% & Pyramid \\
+Model & Benchmark (metric, $n$) & none & RBM @25\% & RBM @12.5\% & post$\equiv$VZ @25\% & post @12.5\% & $\Delta_{25}$ & FastV @25\%$^{h}$ & Pyramid @62.5\%$^{h}$ \\
 \midrule
-Qwen3-VL-8B & TextVQA (VQA-acc, 5000) & .844 (.005) & .605 (.007) & .472 (.007) & .222 (.006) & .132 (.005) & $+$38.4$^{**}$ ($z{=}42.3$) & pending & pending \\
- & DocVQA (ANLS, 5349) & --- & .481 (.007) & .352 (.007) & .238 (.006) & .103 (.004) & $+$24.3$^{**}$ ($z{=}27.1$) & pending & pending \\
- & OCR-Bench (/1000, 1000) & 760 (.014) & 547 (.016) & 350 (.015) & 184 (.012) & 53 (.007) & $+$363$^{**}$ ($z{=}18.2$) & pending & pending \\
- & GQA (exact match, 12578) & .616 (.004) & .449 (.004) & --- & .477 (.004) & --- & $-$2.8$\dagger$ ($z{=}4.5$; McNemar 8.1) & pending & pending \\
+Qwen3-VL-8B & TextVQA (VQA-acc, 5000) & .844 (.005) & .605 (.007) & .472 (.007) & .222 (.006) & .132 (.005) & $+$38.4$^{**}$ ($z{=}42.3$) & .646 (.021) & .835 (.017) \\
+ & DocVQA (ANLS, 5349) & --- & .481 (.007) & .352 (.007) & .238 (.006) & .103 (.004) & $+$24.3$^{**}$ ($z{=}27.1$) & .486 (.022)$^{i}$ & .882 (.014)$^{i}$ \\
+ & OCR-Bench (/1000, 1000) & 760 (.014) & 547 (.016) & 350 (.015) & 184 (.012) & 53 (.007) & $+$363$^{**}$ ($z{=}18.2$) & 288 (.020) & 746 (.019) \\
+ & GQA (exact match, 12578) & .616 (.004) & .449 (.004) & --- & .477 (.004) & --- & $-$2.8$\dagger$ ($z{=}4.5$; McNemar 8.1) & .510 (.022) & .606 (.022) \\
 \midrule
-Qwen2.5-VL-7B & TextVQA (VQA-acc, 5000) & .862 (.005) & .702 (.006) & .597 (.007) & .442 (.007) & .319 (.007) & $+$26.1$^{**}$ ($z{=}27.3$) & pending & pending \\
- & DocVQA (ANLS, 5349) & .949 (.003) & .636 (.007) & .455 (.007) & .526 (.007) & .245 (.006) & $+$11.0$^{**}$ ($z{=}11.6$) & pending & pending \\
- & OCR-Bench (/1000, 1000) & 817 (.012) & 476 (.016) & 335 (.015) & 183 (.012) & 67 (.008) & $+$293$^{**}$ ($z{=}14.7$) & pending & pending \\
- & GQA (exact match, 12578) & .604 (.004) & .559 (.004) & --- & .585 (.004) & --- & $-$2.6$\dagger$ ($z{=}4.1$; McNemar 7.1) & pending & pending \\
+Qwen2.5-VL-7B & TextVQA (VQA-acc, 5000) & .862 (.005) & .702 (.006) & .597 (.007) & .442 (.007) & .319 (.007) & $+$26.1$^{**}$ ($z{=}27.3$) & .757 (.019) & .779 (.019) \\
+ & DocVQA (ANLS, 5349) & .949 (.003) & .636 (.007) & .455 (.007) & .526 (.007) & .245 (.006) & $+$11.0$^{**}$ ($z{=}11.6$) & .481 (.022)$^{i}$ & .818 (.017)$^{i}$ \\
+ & OCR-Bench (/1000, 1000) & 817 (.012) & 476 (.016) & 335 (.015) & 183 (.012) & 67 (.008) & $+$293$^{**}$ ($z{=}14.7$) & 484 (.022) & 604 (.022) \\
+ & GQA (exact match, 12578) & .604 (.004) & .559 (.004) & --- & .585 (.004) & --- & $-$2.6$\dagger$ ($z{=}4.1$; McNemar 7.1) & .498 (.022) & .562 (.022) \\
 \bottomrule
 \end{tabular}
 \end{table*}
@@ -607,9 +647,11 @@ DocVQA +26.5 → +24.3 pp; OCR-Bench +41.5 → +36.3 pp. Qwen2.5-VL: +32.0 → +
 +28.5 → +29.3 pp (and Δ₁₂.₅ +30.0/+22.3/+27.5 → +27.8/+21.0/+26.8). The single qualitative change is
 GQA, where the full split resolves the underpowered n=200 tie into the small significant post lead
 above (Qwen3-VL post +4.5 pp ≈ 1.3σ at n=200 → +2.8 pp, z=4.5, at n=12578; Qwen2.5-VL +1.0 pp →
-+2.6 pp, z=4.1). The **full split is the headline**; the subset tables are retained only for the
-not-yet-run baseline columns (Table 1b) and the compact cross-generation view (Table 2)
-[E: j7_main_table.md; j2_crossgen_matrix.md; rescore_rerun_report.md].
++2.6 pp, z=4.1). The **full split is the headline**; the FastV/Pyramid baseline columns are now
+carried directly in Table 1 as an independent HF n=500 subset (footnote ʰ), and the n=200 subset
+tables are retained only as a cross-split consistency check (Table 1b) and the compact
+cross-generation view (Table 2)
+[E: j7_main_table.md; j7hf_baselines_n500.md; j2_crossgen_matrix.md; rescore_rerun_report.md].
 
 **DocVQA configuration disclosure (R7).** The blank Qwen3-VL none cell (footnote a) is a
 context-length limitation of the native-resolution evaluation, not a method effect: the pre and post
@@ -618,14 +660,60 @@ max-num-batched-tokens 32768, unlimited pixels) and are compared to each other, 
 baseline. We flag, as in §5.1, that post-merger deep-compression collapse on DocVQA is partly
 configuration-dependent and disclose it rather than present it as a pure method effect.
 
-### 5.3 Same-model, iso-budget comparison (FastV / PyramidDrop / VisionZip-port)
+### 5.3 Same-model comparison against baselines (FastV / PyramidDrop / VisionZip-port)
 
-Table 1b reports the **ready** n=200 subset numbers on Qwen3-VL-8B under official metrics, at
-κ = 25% unless noted [interim; the full-split version is Table 1].
+**n=500 baseline headline (Table 1 ʰ columns).** The FastV and Pyramid columns of Table 1 report an
+independent HF-transformers **n=500** headline subset on **both** models, same seed and official
+metrics as the full-split columns (footnote ʰ). FastV is at the iso-budget κ = 0.25; Pyramid is at
+its canonical keep_equiv 0.625 (≈2.1× our budget, a retention-curve point, not a same-budget cell).
+Because these two columns differ in scope from the full-split RBM/post/none columns, the
+cross-method contrasts below each carry their **own independent-binomial pooled z** (n=500 baseline
+vs full-split RBM), and we never read them off the Δ₂₅ significance band of Table 1. The n=500
+results reproduce, at higher n and on both generations, the structure first seen in the n=200
+Table 1b, which we retain as a cross-split consistency check below.
 
-**Table 1b.** Qwen3-VL-8B, n=200, official metrics, κ = 25% (Pyramid at its two indicated budgets).
-`post ≡ VZ` is the post-merger L2 cell, byte-identical to the VisionZip principle-port (Section 3.4).
-[interim]
+**FastV wins the query-relevant benchmarks — its mechanism, not a general superiority.** Being
+query-conditioned (LLM layer-2 attention has already mixed in the question), FastV leads RBM on
+TextVQA on **both** models (+4.1 pp on Qwen3-VL, 0.646 vs 0.605; +5.5 pp on Qwen2.5-VL, 0.757 vs
+0.702) and on Qwen3-VL GQA (+6.1 pp, 0.510 vs 0.449). Reported honestly against the cross-scope
+pooled test, the TextVQA lead is **direction-only on Qwen3-VL (z = 1.79)** but **significant on
+Qwen2.5-VL (z = 2.56)**, and the Qwen3-VL GQA lead is significant (z = 2.69); on same-pixel DocVQA
+the matched-configuration n=200 table gives FastV +9.4 pp over RBM at identical ptid 176 (0.518 vs
+0.424; footnote ⁱ — the n=500 DocVQA columns are not iso-pixel and are not used for this contrast).
+The mechanism is exactly the query-dependent headroom that our pre-registered query-level gate
+*cannot* reach before the merger (Section 6): which region matters *for this question* is
+recoverable only once cross-attention has seen the question.
+
+**RBM wins the dense-OCR cell and one object-centric cell; an honest cross-generation difference.**
+RBM leads FastV on Qwen3-VL OCR-Bench by **+25.9 pp (0.547 vs 0.288, pooled z = 9.5)** and on
+Qwen2.5-VL GQA by +6.1 pp (0.559 vs 0.498, z = 2.69), and **ties** it on Qwen2.5-VL OCR-Bench
+(0.476 vs 0.484, z = 0.29). Dense OCR is destroyed by the merger, and no ranking—however
+query-conditioned—can recover information the merger has already discarded; only pre-merger
+selection, which keeps raw patches, preserves it. The OCR margin narrows from +42.5 pp at n=200
+(Table 1b) to +25.9 pp at n=500 but stays large and highly significant. The two generations differ
+instructively: FastV's OCR **collapses on Qwen3-VL (0.288) but holds on Qwen2.5-VL (0.484)**—the
+Qwen2.5-VL merger is milder toward text, the same reason its DocVQA stage gap is smaller (Section
+5.4)—while Pyramid's OCR is near-lossless on Qwen3-VL (0.746) yet drops noticeably on Qwen2.5-VL
+(0.604). We report this asymmetry rather than average over it.
+
+**PyramidDrop is near-lossless at its own budget and degenerate at ours; there is no universal
+winner.** At its canonical keep_equiv 0.625 Pyramid is near-lossless on both models (Table 1:
+TextVQA 0.835 / 0.779, DocVQA 0.882 / 0.818, OCR-Bench 746 / 604, GQA 0.606 / 0.562)—a
+retention-curve point ≈2.1× our budget, not a same-budget win. Forced to an honest iso-25% budget,
+its faithful degenerate schedule `[1,0,0,0]` (drop all visual tokens after the first layer segment)
+collapses (Table 1b: TextVQA 0.073 / GQA 0.305 / OCR 0.005), whereas RBM holds (0.60 / 0.42 / 0.58).
+The post-merger family (VZ ≡ post) is the weakest method on every text-dense benchmark under both
+models (Table 1: 0.222 / 0.238 / 184 and 0.442 / 0.526 / 183), confirming the "post-merger
+deep-compression fragility" spine. **No method wins everywhere**: FastV wins the query-relevant
+benchmarks but loses dense OCR (Qwen3-VL); RBM is the mirror image; Pyramid is near-lossless only at
+high budget. This is precisely why we position RBM as the **robust default, not uniformly
+optimal**—it never collapses, never loses to the post-merger family, and uniquely retains dense
+OCR—rather than as a method that "beats" the field [E: j7hf_baselines_n500.md;
+runs/full_matrix/j7hf_official_summary.json; j4_probe_qwen3vl 补遗].
+
+**Table 1b.** Qwen3-VL-8B **n=200** cross-split check, official metrics, κ = 25% (Pyramid at its two
+indicated budgets). `post ≡ VZ` is the post-merger L2 cell, byte-identical to the VisionZip
+principle-port (Section 3.4). [interim]
 
 | Benchmark (metric) | none | RBM (pre) | post ≡ VZ | FastV | Pyramid |
 |---|---|---|---|---|---|
@@ -638,22 +726,13 @@ Table 1b reports the **ready** n=200 subset numbers on Qwen3-VL-8B under officia
 Reference (native-resolution DocVQA, not iso-pixel with the HF baselines): none 0.976, RBM 0.465,
 post 0.200 [E: rescore_rerun_report].
 
-**Reading (R1-respecting).** FastV, being query-conditioned (layer-2 attention has already mixed in
-the question), wins TextVQA (+8.2 pp over RBM), DocVQA (+9.4 pp at matched ptid 176), and GQA
-(+7.0 pp). **RBM's distinctive property is not that it wins these but that it never collapses**: it
-leads the post-merger family on every text-dense benchmark, and it is the **only** compared method
-that retains OCR-Bench (0.580 vs FastV 0.155, **+42.5 pp**)—dense OCR is destroyed by the merger,
-and no ranking, however query-conditioned, can recover information the merger already discarded;
-only pre-merger selection, which keeps raw patches, preserves it [E: j4_probe_qwen3vl; j4 补遗]. The
-mechanism behind FastV's wins is precisely the query-dependent headroom that our query-level gate
-cannot reach pre-merger (Section 6).
-
-**PyramidDrop occupies a different budget and degenerates at ours.** Its canonical schedule
-(keep_equiv 0.625, ≈2.1× our budget) is near-lossless (TextVQA 0.852, DocVQA 0.878)—a
-retention-curve point, not a same-budget comparison. Forced to an honest iso-25% budget, its
-faithful degenerate schedule `[1,0,0,0]` (drop all visual tokens after the first layer segment)
-collapses (TextVQA 0.073 / GQA 0.305 / OCR 0.005): PyramidDrop's progressive schedule is not viable
-at 25%, whereas RBM holds (0.60 / 0.42 / 0.58 on the same benchmarks) [E: j4_probe_qwen3vl 补遗].
+**Cross-check vs the n=500 headline.** These n=200 values agree with the n=500 Table 1 columns in
+**direction and approximate magnitude** on every cell: FastV > RBM on TextVQA (n=200 +8.2 pp →
+n=500 +4.1 pp) and GQA (+7.0 → +6.1 pp) and same-pixel DocVQA (+9.4 pp); RBM ≫ FastV on OCR-Bench
+(+42.5 → +25.9 pp); Pyramid canonical near-lossless and its iso-25% schedule collapsed in both. The
+n=500 run thus confirms the n=200 picture rather than changing it; the only quantitative refinements
+are the narrower (still significant) OCR margin and the direction-only Qwen3-VL TextVQA contrast
+noted above [E: j4_probe_qwen3vl; j7hf_baselines_n500.md].
 
 ### 5.4 Cross-generation consistency
 
@@ -734,11 +813,27 @@ regime the official evaluation did not enter [E: visionzip_gap_report §4].
      +268(z15.9). All text-dense z≥11.6 (**); GQA significant POST lead (†) — supersedes the old
      n=200 "tie/ns" (n=200 z≈0.6–0.8 = underpowered, not zero effect). Disclosures: Qwen3-VL none
      DocVQA cell missing (context overrun, aborted); OCRBench none skips 18/24; Qwen2.5 OCR@25% RBM
-     rerun 4M-px cap (ptid 229.6 vs 282.0) → gap conservative; GQA no @12.5% cells. FastV/Pyramid
-     columns = [HF-n500 pending] placeholders. Table 1b (j4_probe + 补遗 + rescore_rerun) and
-     Table 2 (j2) remain interim n=200. Cross-split deltas (subset→full): Q3 +38.3→+38.4, +26.5→
-     +24.3, +41.5→+36.3; Q25 +32.0→+26.1, +18.8→+11.0, +28.5→+29.3; direction all identical.
-     VisionZip anchor 81.5→70.5 @50% mismatched only (R3). Efficiency Table 3 = PENDING J6.
+     rerun 4M-px cap (ptid 229.6 vs 282.0) → gap conservative; GQA no @12.5% cells. Table 1b
+     (j4_probe + 补遗 + rescore_rerun) and Table 2 (j2) remain interim n=200. Cross-split deltas
+     (subset→full): Q3 +38.3→+38.4, +26.5→+24.3, +41.5→+36.3; Q25 +32.0→+26.1, +18.8→+11.0,
+     +28.5→+29.3; direction all identical. VisionZip anchor 81.5→70.5 @50% mismatched only (R3).
+     Efficiency Table 3 = PENDING J6.
+     HF n=500 BASELINE COLUMNS FILLED (2026-07-28 J7hf sub-agent; footnotes ʰ/ⁱ; source
+     runs/full_matrix/j7hf_official_summary.json + experiments/j7hf_baselines_n500.md). Qwen3-VL
+     FastV@25 .646/.486(600k)/288/.510; Pyramid@62.5 .835/.882(600k)/746/.606. Qwen2.5-VL FastV@25
+     .757/.481(600k)/484/.498; Pyramid@62.5 .779/.818(600k)/604/.562. Binomial stderr at n=500 (rate)
+     .014–.022 (√(p(1−p)/500), recomputed). OCRBench cells = est. Final/1000 = acc×1000, skip ≤1/500
+     scored 0. Cross-method pooled z (n=500 baseline vs full-split RBM, indep binomial, recomputed):
+     TextVQA FastV>RBM Q3 +4.1pp z=1.79 DIRECTION-ONLY / Q2.5 +5.5pp z=2.56 sig; GQA Q3 FastV>RBM
+     +6.1pp z=2.69 sig / Q2.5 RBM>FastV +6.1pp z=2.69 sig; OCR Q3 RBM>FastV +25.9pp z=9.49 sig /
+     Q2.5 tie −0.8pp z=0.29. DocVQA cross-method contrast uses j4d same-pixel 600k n=200 (FastV 0.518
+     vs RBM 0.424, +9.4pp; none 0.951/post 0.251) because n=500 DocVQA cols are native vs 600k (not
+     iso-pixel, footnote ⁱ); Q2.5 same-pixel 600k RBM/post pending (J8). Structure: no universal
+     winner → RBM robust default not uniformly optimal (R1 held; FastV wins stated honestly).
+     DOWNSTREAM (this pass): front matter, §5.1 subset/full + engine, Table 1 header/body/caption/
+     footnotes ʰⁱ/mandatory note/LaTeX, §5.2 cross-split ¶, §5.3 rewritten around n=500 + Table 1b
+     cross-check note, §7 item 5. Abstract/§1/§8 retain n=200-scoped OCR +42.5pp (j4_probe) which
+     coexists with the n=500 +25.9pp (both labelled); no SOTA/beats introduced.
      DOWNSTREAM FIXES APPLIED (outside §5; 2026-07-28 writing sub-agent): abstract GQA clause,
      §1 "What we find" / cross-gen / positioning / contribution 2, §4.4 "post ≈ pre" tail →
      significant micro-lead + workload-conditional reading, §6(b) n=200 GQA label, §7 items 4–5
@@ -812,12 +907,15 @@ prescription: **pre-merger selection must remain query-blind**, and RBM is that 
    was an underpowered interim judgment (binomial SE roughly 8× the full-split SE). We report the
    full-split result as a genuine but narrow object-centric post-merger advantage and position RBM
    accordingly: a robustness-first default, not uniformly optimal (Sections 5.2 and 5.4).
-5. **Subset → full-split migration (J7 complete; J6 pending).** The full-split main table
-   (Table 1) is **complete** (J7, 2026-07-28; official metrics, both models, 26/26 cells); the
-   FastV/PyramidDrop n=500 cells remain `[HF-n500 pending]`, and the efficiency table (Table 3) is
-   **PENDING J6**. n=200 seed-0 subsets `[interim]` survive only in Tables 1b–2 as a cross-split
-   consistency check. The Qwen2.5-VL causal swap is **undecided** (Section 4.5), so the causal
-   claim is scoped to Qwen3-VL.
+5. **Subset → full-split migration (J7 + J7hf complete; J6 pending).** The full-split main table
+   (Table 1) is **complete** (J7, 2026-07-28; official metrics, both models, 26/26 cells), and its
+   **FastV/PyramidDrop n=500 baseline columns are now filled** (J7hf, 2026-07-28; footnote ʰ), so the
+   only remaining pending table is the efficiency table (Table 3, **PENDING J6**). Because the
+   baseline columns are an n=500 subset while the our-method columns are full splits, the
+   cross-method contrasts in §5.3 are cross-scope and carry their own pooled z (the Qwen3-VL
+   TextVQA FastV-vs-RBM contrast is direction-only, z = 1.79). n=200 seed-0 subsets `[interim]`
+   survive only in Tables 1b–2 as a cross-split consistency check. The Qwen2.5-VL causal swap is
+   **undecided** (Section 4.5), so the causal claim is scoped to Qwen3-VL.
 6. **Greedy decoding / single device.** Decoding is deterministic (temperature 0), so error bars are
    binomial standard errors only, with no temperature variance; all runs are on a single A40.
    Efficiency is measured **offline**, not under continuous-batching serving.
@@ -826,7 +924,8 @@ prescription: **pre-merger selection must remain query-blind**, and RBM is that 
      (z 4.1/4.5 indep; McNemar 7.1/8.1 paired; j7_main_table; DECISIONS 2026-07-28 supersedes the
      n=200 tie; 1/10–1/14 of text-dense Δ; n=200 +4.5pp ~1.3σ of j2 retained as underpowered
      interim, SE ~8× full-split); DocVQA 1.5M/32768 + 600k cap (rescore_rerun + j4 补遗);
-     Qwen2.5 swap undecided (j3); J7 complete 2026-07-28, J6 pending. No SOTA / cross-model (R2). -->
+     Qwen2.5 swap undecided (j3); J7 complete + J7hf HF-n500 baseline columns filled 2026-07-28,
+     J6 pending. No SOTA / cross-model (R2). -->
 
 ---
 
@@ -844,26 +943,34 @@ significantly (post +2.6–2.8 pp at full n=12578; z ≈ 4–8; 1/10–1/14 the 
 text-dense benchmark shows any crossover; the text-dense gap widens under deeper compression. In a
 same-model, iso-budget comparison RBM is the **robust default, not uniformly optimal**: it never
 collapses, concedes only a narrow significant margin on object-centric GQA, and is the only
-compared method that retains OCR-Bench (+42.5 pp over the query-conditioned FastV, which wins
-the other three benchmarks precisely because it is query-conditioned). Three pre-registered
+compared method that robustly retains OCR-Bench (+25.9 pp over FastV at n=500, z ≈ 9.5; +42.5 pp at
+n=200). There is no universal winner: the query-conditioned FastV wins the query-relevant
+benchmarks (TextVQA on both models, Qwen3-VL GQA, same-pixel DocVQA) precisely because it is
+query-conditioned, yet loses dense OCR on Qwen3-VL and Qwen2.5-VL GQA to RBM. Three pre-registered
 negative results close the design space: pre-merger selection **must remain query-blind**, because the query-dependent headroom is
 reachable only after the LLM's cross-attention layers mix in the question. Future work: extend the
 mechanism and method to a second model family (e.g. InternVL3), add a same-model comparison to
 Hi-Lo Prune if its code is released, and measure serving-side (continuous-batching) efficiency.
 
-<!-- NUMBERS: M3 200/200 & 198/200 (mechanism §3); +18.8~+38.3pp (j2 + rescore_rerun); OCR +42.5pp
-     (j4_probe); three negatives (method_gate §2–4 + j5); GQA full n=12578 post +2.6–2.8pp, z≈4–8
-     (indep 4.1/4.5; McNemar 7.1/8.1; 1/10–1/14 of text-dense Δ; j7_main_table; supersedes the
-     n=200 tie). No "beats existing methods" / no SOTA (R1/R2). -->
+<!-- NUMBERS: M3 200/200 & 198/200 (mechanism §3); +18.8~+38.3pp (j2 + rescore_rerun); OCR headline
+     now n=500 +25.9pp = 0.547 vs 0.288 (z≈9.5, j7hf_baselines_n500) with n=200 +42.5pp (0.580 vs
+     0.155, j4_probe) retained; three negatives (method_gate §2–4 + j5); GQA full n=12578 post
+     +2.6–2.8pp, z≈4–8 (indep 4.1/4.5; McNemar 7.1/8.1; 1/10–1/14 of text-dense Δ; j7_main_table;
+     supersedes the n=200 tie); "no universal winner" = FastV wins query-relevant (TextVQA both /
+     GQA Q3 / same-px DocVQA) but RBM wins OCR-Q3 + GQA-Q2.5 (§5.3, model-dependent). No "beats
+     existing methods" / no SOTA (R1/R2). -->
 
 ---
 
 ## Red-line self-check (plan §红线 R1–R7)
 
 - [x] **R1 — no "RBM beats/outperforms existing methods/SOTA".** Full text grepped for
-  beats/outperforms/SOTA re: RBM: absent. FastV explicitly stated to win TextVQA/DocVQA/GQA
-  (Abstract, §1, §5.3, §8). RBM claims = "robust default / never collapses / never loses to the
-  post-merger family / uniquely holds OCR-Bench". The OCR +42.5 pp is stated as RBM vs FastV on one
+  beats/outperforms/SOTA re: RBM: absent. FastV explicitly stated to win TextVQA (both models) and
+  Qwen3-VL GQA and same-pixel DocVQA (Abstract, §1, §5.3, §8; n=500 Table 1 ʰ columns), and the
+  n=500 reading is model-dependent — RBM in turn wins Qwen3-VL OCR-Bench (+25.9 pp, z = 9.5) and
+  Qwen2.5-VL GQA (+6.1 pp) and ties Qwen2.5-VL OCR — stated as **no universal winner**. RBM claims =
+  "robust default / never collapses / never loses to the post-merger family / uniquely holds
+  OCR-Bench". The OCR margins (n=200 +42.5 pp; n=500 +25.9 pp) are stated as RBM vs FastV on one
   benchmark, not as a general superiority.
 - [x] **R2 — no cross-model SOTA.** All causal claims scoped to Qwen3-VL-8B (§4.3, §7); Qwen2.5-VL
   presented as corroboration of the ranking *law*, with the causal swap explicitly **not** claimed
@@ -881,9 +988,12 @@ Hi-Lo Prune if its code is released, and measure serving-side (continuous-batchi
   contributions, §4.4 tail, §6(b) label, §7 items 4–5, §8, front matter); every surviving "tie"
   token in the file is an explicitly labeled n=200 interim/historical mention (§5.2 footnote ᶜ,
   §5.4, this checklist, the front-matter supersede note).
-- [x] **R5 — non-significant gaps = direction only.** No full-split cell is non-significant
+- [x] **R5 — non-significant gaps = direction only.** No full-split Δ cell is non-significant
   (smallest |z| = 4.1); n=200 GQA +4.5 pp / +1.0 pp flagged direction-only as interim; ChartQA not
-  re-asserted as a win (not carried into v4 headline).
+  re-asserted as a win (not carried into v4 headline). The new cross-method pooled z values (§5.3)
+  are each labelled with their own value and scope: the cross-scope Qwen3-VL TextVQA FastV-vs-RBM
+  contrast is **direction-only (z = 1.79)** and is said so explicitly, not claimed significant; the
+  "smallest |z| = 4.1" band is scoped to the full-split Δ₂₅ column only (Table 1 caption + §7 item 5).
 - [x] **R6 — official metrics only.** VQA-acc / ANLS / OCR-Bench official / GQA exact match used;
   no containment figures (0.695/0.255/0.725/0.390/0.320/0.380/+44.0/+33.5/−6.0/+46.6 all absent).
 - [x] **R7 — engine + pixel-cap disclosure.** HF-vs-vLLM engine difference and accuracy-only
@@ -892,7 +1002,9 @@ Hi-Lo Prune if its code is released, and measure serving-side (continuous-batchi
 
 **Grep guard (run before submission):** confirm zero hits for `0.695|0.255|0.725|0.390|0.320|0.380|
 +44.0|+33.5|−6.0|+46.6|outperform|beats(?! …scoring-retired)|state-of-the-art|SOTA` in the
-submission-bound prose, and confirm Table 1 carries only J7 full-split numbers.
+submission-bound prose, and confirm Table 1 carries the J7 full-split numbers in the
+RBM/post/none columns and the J7hf n=500 numbers in the FastV/Pyramid columns (footnote ʰ), with no
+`[HF-n500 pending]` placeholder remaining.
 
 <!-- NUMBERS: self-check references — containment numbers to be grep-killed (plan §A);
      R1–R7 mapped to sections above. -->
