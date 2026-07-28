@@ -621,7 +621,7 @@ runs/full_matrix/j7hf_official_summary.json; experiments/j7hf_baselines_n500.md]
 | Model | Benchmark (metric, n) | none | RBM @25% | RBM @12.5% | post ≡ VZ-port @25% | post @12.5% | Δ₂₅ (pre − post) | FastV @25% ʰ | Pyramid @62.5% ʰ |
 |---|---|---|---|---|---|---|---|---|---|
 | Qwen3-VL-8B | TextVQA (VQA-acc, 5000) | 0.844 (±.005) | 0.605 (±.007) | 0.472 (±.007) | 0.222 (±.006) | 0.132 (±.005) | **+38.4 pp** (z=42.3) | 0.646 (±.021) | 0.835 (±.017) |
-| | DocVQA (ANLS, 5349) | — ᵃ | 0.481 (±.007) | 0.352 (±.007) | 0.238 (±.006) | 0.103 (±.004) | **+24.3 pp** (z=27.1) | 0.486 (±.022) ⁱ | 0.882 (±.014) ⁱ |
+| | DocVQA (ANLS, 5349) | 0.956 (±.003) ᵃ | 0.481 (±.007) | 0.352 (±.007) | 0.238 (±.006) | 0.103 (±.004) | **+24.3 pp** (z=27.1) | 0.486 (±.022) ⁱ | 0.882 (±.014) ⁱ |
 | | OCR-Bench (Final/1000, 1000) | 760 (.760 ±.014) ᵇ | 547 (.547 ±.016) | 350 (.350 ±.015) | 184 (.184 ±.012) | 53 (.053 ±.007) | **+363 pts** (z=18.2) | 288 (.288 ±.020) | 746 (.746 ±.019) |
 | | GQA (exact match, 12578) | 0.616 (±.004) | 0.449 (±.004) | — ᶜ | 0.477 (±.004) | — ᶜ | −2.8 pp † (z=4.5) | 0.510 (±.022) | 0.606 (±.022) |
 | Qwen2.5-VL-7B | TextVQA (VQA-acc, 5000) | 0.862 (±.005) | 0.702 (±.006) | 0.597 (±.007) | 0.442 (±.007) | 0.319 (±.007) | **+26.1 pp** (z=27.3) | 0.757 (±.019) | 0.779 (±.019) |
@@ -630,12 +630,12 @@ runs/full_matrix/j7hf_official_summary.json; experiments/j7hf_baselines_n500.md]
 | | GQA (exact match, 12578) | 0.604 (±.004) | 0.559 (±.004) | — ᶜ | 0.585 (±.004) | — ᶜ | −2.6 pp † (z=4.1) | 0.498 (±.022) | 0.562 (±.022) |
 
 **Footnotes.**
-- ᵃ The Qwen3-VL **none** DocVQA full-split cell was **not completed**: a subset of giant document
-  images exceeds the 32,768-token context at native resolution and the run aborted with only a
-  partial evaluation, so the cell is left blank rather than reported partially. The Qwen3-VL pre/post
-  cells were **both** run at the same native-resolution configuration and are directly comparable to
-  each other; full-split 700k-pixel DocVQA evaluation on Qwen3-VL would require a larger model
-  context. For reference, Qwen2.5-VL none DocVQA completed (ANLS 0.949, 5349/5349 answered,
+- ᵃ The Qwen3-VL **none** DocVQA full-split cell initially aborted (giant document images exceeding
+  the 32,768-token context at native resolution); **re-run at max-model-len 49,152 completed it with
+  0/5349 skips** (ANLS 0.956), so the anchor is now exact and native-resolution for all three cells.
+  The Qwen3-VL pre/post cells were **both** run at the same native-resolution configuration and are
+  directly comparable to each other. For reference, Qwen2.5-VL none DocVQA completed (ANLS 0.949,
+  5349/5349 answered,
   0 skipped, mean 4786.5 tokens/image).
 - ᵇ OCR-Bench **none** cells skip 18 (Qwen3-VL) / 24 (Qwen2.5-VL) of 1000 long-OCR images on context
   overrun; skipped items score 0 pts (conservative). All compressed cells skip ≤ 5.
@@ -808,10 +808,10 @@ retained only as a cross-split consistency check (Appendix Table A2) and the com
 view (Table 2, §5.4)
 [E: j7_main_table.md; j7hf_baselines_n500.md; j2_crossgen_matrix.md; rescore_rerun_report.md].
 
-**DocVQA configuration disclosure (R7).** The blank Qwen3-VL none cell (footnote a) is a
-context-length limitation of the native-resolution evaluation, not a method effect: the pre and post
-cells it would anchor were run under the *same* native-resolution configuration (max-model-len and
-max-num-batched-tokens 32768, unlimited pixels) and are compared to each other, not to the missing
+**DocVQA configuration disclosure (R7).** The Qwen3-VL none cell (footnote a) was initially blank
+(a context-length limitation at native resolution) and is now filled by a 49,152-token re-run
+(ANLS 0.956, 0/5349 skips): the pre and post cells it anchors were run under the *same*
+native-resolution configuration (unlimited pixels) and are compared to each other, not to the
 baseline. We flag, as in §5.1, that post-merger deep-compression collapse on DocVQA is partly
 configuration-dependent and disclose it rather than present it as a pure method effect.
 
