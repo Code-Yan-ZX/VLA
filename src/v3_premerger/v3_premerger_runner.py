@@ -59,6 +59,7 @@ import vllm
 import dataclasses as _dc
 import vllm.model_executor.models.qwen3_vl as _q3vl_mod
 import vllm.model_executor.models.qwen2_5_vl as _q2vl_mod
+import vllm.model_executor.models.internvl as _ivl_mod
 
 # Model-family registry. qwen2vl = Qwen2.5-VL (single native 2x2 merger, NO
 # deepstack); qwen3vl = Qwen3-VL (merger + 3 deepstack mergers). The two
@@ -66,9 +67,19 @@ import vllm.model_executor.models.qwen2_5_vl as _q2vl_mod
 # hidden_size = ctx * spatial_merge_size**2; consecutive-4 input tokens form
 # one merge-unit in BOTH), so the pre/post SELECTOR logic is shared -- only the
 # hook TARGET SET differs: qwen2vl hooks visual.merger ONLY.
+#
+# internvl3 = InternVL3-8B (third model family, architecture-generalization
+# evidence). Its "merger" is a parameter-free pixel_shuffle (downsample_ratio
+# 0.5 -> 2x2 ViT patches collapse to 1 token with 4x channels) followed by the
+# mlp1 projector (LN+Linear+GELU+Linear). NO deepstack, NO mrope (the LLM is
+# Qwen2 with 1-D RoPE) -> the mrope-position fix is irrelevant and guarded out.
+# The pre/post hooks live on DIFFERENT modules than Qwen (extract_feature /
+# _process_vision_input, not visual.merger / _process_image_input), so the
+# internvl3 branch is fully isolated from the two Qwen families.
 MODELS = {
     "qwen3vl": "Qwen/Qwen3-VL-8B-Instruct",
     "qwen2vl": "Qwen/Qwen2.5-VL-7B-Instruct",
+    "internvl3": "OpenGVLab/InternVL3-8B",
 }
 MODEL = MODELS["qwen3vl"]   # default; overridden in main() per --model-family/--model
 
@@ -658,11 +669,13 @@ def parse_args():
                     help="vLLM/torch RNG seed (0 = default). For repeat runs; at "
                          "temp=0 variance comes from GPU-kernel non-determinism.")
     ap.add_argument("--model-family", default="qwen3vl",
-                    choices=["qwen3vl", "qwen2vl"],
+                    choices=["qwen3vl", "qwen2vl", "internvl3"],
                     help="Architecture family. qwen3vl (DEFAULT) hooks "
                          "visual.merger + visual.deepstack_merger_list (current "
                          "behavior, bit-identical). qwen2vl hooks visual.merger "
-                         "ONLY -- Qwen2.5-VL has no deepstack mergers.")
+                         "ONLY -- Qwen2.5-VL has no deepstack mergers. internvl3 "
+                         "hooks extract_feature (pre) / _process_vision_input "
+                         "(post) -- pixel-shuffle merger, no deepstack/mrope.")
     ap.add_argument("--model", default=None,
                     help="HF model id override. If given, family is auto-detected "
                          "from the id (Qwen2* -> qwen2vl, else qwen3vl), overriding "
@@ -687,9 +700,11 @@ def parse_args():
 #   qwen2vl: Qwen2_5_VLMultiModalProcessor._get_prompt_updates
 # --------------------------------------------------------------------------- #
 def detect_family(model_id: str) -> str:
-    """Auto-detect family from HF model id. Qwen2/Qwen2.5-VL -> qwen2vl;
-    everything else (incl. Qwen3-VL) -> qwen3vl."""
+    """Auto-detect family from HF model id. InternVL* -> internvl3;
+    Qwen2/Qwen2.5-VL -> qwen2vl; everything else (incl. Qwen3-VL) -> qwen3vl."""
     mid = model_id.lower()
+    if "internvl" in mid:       # InternVL2 / InternVL3 (same vLLM arch)
+        return "internvl3"
     if "qwen2" in mid:          # qwen2-vl / qwen2.5-vl / qwen2_5_vl
         return "qwen2vl"
     return "qwen3vl"
@@ -697,8 +712,64 @@ def detect_family(model_id: str) -> str:
 
 def _proc_class(family: str):
     """The multimodal processor class carrying _get_prompt_updates for a family."""
-    return (_q2vl_mod.Qwen2_5_VLMultiModalProcessor if family == "qwen2vl"
-            else _q3vl_mod.Qwen3VLMultiModalProcessor)
+    if family == "qwen2vl":
+        return _q2vl_mod.Qwen2_5_VLMultiModalProcessor
+    if family == "internvl3":
+        return _ivl_mod.InternVLMultiModalProcessor
+    return _q3vl_mod.Qwen3VLMultiModalProcessor
+
+
+def _make_internvl_prompt_patch(_orig, r: float, log: dict):
+    """InternVL placeholder scaler. The InternVL image placeholder is
+        <img> + <IMG_CONTEXT>*N + </img>     (N = image_seq_length * num_patches)
+    and the replacement returned by the processor is a PromptUpdateDetails whose
+    .full is that STRING and whose .is_embed marks ONLY the <IMG_CONTEXT> tokens
+    as multimodal (the <img>/</img> wrappers stay text). Only the count of
+    <IMG_CONTEXT> tokens is bound to the number of vision embeddings the model
+    emits, so we shrink that run from N to a PER-TILE-rounded keep and keep the
+    two wrappers. Per-tile rounding (num_patches * round(U*(1-r))) is used so
+    the placeholder count matches extract_feature/pre and _process_vision_input/
+    post EXACTLY for every r (both prune round(U*(1-r)) per tile; U=256 here).
+    Bitwise-identical to stock at r=0 (early return)."""
+    from vllm.multimodal.processing import PromptUpdateDetails
+
+    def _patched(self, mm_items, hf_processor_mm_kwargs, out_mm_kwargs):
+        prompts = _orig(self, mm_items, hf_processor_mm_kwargs, out_mm_kwargs)
+        if r == 0.0:
+            return prompts
+        hf_proc = self.info.get_hf_processor(**hf_processor_mm_kwargs)
+        start = hf_proc.start_image_token          # "<img>"
+        end = hf_proc.end_image_token              # "</img>"
+        ctx = hf_proc.ctx_image_token              # "<IMG_CONTEXT>"
+        U = int(hf_proc.image_seq_length)          # = num_image_token (256)
+        out = []
+        for p in prompts:
+            if getattr(p, "modality", None) == "image":
+                orig_repl = p.replacement
+
+                def _scaled(item_idx, _or=orig_repl, _r=r, _s=start, _e=end,
+                            _c=ctx, _U=U):
+                    details = _or(item_idx)
+                    full = details.full
+                    if isinstance(full, str):
+                        N = full.count(_c)
+                        n_patches = max(1, N // _U) if _U > 0 else 1
+                        k_tile = max(1, int(round(_U * (1.0 - _r))))
+                        k = n_patches * k_tile
+                        log["counts"].append((N, k))
+                        return PromptUpdateDetails.select_text(
+                            _s + _c * k + _e, _c)
+                    # defensive: a bare token-id sequence (not the InternVL
+                    # string path) -- fall back to plain front-truncation.
+                    t = list(full)
+                    n = len(t)
+                    k = max(1, int(round(n * (1.0 - _r))))
+                    log["counts"].append((n, k))
+                    return t[:k]
+                p = _dc.replace(p, replacement=_scaled)
+            out.append(p)
+        return out
+    return _patched
 
 
 def patch_processor(r: float, family: str = "qwen3vl"):
@@ -708,24 +779,27 @@ def patch_processor(r: float, family: str = "qwen3vl"):
     _orig = ProcCls._get_prompt_updates
     log = {"counts": []}
 
-    def _patched(self, mm_items, hf_processor_mm_kwargs, out_mm_kwargs):
-        prompts = _orig(self, mm_items, hf_processor_mm_kwargs, out_mm_kwargs)
-        if r == 0.0:
-            return prompts
-        out = []
-        for p in prompts:
-            if getattr(p, "modality", None) == "image":
-                orig_repl = p.replacement
+    if family == "internvl3":
+        _patched = _make_internvl_prompt_patch(_orig, r, log)
+    else:
+        def _patched(self, mm_items, hf_processor_mm_kwargs, out_mm_kwargs):
+            prompts = _orig(self, mm_items, hf_processor_mm_kwargs, out_mm_kwargs)
+            if r == 0.0:
+                return prompts
+            out = []
+            for p in prompts:
+                if getattr(p, "modality", None) == "image":
+                    orig_repl = p.replacement
 
-                def _scaled(item_idx, _or=orig_repl, _r=r):
-                    t = _or(item_idx)
-                    n = len(t)
-                    k = max(1, int(round(n * (1.0 - _r))))
-                    log["counts"].append((n, k))
-                    return list(t[:k])
-                p = _dc.replace(p, replacement=_scaled)
-            out.append(p)
-        return out
+                    def _scaled(item_idx, _or=orig_repl, _r=r):
+                        t = _or(item_idx)
+                        n = len(t)
+                        k = max(1, int(round(n * (1.0 - _r))))
+                        log["counts"].append((n, k))
+                        return list(t[:k])
+                    p = _dc.replace(p, replacement=_scaled)
+                out.append(p)
+            return out
     _patched._vtc_orig = _orig
     _patched._vtc_patched = True
     ProcCls._get_prompt_updates = _patched
@@ -892,6 +966,136 @@ def setup_post_merger(model, r: float, selector: str = "l2"):
             diag["nk"].append((int(splits[0].shape[0]), int(out[0].shape[0])))
         return tuple(out)
     model._process_image_input = _patched
+    return diag
+
+
+# --------------------------------------------------------------------------- #
+# (C) InternVL3 family -- PRE / POST merger selection.
+#
+# InternVL3's vision "merger" is: ViT -> drop CLS -> reshape [B,h,w,c] ->
+# pixel_shuffle(0.5) (parameter-free 2x2 -> 1, channels c -> 4c) -> mlp1
+# projector (LN+Linear+GELU+Linear, 4c -> llm_hidden). Per image, the dynamic-
+# resolution tiling produces T tiles of image_size x image_size; each tile is an
+# h=w=32 patch grid (448/14) -> U = (h/2)*(w/2) = 256 = num_image_token merged
+# tokens/tile. limit_mm_per_prompt={"image":1} => one image/request, so one
+# extract_feature call handles that image's T tiles.
+#
+# Count contract (kept EXACT for every r): all three sites prune the SAME
+# per-tile keep k_tile = round(U*(1-r)); per image total = T*k_tile.
+#   * patch_processor(internvl3): placeholder <IMG_CONTEXT> run -> T*k_tile.
+#   * PRE  (extract_feature):     each tile keeps k_tile units before mlp1.
+#   * POST (_process_vision_input): flat split [T*U] keeps (T*U//U)*k_tile.
+# For the matrix ratios r in {0.75,0.875}, U*(1-r) in {64,32} is integral so
+# this also equals round(T*U*(1-r)); the per-tile form just guarantees exactness
+# off those points too. NO mrope fix (LLM is Qwen2 with 1-D RoPE) and NO
+# deepstack -- both Qwen-only machinery, guarded out in main().
+# --------------------------------------------------------------------------- #
+def _prepare_internvl3_config(model_id: str):
+    """Make the repo's remote InternVLChatConfig usable by vLLM's native
+    internvl.InternVLChatModel. The InternVL3-8B config.json is the legacy
+    "internvl_chat" format: trust_remote_code=False is rejected (auto_map custom
+    code), and the remote InternVLChatConfig stores the LLM sub-config as
+    ``llm_config`` while vLLM's internvl.py reads ``config.text_config``
+    (qwen2_5_vl-style composite layout). Fix: load the remote config class once
+    (trust_remote_code=True, which caches the dynamic module in sys.modules) and
+    add a ``text_config -> llm_config`` PROPERTY on the class. vLLM's later
+    AutoConfig load reuses that same cached class object, so every instance it
+    creates exposes text_config and the model resolves to vLLM's native,
+    hookable InternVLChatModel. All other fields vLLM reads (downsample_ratio,
+    ps_version, force_image_size, select_layer, use_thumbnail, max/min_dynamic_
+    patch, vision_config) are already present. The image_token_id is supplied by
+    the processor (ctx_image_token_id), not the config, so its absence here is
+    harmless. No-op if the class already has text_config."""
+    from transformers import AutoConfig
+    cfg = AutoConfig.from_pretrained(model_id, trust_remote_code=True)
+    cls = type(cfg)
+    if not hasattr(cls, "text_config"):
+        cls.text_config = property(lambda self: self.llm_config)
+        print(f"[internvl3] patched {cls.__module__}.{cls.__name__} with "
+              f"text_config->llm_config alias for vLLM native loader", flush=True)
+    return cfg
+
+
+def setup_pre_merger_internvl(model, r: float, selector: str = "l2"):
+    """True rank-before-merge: score each 2x2 pixel-shuffle unit (L2 of its 4c
+    merged vector == aggregate L2 of the 4 patches), keep the top-k_tile units
+    PER TILE, and run the NATIVE mlp1 only on survivors. Faithful to the native
+    pipeline: pixel_shuffle is reused verbatim, so a kept unit's 4c vector is
+    bitwise what mlp1 would have seen, and mlp1(kept) reproduces the native
+    output for exactly those units (fewer tokens computed -> real saving)."""
+    U = int(model.num_image_token)                 # 256
+    scale = float(model.downsample_ratio)          # 0.5
+    diag = {"fires": 0, "nk": [], "selector": selector, "family": "internvl3",
+            "num_image_token": U, "downsample_ratio": scale,
+            "degraded": 0, "mode": "pre"}
+    _orig = model.extract_feature
+
+    def _patched(pixel_values):
+        if r == 0.0:
+            return _orig(pixel_values)
+        vit_embeds = model.vision_model(pixel_values=pixel_values)
+        vit_embeds = vit_embeds[:, 1:, :]          # drop CLS
+        B = vit_embeds.shape[0]
+        n_patch = int(vit_embeds.shape[1])
+        h = w = int(n_patch ** 0.5)
+        # Defensive: non-square / odd grid (should not happen at image_size 448)
+        # -> hand off to the fully native path (mode-none behavior for this call).
+        if (h * w != n_patch) or (h % 2) or (w % 2):
+            diag["degraded"] += 1
+            return _orig(pixel_values)
+        c = vit_embeds.shape[-1]
+        grid = vit_embeds.reshape(B, h, w, c)
+        ps = model.pixel_shuffle(grid, scale_factor=scale)   # [B,h/2,w/2,4c]
+        units = ps.reshape(B, U, -1)               # [B, U, 4c] (row-major units)
+        if units.shape[1] != U:
+            diag["degraded"] += 1
+            return _orig(pixel_values)
+        k = max(1, int(round(U * (1.0 - r))))
+        scores = _score_tokens(units.reshape(B * U, -1), selector).reshape(B, U)
+        idx = torch.topk(scores, k, dim=-1).indices.sort(dim=-1).values  # [B,k]
+        gather_idx = idx.unsqueeze(-1).expand(-1, -1, units.shape[-1])
+        kept = torch.gather(units, 1, gather_idx)  # [B, k, 4c]
+        out = model.mlp1(kept)                     # [B, k, llm_hidden]
+        diag["fires"] += 1
+        if len(diag["nk"]) < 8:
+            diag["nk"].append((U, k))
+        return out
+    model.extract_feature = _patched
+    return diag
+
+
+def setup_post_merger_internvl(model, r: float, selector: str = "l2"):
+    """Post-merger baseline for InternVL: run the FULL native vision path, then
+    keep the top-k merged tokens (L2) from each per-image split. The InternVL
+    analog of Qwen's _process_image_input is _process_vision_input (it returns
+    the per-image embedding splits). Per-tile-rounded keep matches the
+    placeholder count (see module note)."""
+    U = int(model.num_image_token)                 # 256
+    _orig = model._process_vision_input
+    diag = {"fires": 0, "nk": [], "selector": selector, "family": "internvl3",
+            "num_image_token": U, "mode": "post"}
+
+    def _patched(image_input):
+        splits = _orig(image_input)
+        diag["fires"] += 1
+        if r == 0.0:
+            return splits
+        out = []
+        for s in splits:
+            n = int(s.shape[0])
+            n_tiles = n // U if U > 0 else 0
+            if n_tiles > 0:
+                k = n_tiles * max(1, int(round(U * (1.0 - r))))
+            else:                                  # sub-unit split (defensive)
+                k = max(1, int(round(n * (1.0 - r))))
+            k = min(k, n)
+            score = _score_tokens(s, selector)
+            idx = torch.topk(score, k).indices.sort().values
+            out.append(s.index_select(0, idx).contiguous())
+        if len(diag["nk"]) < 8:
+            diag["nk"].append((int(splits[0].shape[0]), int(out[0].shape[0])))
+        return tuple(out)
+    model._process_vision_input = _patched
     return diag
 
 
@@ -1874,8 +2078,135 @@ def setup_pre_merger(model, r: float, selector: str = "l2", family: str = "qwen3
 # mrope-position correctness (the runner relies on vLLM's placeholder-count-
 # based mrope, identical contract for both families).
 # --------------------------------------------------------------------------- #
+def _run_dry_check_internvl3():
+    """No-GPU dry check for the internvl3 family: processor-class selection,
+    the <IMG_CONTEXT>-run placeholder scaler, the pixel-shuffle PRE prune count,
+    and the POST split prune count. Mirrors the Qwen dry-check contract; uses
+    tiny synthetic grids (h=w=8 -> U=16 units/tile) so it is instant."""
+    import torch.nn as nn
+    from vllm.multimodal.processing import PromptUpdateDetails
+
+    print(f"[dry-check] family=internvl3  model_id={MODELS['internvl3']}")
+
+    # (a) processor patch installs on the RIGHT class for this family
+    ProcCls = _proc_class("internvl3")
+    assert ProcCls is _ivl_mod.InternVLMultiModalProcessor, ProcCls
+    proc_log = patch_processor(0.75, "internvl3")
+    assert getattr(ProcCls._get_prompt_updates, "_vtc_patched", False), \
+        "internvl3 patch not installed"
+    ProcCls._get_prompt_updates = ProcCls._get_prompt_updates._vtc_orig
+    print(f"[dry-check]   OK processor patch on {ProcCls.__name__}")
+
+    # (b) placeholder scaler: <img><IMG_CONTEXT>*N</img> -> per-tile-rounded run
+    @_dc.dataclass
+    class _FakePR:
+        modality: str
+        target: str
+        replacement: object
+
+    class _FakeHFProc:
+        start_image_token = "<img>"
+        end_image_token = "</img>"
+        ctx_image_token = "<IMG_CONTEXT>"
+        image_seq_length = 256
+
+    class _FakeSelf:
+        class info:
+            @staticmethod
+            def get_hf_processor(**kw):
+                return _FakeHFProc()
+
+    N = 512                                       # 2 tiles * 256
+    full = "<img>" + "<IMG_CONTEXT>" * N + "</img>"
+    fake_details = PromptUpdateDetails.select_text(full, "<IMG_CONTEXT>")
+    _fake_orig = lambda self, a, b, c: [           # noqa: E731
+        _FakePR("image", "<image>", lambda idx: fake_details)]
+    log = {"counts": []}
+    patched = _make_internvl_prompt_patch(_fake_orig, 0.75, log)
+    out = patched(_FakeSelf(), None, {}, None)
+    res = out[0].replacement(0)
+    # n_patches=2, k_tile=round(256*0.25)=64 -> k=128
+    assert res.full == "<img>" + "<IMG_CONTEXT>" * 128 + "</img>", res.full[:40]
+    assert res.is_embed is not None
+    assert log["counts"] == [(512, 128)], log["counts"]
+    print(f"[dry-check]   OK placeholder scaler: N=512 -> 128 <IMG_CONTEXT> "
+          f"(wrappers preserved); counts={log['counts']}")
+
+    # (c) PRE pixel-shuffle prune: build a tiny InternVL-like model
+    c, hidden = 8, 16
+    h = w = 8                                     # 64 patches/tile -> U=16
+    U = (h // 2) * (w // 2)
+
+    class _DummyInternVL:
+        def __init__(self):
+            self.num_image_token = U
+            self.downsample_ratio = 0.5
+            self.mlp1 = nn.Linear(4 * c, hidden)
+
+        def vision_model(self, pixel_values):
+            B = pixel_values.shape[0]
+            # +1 CLS token, dropped inside extract_feature
+            return torch.randn(B, h * w + 1, c)
+
+        def pixel_shuffle(self, x, scale_factor=0.5):
+            # verbatim copy of vLLM internvl.pixel_shuffle (ps_version v2)
+            n, ww, hh, cc = x.size()
+            x = x.view(n, ww, int(hh * scale_factor), int(cc / scale_factor))
+            x = x.permute(0, 2, 1, 3).contiguous()
+            x = x.view(n, int(hh * scale_factor), int(ww * scale_factor),
+                       int(cc / (scale_factor * scale_factor)))
+            x = x.permute(0, 2, 1, 3).contiguous()
+            return x
+
+        def extract_feature(self, pixel_values):
+            vit = self.vision_model(pixel_values)[:, 1:, :]
+            B = vit.shape[0]
+            grid = vit.reshape(B, h, w, c)
+            ps = self.pixel_shuffle(grid, scale_factor=self.downsample_ratio)
+            ps = ps.reshape(B, -1, ps.shape[-1])
+            return self.mlp1(ps)
+
+        def _process_vision_input(self, image_input):
+            return (torch.randn(2 * U, hidden),)   # 1 image, 2 tiles
+
+    m_pre = _DummyInternVL()
+    pv = torch.randn(2, 3, 32, 32)                 # 2 tiles
+    full_out = m_pre.extract_feature(pv)
+    assert full_out.shape == (2, U, hidden), full_out.shape   # native sanity
+    diag_pre = setup_pre_merger_internvl(m_pre, 0.75, "l2")
+    pruned = m_pre.extract_feature(pv)
+    k = max(1, round(U * 0.25))                    # =4
+    assert pruned.shape == (2, k, hidden), pruned.shape
+    assert diag_pre["fires"] == 1 and diag_pre["nk"] == [(U, k)], diag_pre
+    # r=0 -> bit-identical native passthrough (full U tokens)
+    m_pre0 = _DummyInternVL()
+    setup_pre_merger_internvl(m_pre0, 0.0, "l2")
+    assert m_pre0.extract_feature(pv).shape == (2, U, hidden)
+    print(f"[dry-check]   OK pre pixel-shuffle prune: [2,{U},{hidden}] -> "
+          f"[2,{k},{hidden}] (1 extract_feature wrap; r=0 passthrough native)")
+
+    # (d) POST split prune: (n//U)*round(U*(1-r)) tokens kept
+    m_post = _DummyInternVL()
+    diag_post = setup_post_merger_internvl(m_post, 0.75, "l2")
+    splits = m_post._process_vision_input(None)
+    n_tiles = (2 * U) // U
+    k_post = n_tiles * max(1, round(U * 0.25))     # =8
+    assert [s.shape[0] for s in splits] == [k_post], [s.shape for s in splits]
+    assert diag_post["fires"] == 1
+    print(f"[dry-check]   OK post split prune: [{2*U},{hidden}] -> "
+          f"[{k_post},{hidden}] (1 _process_vision_input wrap)")
+
+    # (e) expected hook/wrap counts for internvl3 = 1 (pre) + 1 (post)
+    print(f"[dry-check]   OK expected internvl3 wraps: pre=1 (extract_feature), "
+          f"post=1 (_process_vision_input); NO deepstack/mrope")
+    print(f"[dry-check] ALL PASS for family=internvl3")
+
+
 def run_dry_check(family: str):
     import torch.nn as nn
+
+    if family == "internvl3":
+        return _run_dry_check_internvl3()
 
     class _DummyMerger(nn.Module):
         def forward(self, x):
@@ -2105,16 +2436,40 @@ def main():
         if args.visionzip_style:
             raise SystemExit("--qa-lambda>0 is not supported with "
                              "--visionzip-style (dominant-only standard path)")
+    # InternVL3 third-family onboarding supports the two clean mechanisms only
+    # (stage-ranking pre + post). The Qwen-specific machinery -- M3 swap control,
+    # VisionZip-style dom/ctx split, hybrid routing, and QA-pre saliency -- is
+    # tied to the Qwen merger/deepstack/mrope internals and is NOT ported. Guard
+    # them out explicitly so they can never silently touch internvl3 behavior.
+    if family == "internvl3":
+        if args.mask_ranking == "swap":
+            raise SystemExit("internvl3: --mask-ranking swap is not supported "
+                             "(Qwen M3 control; stage ranking only).")
+        if args.visionzip_style:
+            raise SystemExit("internvl3: --visionzip-style is not supported.")
+        if args.mode == "hybrid":
+            raise SystemExit("internvl3: --mode hybrid is not supported "
+                             "(pre/post only for the third-family onboarding).")
+        if args.qa_lambda > 0.0:
+            raise SystemExit("internvl3: --qa-lambda>0 is not supported.")
     proc_log = patch_processor(r, family)
 
     from vllm import LLM, SamplingParams
     t0 = time.perf_counter()
     torch.manual_seed(args.seed)
+    # trust_remote_code: Qwen configs are fully native (no auto_map) -> False
+    # (bit-identical to before). InternVL3-8B's config.json carries an auto_map
+    # to a custom InternVLChatConfig, so transformers refuses to parse it with
+    # trust_remote_code=False; the standard vLLM setting for InternVL is True.
+    # This only affects CONFIG/tokenizer loading -- vLLM still resolves the
+    # model by architecture ("InternVLChatModel") to its OWN native, hookable
+    # internvl.InternVLChatModel (NOT the repo's remote modeling code), so the
+    # extract_feature/_process_vision_input hooks land on vLLM modules.
     llm_kwargs = dict(
         model=model_id, dtype="bfloat16", tensor_parallel_size=1,
         gpu_memory_utilization=args.gpu_memory_utilization,
         max_model_len=args.max_model_len,
-        trust_remote_code=False, enforce_eager=True,
+        trust_remote_code=(family == "internvl3"), enforce_eager=True,
         limit_mm_per_prompt={"image": 1},
         allowed_local_media_path=os.path.abspath(
             os.path.join(os.path.dirname(__file__), os.pardir, os.pardir)),
@@ -2132,6 +2487,11 @@ def main():
     # exceeds vLLM's default 8192 -> ValueError + cascading OOM/skip-all.
     if args.max_num_batched_tokens is not None:
         llm_kwargs["max_num_batched_tokens"] = args.max_num_batched_tokens
+    # InternVL3: alias the remote config's llm_config -> text_config so vLLM's
+    # native InternVLChatModel loader (which reads config.text_config) works.
+    # Must run BEFORE LLM() (vLLM reuses the patched, sys.modules-cached class).
+    if family == "internvl3":
+        _prepare_internvl3_config(model_id)
     llm = LLM(**llm_kwargs)
     load_s = time.perf_counter() - t0
     model = llm.llm_engine.model_executor.driver_worker.model_runner.model
@@ -2157,7 +2517,9 @@ def main():
     hybrid_state = None
     qa_state = None
     if args.mode == "post":
-        if args.mask_ranking == "swap":
+        if family == "internvl3":
+            diag = setup_post_merger_internvl(model, r, args.selector)
+        elif args.mask_ranking == "swap":
             # M3: post forward path + PRE ranking selection.
             diag, swap_state = setup_post_merger_swap(model, r, args.selector,
                                                       family,
@@ -2170,29 +2532,37 @@ def main():
                                           args.hybrid_text_frac,
                                           args.save_unit_scores)
     elif args.mode == "pre":
-        # J5 QA-pre: build the query-similarity state (embed questions, key by
-        # offline unit count) ONLY when λ>0. λ=0 -> qa_state stays None and
-        # setup_pre_merger behaves bit-identically to plain pre-merger.
-        if args.qa_lambda > 0.0:
-            try:
-                tokenizer = llm.get_tokenizer()
-            except Exception:
-                tokenizer = llm.llm_engine.tokenizer.tokenizer
-            qa_state = _qa_precompute(model, tokenizer, samples,
-                                      args.qa_embed_cache, args.max_pixels,
-                                      model_id)
-        pruner, _handles = setup_pre_merger(model, r, args.selector, family,
-                                             visionzip_style=args.visionzip_style,
-                                             visionzip_dom_ratio=args.visionzip_dom_ratio,
-                                             mask_ranking=args.mask_ranking,
-                                             qa_lambda=args.qa_lambda,
-                                             qa_state=qa_state,
-                                             save_kept=args.save_unit_scores)
-        diag = pruner.diag
+        if family == "internvl3":
+            # True rank-before-merge on the pixel-shuffle units (no QA/swap/
+            # visionzip/deepstack/mrope machinery -- all Qwen-only, guarded out).
+            diag = setup_pre_merger_internvl(model, r, args.selector)
+        else:
+            # J5 QA-pre: build the query-similarity state (embed questions, key
+            # by offline unit count) ONLY when λ>0. λ=0 -> qa_state stays None
+            # and setup_pre_merger behaves bit-identically to plain pre-merger.
+            if args.qa_lambda > 0.0:
+                try:
+                    tokenizer = llm.get_tokenizer()
+                except Exception:
+                    tokenizer = llm.llm_engine.tokenizer.tokenizer
+                qa_state = _qa_precompute(model, tokenizer, samples,
+                                          args.qa_embed_cache, args.max_pixels,
+                                          model_id)
+            pruner, _handles = setup_pre_merger(model, r, args.selector, family,
+                                                 visionzip_style=args.visionzip_style,
+                                                 visionzip_dom_ratio=args.visionzip_dom_ratio,
+                                                 mask_ranking=args.mask_ranking,
+                                                 qa_lambda=args.qa_lambda,
+                                                 qa_state=qa_state,
+                                                 save_kept=args.save_unit_scores)
+            diag = pruner.diag
 
     # Qwen2.5-VL ONLY: fix the mrope-position overshoot that collapses pruned
     # acc to ~0.004 (see setup_qwen2vl_mrope_fix docstring).  No-op for r=0 and
-    # never installed for qwen3vl -> baseline + qwen3vl behavior untouched.
+    # never installed for qwen3vl/internvl3 -> baseline + qwen3vl behavior
+    # untouched.  InternVL3's LLM is Qwen2 with 1-D RoPE (no mrope) so the
+    # placeholder-count shrink needs NO position repair (confirmed: the fix is
+    # family-gated to qwen2vl and never runs for internvl3).
     mrope_fix_diag = None
     if family == "qwen2vl" and r > 0.0:
         mrope_fix_diag = setup_qwen2vl_mrope_fix(model)
