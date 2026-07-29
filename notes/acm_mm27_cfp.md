@@ -1,9 +1,10 @@
 # ACM MM'27 CFP 核实（2026-07-29）
 **结论：MM'27 官方 CFP 未发布 → 全部要求字段以 MM'26 官方 CFP 为 proxy。**
 
-## MM'27-official（已确认的仅有地点）
-- 地点：Hong Kong；日期 "to be announced"；CFP 未出。[acmmm.org](https://acmmm.org/)
-- 惯例会期：10 月下旬–11 月上旬；截稿惯例 ~每年 4 月初 → 预计 MM'27 截稿 ≈ 2027-03/04。
+## MM'27-official
+- 地点：Hong Kong；日期 "to be announced"；正式 CFP 未出。[acmmm.org](https://acmmm.org/)
+- ACM 会议日历列 MM'27（第 35 届）截稿窗口 ~**2027-04-28~30**（仅日历条目，未经正式 CFP 确认）。[ACM deadlines](https://www.acm.org/conferences/upcoming-submission-deadlines)
+- 惯例会期 10 月下旬–11 月上旬；对照 MM'26 proxy → 预计 MM'27 截稿 ≈ 2027-03/25~04/01（日历条目偏晚，以正式 CFP 为准）。
 
 ## MM'26-proxy（官方 2026.acmmm.org）
 1. **时间线**（Technical Track，[cfp-guidelines](https://2026.acmmm.org/site/cfp-guidelines.html)）：abstract 2026-03-25（OpenReview 注册 03-26）→ paper **2026-04-01 23:59 AoE** → supp 04-08 → rebuttal（可选，dataset 页示 06-04 AoE，"勿在 rebuttal 要新结果"）→ notification **2026-07-07** → 会议 2026-11-10~14 里约。
