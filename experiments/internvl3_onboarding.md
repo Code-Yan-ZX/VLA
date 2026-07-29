@@ -91,3 +91,15 @@
 ## 7. 硬约束遵守
 - 未改 `baselines_hf.py`（cascade agent 在用）。Qwen 两族 dry-check 零回归、行为 guard 隔离。
 - **未做任何 git commit**。GPU 轮询自串行化。下载断点续传。
+
+## Smoke 结果（2026-07-29，n=16，官方 containment，gmu 0.55）
+
+| cell | acc | skip | ptid |
+|---|---|---|---|
+| none gqa | 0.500 | 0 | 2227 |
+| pre gqa r0.75 | 0.562 | 0 | 607 |
+| post gqa r0.75 | 0.563 | 0 | 607 |
+| pre textvqa r0.75 | **0.750** | 0 | 614 |
+| post textvqa r0.75 | 0.375 | 0 | 614 |
+
+**判读**：sanity 过（none ≥0.45）；**模式与 Qwen 家族完全同构**——text-dense pre 大胜（+37.5pp，post 毁文字同 pattern）、object-centric GQA tie（0.562 vs 0.563）。pre-merger selection 泛化到第三架构族（pixel-shuffle merger，无 mrope）。InternVL3 token 数更多（dynamic tiling 256/tile，native ptid 2227）。注：gqa pre 首跑 hang（疑并发争用），mns2/chunk8 重跑正常。主矩阵待 cascade gate 后启动（GPU 优先级=cascade 裁决）。
