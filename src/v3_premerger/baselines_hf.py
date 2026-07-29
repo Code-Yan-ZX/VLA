@@ -66,10 +66,43 @@ Method correspondence (line-by-line, URLs in the design digest):
     i.e. PyramidDrop's default schedule spends the same LLM token-budget as a
     uniform method at keep=62.5% (r=0.375).  r_equiv is what we store in "r".
 
+Cascade (two-stage, single budget) -- NEW modes for the pre-registered cascade
+gate (DECISIONS 2026-07-28):
+  --mode pre --r-pre X      : Stage-1 ONLY.  PRE-merger L2 top-kappa on merger-
+    input UNITS (X = KEEP fraction of units; query-blind).  The native Patch-
+    Merger is per-unit (4 consecutive ViT patches -> 1 token; LayerNorm+MLP act
+    on each unit independently), so a kept unit's merged token is BIT-IDENTICAL
+    whether it is selected before or after the merger (the runner's M3 swap==pre
+    identity) -- we therefore run the FULL native vision stage (captured at the
+    language-model boundary, same stub as FastV) and index-select the survivors
+    out of the prepared inputs_embeds / position_ids / deepstack rows.  The
+    keep-MASK itself is computed exactly like the vLLM runner's pre mode
+    (v3_premerger_runner.PreMergerPruner): unit = spatial_merge_size**2 = 4
+    consecutive patches, score = feats.float().norm(-1).mean(-1) (mean per-patch
+    L2 of the unit), k_i = max(1, round(f_i*X)) per image, top-k per image, ONE
+    mask computed from the FIRST merger called (Qwen3-VL: deepstack[0] input,
+    i.e. layer-8 features -- the runner's mask_computed_at='deepstack_0';
+    Qwen2.5-VL: the single main merger) and applied consistently to the main
+    merged tokens AND every deepstack row set (all mergers consume the same
+    block-major patch order, verified in Qwen3VLVisionModel.forward).  Each
+    surviving image token keeps its NATIVE mrope 3-D coordinate (index_select on
+    the native get_rope_index positions).  No FastV.
+  --mode cascade --r-pre X --r Y --fastv-k K : Stage-1 pre (keep fraction X)
+    -> native merger -> Stage-2 FastV pruning the SURVIVING image tokens after
+    LLM layer K, where --r Y is the DROP fraction OF THE STAGE-1 REMAINDER
+    (documented convention; NOT of the full grid).  TOTAL image-token keep =
+    X*(1-Y)  (modulo per-image rounding): e.g. X=0.5, Y=0.5 -> 25% total;
+    X=0.5, Y=0.75 -> 12.5% total.  Degenerate identities (self-tested in
+    --dry-check): X=1.0 -> cascade == FastV-alone at Y (stage 1 is the
+    identity); Y=0.0 -> cascade == pre-alone at X (stage 2 keeps everything).
+    The output "r" field stores the TOTAL drop 1-X*(1-Y) (runner convention);
+    "r_pre"/"r_fastv"/"total_keep" carry the stage-wise definition.
+
 NO GPU is touched at import; the model is loaded only in main().  --dry-check
 builds a TINY random-init Qwen2.5-VL on CPU (no weights download, no GPU) and
-verifies the manual layer loop reproduces the native forward exactly at r=0 and
-runs FastV/Pyramid end-to-end with correct keep counts.
+verifies the manual layer loop reproduces the native forward exactly at r=0,
+runs FastV/Pyramid end-to-end with correct keep counts, and validates the
+pre-merger mask + cascade degeneracies (X=1 == FastV, Y=0 == pre).
 """
 from __future__ import annotations
 
@@ -347,6 +380,165 @@ def rank_keep_indices(attn_w: torch.Tensor, image_mask: torch.Tensor,
     keep_img = img_pos.index_select(0, scores.topk(k).indices)
     non_img = (~image_mask).nonzero(as_tuple=False).squeeze(-1)
     return torch.cat([non_img, keep_img]).sort().values
+
+
+# --------------------------------------------------------------------------- #
+# PRE-merger stage (cascade Stage-1 / --mode pre).  Mirrors the vLLM runner's
+# PreMergerPruner (v3_premerger_runner.py) EXACTLY on the mask semantics:
+#   * units  : `unit` = spatial_merge_size**2 (=4) CONSECUTIVE ViT patches
+#              (both PatchMerger families group rows by .view(-1, hidden*unit));
+#   * score  : feats.float().norm(-1).mean(-1) -- mean per-patch L2 of the unit
+#              (the runner's _score_units(feats, "l2"));
+#   * k_i    : max(1, round(full_i * keep_frac)) per image, top-k per image;
+#   * source : ONE mask from the FIRST merger called (qwen3vl: deepstack[0]
+#              input == layer deepstack_visual_indexes[0] features; qwen2vl:
+#              the single main merger), applied to every merger's output rows
+#              (all mergers share the same block-major patch sequence, so the
+#              same unit mask is consistent across main + deepstack -- verified
+#              in transformers Qwen3VLVisionModel.forward and the runner diag
+#              mask_computed_at='deepstack_0').
+# The merge is per-unit (norm+MLP over each 4-patch group independently) so a
+# SURVIVOR'S merged token is identical whether selected pre or post merge
+# (runner M3 swap==pre identity) -- hence the implementation runs the FULL
+# native vision stage and index-selects survivors out of the captured
+# inputs_embeds / position_ids / deepstack (no merger patching needed).
+# --------------------------------------------------------------------------- #
+def premerger_keep_units(hs: torch.Tensor, grid_thw: torch.Tensor,
+                         keep_frac: float, unit: int):
+    """hs: [seq, ctx] first-called merger input; grid_thw: [n_img, 3].
+    Returns (kept_idx [K] sorted global unit indices, diag dict)."""
+    keep_frac = float(keep_frac)
+    assert 0.0 < keep_frac <= 1.0, f"--r-pre must be in (0,1] (got {keep_frac})"
+    seq = hs.shape[0]
+    ctx = hs.shape[-1]
+    num_units = seq // unit
+    full = (grid_thw.prod(-1) // unit).tolist()
+    assert sum(full) == num_units, \
+        f"unit count mismatch: grid_thw->{sum(full)} vs hs->{num_units}"
+    if keep_frac >= 1.0:
+        kept = torch.arange(num_units, device=hs.device)
+        return kept, {"n_units_full": num_units, "n_units_kept": num_units,
+                      "full_per_image": full, "k_per_image": list(full),
+                      "kept_per_image": [list(range(f)) for f in full],
+                      "degraded_subunit": False}
+    if num_units == 0:
+        return (torch.zeros(0, dtype=torch.long, device=hs.device),
+                {"n_units_full": 0, "n_units_kept": 0, "full_per_image": full,
+                 "k_per_image": [], "degraded_subunit": True})
+    feats = hs.reshape(num_units, unit, ctx)
+    scores = feats.float().norm(dim=-1).mean(dim=-1)           # runner _score_units l2
+    k_per = [max(1, int(round(f * keep_frac))) for f in full]
+    keep = torch.zeros(num_units, dtype=torch.bool, device=hs.device)
+    kept_per_image = []                                        # runner kept_log format
+    off = 0
+    for f, k in zip(full, k_per):
+        s_i = scores[off:off + f]
+        idx = torch.topk(s_i, min(k, f)).indices
+        keep[off + idx] = True
+        kept_per_image.append(sorted(idx.tolist()))            # LOCAL, sorted
+        off += f
+    kept = keep.nonzero(as_tuple=False).squeeze(-1)            # original order
+    diag = {"n_units_full": num_units, "n_units_kept": int(kept.numel()),
+            "full_per_image": full, "k_per_image": k_per,
+            "degraded_subunit": False}
+    if num_units <= 4096:                                      # diagnostic cap
+        diag["kept_per_image"] = kept_per_image                # == runner --save-unit-scores kept_log
+    return kept, diag
+
+
+def apply_premerger(inputs_embeds: torch.Tensor, position_ids: torch.Tensor,
+                    deepstack, image_mask_1d: torch.Tensor,
+                    kept_units: torch.Tensor):
+    """Index-select the FULL prepared tensors down to the surviving pre-merger
+    units.  Each surviving image token keeps its native mrope coordinate
+    (index_select along the seq axis of the native get_rope_index positions);
+    every deepstack row set [n_units_full, H] is sliced by the SAME kept unit
+    indices (shared block-major patch order).  Returns (inputs_embeds',
+    position_ids', deepstack', image_mask')."""
+    img_pos = image_mask_1d.nonzero(as_tuple=False).view(-1)      # [n_units_full]
+    assert int(kept_units.numel()) <= int(img_pos.numel()) and (
+        kept_units.numel() == 0 or int(kept_units.max()) < int(img_pos.numel())
+    ), f"kept units {int(kept_units.numel())} exceed image tokens {int(img_pos.numel())}"
+    keep_img = img_pos.index_select(0, kept_units)
+    keep_text = (~image_mask_1d).nonzero(as_tuple=False).view(-1)
+    keep = torch.cat([keep_text, keep_img]).sort().values
+    ie = inputs_embeds.index_select(1, keep)
+    pos = position_ids.index_select(-1, keep)
+    ds = (None if deepstack is None
+          else [e.index_select(0, kept_units.to(e.device)) for e in deepstack])
+    return ie, pos, ds, image_mask_1d.index_select(0, keep)
+
+
+def mimic_vllm_pre_positions(n_text_pre: int, grid_thw, spatial_merge_size: int,
+                             n_units_kept: int, n_text_post: int,
+                             ref_position_ids: torch.Tensor) -> torch.Tensor:
+    """Reproduce the mrope positions the vLLM-0.19 runner assigns in pre mode
+    (vllm qwen3_vl.py _get_mrope_input_positions + gpu_model_runner truncation):
+    the FULL (t,H,W) grid block is laid down at the image location even
+    though only k = n_units_kept placeholder tokens exist there, and the whole
+    position array is truncated to the true token count N = T1+k+T2.  Hence the
+    k surviving image tokens get the ROW-MAJOR FIRST-k grid coordinates (NOT
+    their native sparse coordinates) and the post-image text tokens inherit the
+    grid-block continuation (the 'Qwen3 interleaved self-consistent' unfixed
+    path the J7 vLLM pre cells ran with -- STATE survey point 1).  Shape ==
+    ref_position_ids' row convention ([3,1,N]; if the family's native ids carry
+    a 4th packed-text row it is replicated and dropped later by
+    _split_mrope_pos, exactly as the native path does)."""
+    import numpy as np
+    t = int(grid_thw[0, 0]); H = int(grid_thw[0, 1]) // spatial_merge_size
+    W = int(grid_thw[0, 2]) // spatial_merge_size
+    T1, k, T2 = n_text_pre, n_units_kept, n_text_post
+    text_pre = np.broadcast_to(np.arange(T1), (3, T1)).copy()
+    grid = np.indices((t, H, W)).reshape(3, -1) + T1
+    text_post = (np.broadcast_to(np.arange(T2), (3, T2))
+                 + int(grid.max()) + 1)
+    arr = np.concatenate([text_pre, grid, text_post], axis=1)[:, :T1 + k + T2]
+    pos = torch.from_numpy(arr.astype(np.int64))
+    rows = int(ref_position_ids.shape[0]) if ref_position_ids.ndim == 3 else 3
+    if rows == 4:
+        pos = torch.cat([torch.arange(T1 + k + T2).view(1, -1), pos], dim=0)
+    return pos.view(rows, 1, T1 + k + T2)
+
+
+class MergerTap:
+    """Captures the FIRST merger call's input hidden_states (once per sample
+    pass) across visual.merger + visual.deepstack_merger_list[*] -- the mask
+    source that mirrors the runner's cached-once-per-pass mask.  Install once
+    after model load; reset() per sample; .first_hs / .first_tag after the
+    captured forward."""
+
+    def __init__(self, visual):
+        self.first_hs = None
+        self.first_tag = None
+        self.call_order = []
+        self._handles = []
+        targets = [("main", visual.merger)]
+        dsl = getattr(visual, "deepstack_merger_list", None)
+        if dsl is not None:
+            targets += [(f"deepstack_{i}", m) for i, m in enumerate(dsl)]
+        for tag, mod in targets:
+            self._handles.append(mod.register_forward_pre_hook(
+                self._make_hook(tag), with_kwargs=True))
+
+    def _make_hook(self, tag):
+        def hook(module, args, kwargs):
+            self.call_order.append(tag)
+            if self.first_hs is None:
+                hs = kwargs.get("hidden_states", args[0] if args else None)
+                if hs is not None:
+                    self.first_hs = hs.detach()
+                    self.first_tag = tag
+        return hook
+
+    def reset(self):
+        self.first_hs = None
+        self.first_tag = None
+        self.call_order = []
+
+    def remove(self):
+        for h in self._handles:
+            h.remove()
+        self._handles = []
 
 
 # --------------------------------------------------------------------------- #
@@ -640,7 +832,7 @@ def build_inputs(processor, image, question: str, max_pixels: int, device):
 def parse_args():
     ap = argparse.ArgumentParser()
     ap.add_argument("--mode", default="none",
-                    choices=["none", "fastv", "pyramid"])
+                    choices=["none", "fastv", "pyramid", "pre", "cascade"])
     ap.add_argument("--model", default=None,
                     help="HF id (Qwen/Qwen3-VL-8B-Instruct or "
                          "Qwen/Qwen2.5-VL-7B-Instruct). Family auto-detected.")
@@ -657,6 +849,25 @@ def parse_args():
                          "STORE r_equiv=1-keep_equiv in the output 'r' field, where "
                          "keep_equiv=sum(ratio_s*L_s)/sum(L_s) (=mean for equal "
                          "bands; [1.0,0.75,0.5,0.25] -> 0.625 -> r=0.375).")
+    ap.add_argument("--r-pre", type=float, default=None,
+                    help="PRE-merger stage: KEEP fraction of merger-input units "
+                         "(top-kappa by mean-patch L2, per image; query-blind). "
+                         "REQUIRED for --mode pre/cascade. mode=pre: total keep "
+                         "= r_pre. mode=cascade: total keep = r_pre*(1-r), where "
+                         "--r is the FastV DROP fraction OF THE STAGE-1 REMAINDER "
+                         "(documented convention, not of the full grid). "
+                         "Degenerate: r_pre=1.0 -> cascade==FastV; r=0.0 -> "
+                         "cascade==pre.")
+    ap.add_argument("--mrope", default="vllm-mimic",
+                    choices=["vllm-mimic", "native"],
+                    help="pre/cascade ONLY: mrope positions of the pruned "
+                         "sequence. vllm-mimic (DEFAULT) replicates the vLLM "
+                         "runner's scaled-placeholder layout (full grid block "
+                         "truncated to the token count -> survivors carry "
+                         "row-major first-k grid coords), so HF answers match "
+                         "the reference vLLM pre cells; native keeps each "
+                         "survivor's original get_rope_index coordinate "
+                         "(diagnostic).")
     ap.add_argument("--max-tokens", type=int, default=32)
     ap.add_argument("--fastv-k", type=int, default=2,
                     help="FastV prune layer (paper default K=2; attention of this "
@@ -735,6 +946,66 @@ def run_dry_check():
     assert abs(ke - 0.625) < 1e-9, ke              # equal bands -> mean
     print(f"[dry-check]   OK prune plan + keep_equiv={ke:.3f} (r_equiv={1-ke:.3f})")
 
+    # premerger_keep_units: runner-exact mask semantics (unit = 4 consecutive
+    # patches; score = mean per-patch L2; k_i = max(1, round(f_i*keep)); top-k
+    # per image; keep_frac=1.0 identity; k floors at 1).
+    torch.manual_seed(1)
+    ctx = 6
+    feats = torch.randn(6, 4, ctx)                 # 6 units
+    hs = feats.reshape(24, ctx)
+    grid = torch.tensor([[1, 4, 4], [1, 2, 4]])    # units/image = 4, 2
+    kept, dp = premerger_keep_units(hs, grid, 0.5, 4)
+    sc = feats.float().norm(dim=-1).mean(dim=-1)     # runner _score_units(l2)
+    k0, k1 = max(1, int(round(4 * 0.5))), max(1, int(round(2 * 0.5)))   # 2, 1
+    want = torch.cat([sc[:4].topk(k0).indices,
+                      4 + sc[4:].topk(k1).indices]).sort().values
+    assert torch.equal(kept, want), (kept, want)
+    assert dp["k_per_image"] == [2, 1] and dp["n_units_kept"] == 3, dp
+    kept1, dp1 = premerger_keep_units(hs, grid, 1.0, 4)
+    assert kept1.numel() == 6 and dp1["n_units_kept"] == 6   # r_pre=1 identity
+    _, dp2 = premerger_keep_units(hs, grid, 0.1, 4)
+    assert dp2["k_per_image"] == [1, 1], dp2         # k floors at 1
+    print(f"[dry-check]   OK premerger mask (runner semantics: per-img top-k "
+          f"{dp['k_per_image']}, keep=1.0 identity, floor@1)")
+
+    # apply_premerger: text untouched, survivors keep their seq positions,
+    # deepstack rows sliced by the SAME kept unit indices (row j == unit j).
+    Lp, Hp = 10, 5
+    Xp = torch.randn(1, Lp, Hp)
+    Pp = torch.arange(Lp).view(1, 1, Lp).expand(3, 1, Lp).contiguous().clone()
+    imp = torch.zeros(Lp, dtype=torch.bool); imp[2:8] = True    # 6 image tokens
+    dsp = [torch.arange(6).float().view(6, 1).expand(6, Hp).clone()]
+    keptp = torch.tensor([0, 3, 5])
+    iep, posp, ds2p, im2p = apply_premerger(Xp, Pp, dsp, imp, keptp)
+    want_cols = torch.cat([torch.tensor([0, 1, 8, 9]),
+                           torch.tensor([2, 5, 7])]).sort().values
+    assert torch.equal(iep[0], Xp[0].index_select(0, want_cols))
+    assert torch.equal(posp[0, 0], want_cols)        # positions preserved
+    assert torch.equal(ds2p[0][:, 0], torch.tensor([0., 3., 5.]))
+    assert int(im2p.sum()) == 3 and iep.shape[1] == 7
+    print("[dry-check]   OK apply_premerger (survivor positions + deepstack "
+          "row alignment)")
+
+    # mimic_vllm_pre_positions: full grid block + truncation to T1+k+T2.
+    # T1=2 text, grid (t=1,h=4,w=4)->H=W=2 (4 grid cols), k=2, T2=3 -> N=7:
+    # text_pre cols (0,1); survivors = row-major first-2 grid coords
+    # (2,2,2),(2,2,3); text_post inherits grid continuation (2,3,2),(2,3,3)
+    # then its own base max+1=4 -> (4,4,4).
+    refp = torch.arange(9).view(1, 1, 9).expand(3, 1, 9).contiguous()
+    pm = mimic_vllm_pre_positions(
+        2, torch.tensor([[1, 4, 4]]), 2, 2, 3, refp)
+    assert pm.shape == (3, 1, 7), pm.shape
+    want_cols = torch.tensor([[0, 1, 2, 2, 2, 2, 4],
+                              [0, 1, 2, 2, 3, 3, 4],
+                              [0, 1, 2, 3, 2, 3, 4]])
+    assert torch.equal(pm.view(3, 7), want_cols), pm.view(3, 7)
+    pm4 = mimic_vllm_pre_positions(
+        2, torch.tensor([[1, 4, 4]]), 2, 2, 3,
+        torch.arange(9).view(1, 1, 9).expand(4, 1, 9).contiguous())
+    assert pm4.shape == (4, 1, 7) and torch.equal(pm4[1:], want_cols.view(3, 1, 7))
+    print("[dry-check]   OK vllm-mimic mrope (grid-block + truncation, "
+          "3-row and 4-row conventions)")
+
     print("[dry-check] (B) tiny-model equivalence + end-to-end (CPU)")
     try:
         m, cfg = _tiny_model()
@@ -801,6 +1072,45 @@ def run_dry_check():
     print("[dry-check]   OK deepstack replay (n_deepstack=2, zero-add identity, "
           "img_ord survives pruning)")
 
+    # (B7) cascade DEGENERATE IDENTITIES (the pre-registered self test).
+    cfg0 = {"r": 0.0, "fastv_k": 2, "ratios": [1, .75, .5, .25]}
+    cfg5 = {"r": 0.5, "fastv_k": 2, "ratios": [1, .75, .5, .25]}
+    # (B7a) Y=0.0 -> cascade == pre-alone: FastV with r=0 keeps EVERY survivor
+    # (plan fires but is a no-op) -> hidden identical to the empty plan.
+    hid_pre, _, _, _, _ = prefill_pruned(
+        m, X.clone(), P.clone(), img.clone(), "pre", cfg0)
+    hid_c0, _, _, _, dc0 = prefill_pruned(
+        m, X.clone(), P.clone(), img.clone(), "fastv", cfg0)
+    assert dc0["n_image_kept"] == 6, dc0
+    assert torch.allclose(hid_pre, hid_c0, atol=1e-5), \
+        f"Y=0 cascade != pre (maxdiff={(hid_pre-hid_c0).abs().max():.2e})"
+    print("[dry-check]   OK degenerate Y=0.0: cascade(r_fastv=0) == pre-alone")
+    # (B7b) X=1.0 -> apply_premerger is the identity -> cascade == FastV-alone.
+    ie1, pos1, _, im1 = apply_premerger(
+        X.clone(), P.clone(), [torch.zeros(6, hidden_size)], img.clone(),
+        torch.arange(6))
+    assert torch.equal(ie1, X) and torch.equal(im1, img), "X=1 must be identity"
+    hid_fv, _, _, _, _ = prefill_pruned(
+        m, X.clone(), P.clone(), img.clone(), "fastv", cfg5)
+    hid_c1, _, _, _, dc1 = prefill_pruned(m, ie1, pos1, im1, "fastv", cfg5)
+    assert dc1["n_image_kept"] == 3, dc1
+    assert torch.allclose(hid_fv, hid_c1, atol=1e-5), \
+        f"X=1 cascade != FastV (maxdiff={(hid_fv-hid_c1).abs().max():.2e})"
+    print("[dry-check]   OK degenerate X=1.0: cascade(r_pre=1) == FastV-alone")
+    # (B7c) a real two-stage cut: keep 3 units -> FastV r=0.5 keeps
+    # round(3*.5)=2 -> L' = 6 text + 2 = 8, cache cropped, deepstack rows right.
+    kept3 = torch.tensor([0, 2, 5])
+    ds_emb = [torch.arange(6).float().view(6, 1).expand(6, hidden_size).clone()]
+    ie3, pos3, ds3, im3 = apply_premerger(
+        X.clone(), P.clone(), ds_emb, img.clone(), kept3)
+    assert ie3.shape[1] == 9 and int(im3.sum()) == 3, (ie3.shape, im3.sum())
+    assert torch.equal(ds3[0][:, 0], torch.tensor([0., 2., 5.])), "ds rows"
+    hid_c3, _, cache3, _, dc3 = prefill_pruned(m, ie3, pos3, im3, "fastv", cfg5)
+    assert dc3["n_image_kept"] == 2 and hid_c3.shape[1] == 8, dc3
+    assert _cache_len(cache3) == 8, _cache_len(cache3)
+    print("[dry-check]   OK cascade two-stage counts: 6 units -> pre 3 -> "
+          f"FastV 2 (L 12->9->8, cache@8, fired={dc3['fired']})")
+
     # (B4) end-to-end greedy generation runs and terminates.
     eos = {cfg.text_config.eos_token_id if hasattr(cfg.text_config, 'eos_token_id')
            else 1}
@@ -861,6 +1171,12 @@ def main():
     load_s = time.perf_counter() - t0
     image_token_id = model.config.image_token_id
 
+    # cascade/pre: tap the merger inputs for the pre-merger L2 mask (first
+    # merger called wins: qwen3vl deepstack_0 / qwen2vl main -- runner parity).
+    tap = MergerTap(model.visual) if args.mode in ("pre", "cascade") else None
+    spatial_merge = int(getattr(model.visual, "spatial_merge_size", 2))
+    spatial_unit = spatial_merge ** 2
+
     # eos set for manual decode
     eos = model.generation_config.eos_token_id
     eos_ids = set(eos) if isinstance(eos, (list, tuple)) else {eos}
@@ -874,6 +1190,18 @@ def main():
         r_eff = round(1.0 - keep_equiv, 4)
     elif args.mode == "fastv":
         keep_equiv, r_eff = None, args.r
+    elif args.mode == "pre":
+        if args.r_pre is None:
+            raise SystemExit("--mode pre requires --r-pre (unit KEEP fraction; "
+                             "e.g. --r-pre 0.25 for pre-alone@25%)")
+        keep_equiv, r_eff = None, round(1.0 - args.r_pre, 4)
+    elif args.mode == "cascade":
+        if args.r_pre is None:
+            raise SystemExit("--mode cascade requires --r-pre (Stage-1 unit KEEP "
+                             "fraction); --r is the FastV drop of the STAGE-1 "
+                             "REMAINDER -> total keep = r_pre*(1-r)")
+        keep_equiv = None
+        r_eff = round(1.0 - args.r_pre * (1.0 - args.r), 4)
     else:
         keep_equiv, r_eff = None, 0.0
     cfg = {"r": args.r, "fastv_k": args.fastv_k, "ratios": ratios}
@@ -904,6 +1232,62 @@ def main():
                         "n_text": n_prompt_full - n_img_full, "L0": n_prompt_full,
                         "L_after": n_prompt_full}
                 ptid = n_prompt_full
+            elif args.mode in ("pre", "cascade"):
+                # STAGE 1: pre-merger L2 top-kappa over merger-input units
+                # (mask from the first merger called -- runner parity), then
+                # index-select survivors out of the FULL native prepared
+                # tensors (kept merged tokens are bit-identical pre/post merge).
+                image_mask = (inputs["input_ids"][0] == image_token_id)
+                tap.reset()
+                inputs_embeds, position_ids, deepstack = capture_prepared_inputs(
+                    model, {k: v for k, v in inputs.items()})
+                if tap.first_hs is None:
+                    raise RuntimeError("merger tap captured nothing (no image?)")
+                kept, dpre = premerger_keep_units(
+                    tap.first_hs, inputs["image_grid_thw"], args.r_pre,
+                    spatial_unit)
+                ie, pos, ds, im2 = apply_premerger(
+                    inputs_embeds, position_ids, deepstack, image_mask, kept)
+                # mrope: default replicates the vLLM runner's scaled-placeholder
+                # positions (full grid block + truncation to token count); the
+                # survivors then carry row-major first-k grid coords, exactly
+                # as the reference vLLM pre cells did.
+                if args.mrope == "vllm-mimic":
+                    img_run = image_mask.nonzero(as_tuple=False).view(-1)
+                    n_full = int(img_run.numel())
+                    t1 = int(img_run[0]) if n_full else 0
+                    single_span = bool(n_full == 0 or (
+                        int(img_run[-1]) - int(img_run[0]) + 1 == n_full))
+                    multi_img = (inputs["image_grid_thw"].shape[0] > 1
+                                 if "image_grid_thw" in inputs else False)
+                    if single_span and not multi_img:
+                        t2 = int(image_mask.numel()) - t1 - n_full
+                        pos = mimic_vllm_pre_positions(
+                            t1, inputs["image_grid_thw"], spatial_merge,
+                            int(kept.numel()), t2,
+                            position_ids).to(device=position_ids.device)
+                        dpre["mrope"] = "vllm-mimic"
+                    else:
+                        dpre["mrope"] = "native (multi-image/split span)"
+                else:
+                    dpre["mrope"] = "native"
+                # STAGE 2: pre -> no further pruning (empty plan); cascade ->
+                # FastV at layer K over the SURVIVING image tokens (--r = drop
+                # fraction of the stage-1 remainder).
+                stage2 = "pre" if args.mode == "pre" else "fastv"
+                gen, diag = generate_pruned(
+                    model, ie, pos, im2, stage2, cfg, args.max_tokens,
+                    eos_ids, deepstack=ds)
+                diag["pre"] = {**dpre, "mask_source": tap.first_tag,
+                               "merger_call_order": tap.call_order[:6],
+                               "r_pre_keep_frac": args.r_pre,
+                               "r_fastv_drop_of_remainder": (
+                                   args.r if args.mode == "cascade" else None),
+                               "total_keep_target": (
+                                   round(args.r_pre, 4) if args.mode == "pre"
+                                   else round(args.r_pre * (1.0 - args.r), 4))}
+                ans = processor.decode(gen, skip_special_tokens=True).strip()
+                ptid = int(diag["L_after"])
             else:
                 # MANUAL pruned prefill + greedy decode.
                 image_mask = (inputs["input_ids"][0] == image_token_id)
@@ -938,6 +1322,8 @@ def main():
                "n_image_kept": diag["n_image_kept"], "n_text": diag["n_text"]}
         if args.benchmark == "ocrbench" and "question_type" in s.extra:
             rec["question_type"] = s.extra["question_type"]
+        if "pre" in diag:                                      # pre/cascade diag
+            rec["pre"] = diag["pre"]                           # incl. kept_per_image
         per_sample.append(rec)
         if (i + 1) % 10 == 0:
             print(f"[j4] {i+1}/{len(samples)} running_acc="
@@ -951,7 +1337,15 @@ def main():
         "mode": args.mode, "benchmark": args.benchmark, "r": r_eff,
         "n": len(samples), "max_tokens": args.max_tokens, "max_pixels": args.max_pixels,
         "seed": args.seed,
-        "fastv_k": args.fastv_k if args.mode == "fastv" else None,
+        "fastv_k": args.fastv_k if args.mode in ("fastv", "cascade") else None,
+        "r_pre": args.r_pre if args.mode in ("pre", "cascade") else None,
+        "r_fastv": args.r if args.mode == "cascade" else None,
+        "total_keep": (round(args.r_pre, 4) if args.mode == "pre" else
+                       round(args.r_pre * (1.0 - args.r), 4)
+                       if args.mode == "cascade" else None),
+        "r_convention": ("r = TOTAL drop (runner convention); cascade --r is "
+                         "the FastV drop of the STAGE-1 remainder, total keep "
+                         "= r_pre*(1-r)"),
         "pyramid_ratios": ratios if args.mode == "pyramid" else None,
         "pyramid_keep_equiv": (round(keep_equiv, 4)
                                if args.mode == "pyramid" else None),
