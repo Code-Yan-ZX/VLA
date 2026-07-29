@@ -18,9 +18,13 @@ Generation protocol replicated from the runner (v3_premerger_runner.py:main):
                runner's llm.chat make_msgs + chat template).
   * sampling : greedy (runner temperature=0.0) -> HF do_sample=False / argmax;
                max_tokens=32 (runner default).
-  * pixels   : --max-pixels>0 -> processor max_pixels; ==0 -> processor default
-               (runner passes mm_processor_kwargs={"max_pixels":...} only when
-               --max-pixels>0; same min/max-pixels calibration per family).
+  * pixels   : --max-pixels>0 -> PIL pre-resize each image to <= that pixel
+               budget (aspect preserved, edges to multiples of 32) BEFORE the
+               processor; ==0 -> native resolution. (Processor kwargs would be
+               ignored anyway: transformers 4.57 drops the max_pixels kwarg and
+               vLLM V1 ignores engine-level mm_processor_kwargs -- PIL
+               pre-resize is the effective enforcement on both harnesses, same
+               pixel-budget calibration per family.)
   * output   : JSON with the SAME fields as the runner so official_scorers.py
                offline re-scoring is seamless: model / mode / benchmark / r /
                acc / n_skipped / mean_ptid_len / per_sample[{id,question,gt,
@@ -877,8 +881,11 @@ def parse_args():
                          "1.0,0.5,0.25,0.125 (lambda=0.5); we use the fair-budget "
                          "schedule by default.")
     ap.add_argument("--max-pixels", type=int, default=0,
-                    help=">0 -> processor max_pixels (iso-token calibration per "
-                         "family); 0 -> processor default (runner parity).")
+                    help=">0 -> PIL pre-resize each image to <= this pixel "
+                         "budget before the processor (iso-token calibration "
+                         "per family; processor kwargs are ignored by "
+                         "transformers 4.57); 0 -> native resolution (runner "
+                         "parity).")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--out", default=None)
     ap.add_argument("--dry-check", action="store_true",

@@ -2479,7 +2479,16 @@ def main():
     )
     # Cap image resolution if requested (DocVQA encoder-cache crash fix).
     # pre-merger tokens ~= max_pixels / (patch=16)^2 ; 1.5M px -> ~5859 tokens.
-    if args.max_pixels and args.max_pixels > 0:
+    # Qwen families: declare the budget to the vLLM processor. internvl3:
+    # InternVLImageProcessor REJECTS the max_pixels kwarg (TypeError during
+    # LLM() dummy-input budgeting -> instant crash) -- for this family the
+    # pixel budget lands via the PIL pre-resize pass over the samples below
+    # (_capped_image_path: same budget, aspect-preserving, edges to /32; the
+    # processor then does its native dynamic tiling on the resized image).
+    # Cross-family pixel-budget fairness (DECISIONS 2026-07-24 c79d083) is
+    # preserved: the cap VALUE is untouched, only the enforcement mechanism is
+    # family-aware (never swap in InternVL's max_num tiles for the budget).
+    if args.max_pixels and args.max_pixels > 0 and family != "internvl3":
         llm_kwargs["mm_processor_kwargs"] = {"max_pixels": args.max_pixels}
     # max_num_batched_tokens also sets the V1 multimodal encoder cache budget
     # (scheduler.py: encoder_cache_size = max_num_batched_tokens). Required for
@@ -2579,8 +2588,11 @@ def main():
     sp = SamplingParams(max_tokens=args.max_tokens, temperature=0.0)
     # vLLM 0.19 V1 IGNORES engine-level mm_processor_kwargs (verified: DocVQA
     # ptid identical with/without the engine kwarg) -> pass it per request.
+    # internvl3: no per-request kwarg either (its image processor rejects
+    # max_pixels just the same); the PIL pre-resize pass above already enforced
+    # the cap on every sample image, so the budget holds without any kwarg.
     chat_kw = {}
-    if args.max_pixels and args.max_pixels > 0:
+    if args.max_pixels and args.max_pixels > 0 and family != "internvl3":
         chat_kw["mm_processor_kwargs"] = {"max_pixels": args.max_pixels}
 
     # warmup 1 fwd (not timed) so eager kernels are primed
