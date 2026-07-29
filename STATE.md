@@ -1,11 +1,23 @@
 # STATE.md — 当前项目状态（主窗口维护，保持 ≤30 行）
 
-> 项目：VLM 视觉 token 压缩 · /goal 锁定：Rank-Before-Merge → **CCF-B 主（CCF-A 扩展）submission-ready 方法论文**
-> 最近更新：2026-07-24 · **J5 有效 gate = NO-GO：方法冻结 plain RBM**（qsim bug 修复后真测：dev 所有 λ>0 皆负 −1.7~5.2pp → 不再搜 query-aware/hybrid/router；机制强化=pre-merger 纯视觉无 query 信息，FastV layer-2 胜 TextVQA/GQA 正因此）。**claim 终态**：RBM 鲁棒默认+text-dense 大胜 post 族；FastV query-conditioned 竞争者（胜 TextVQA+8.2/GQA+7、OCR 崩至 post 水平）；不写"超过现有方法"。已完成：J1 修通 Qwen2.5-VL（mrope）/ J2 跨代一致（+32/+18.8/+28.5pp，GQA tie）/ J4 baseline 探针（HF harness 验证+FastV/Pyramid）。下一步：**J7 完整 split 主表完成**（官方指标，25/26 cell 齐；仅 qwen2vl pre OCRBench r0.75 坏 cell 安全-flags 补跑中）→ HF baseline n500 双模型（含 qwen2vl smoke gate）→ J6 效率 → J8 消融 → paper_v4 填 Table 1。**Goal 进度**：①双模型一致 ✓②完整 benchmark 成立 ✓③强 baseline 充分(J4/J7+HF-n500) ▶④机制+效率消融闭环(J3/J6/J8) ▶⑤submission-ready(paper_v4 初稿已在) ▶。**J7 主表**：Qwen3 pre>post @25% TextVQA +38.4/DocVQA +24.3/OCRBench Final 547vs184/1000；Qwen2.5 +26.1/+11.0 +ORCBench@12.5% 335vs67；GQA **claim 修正**：完整 n12578 post +2.6~2.8pp **显著**(z≈4-4.5/配对8-7；n200"tie"系欠功效误判)，量级仅 text-dense Δ 的 1/10–1/14，与 workload-conditional stage law 一致，spine 未推翻；入稿="post 显著微胜 GQA、无 text-dense crossover、RBM 鲁棒默认非全域最优"；FastV 同模型胜 3/4 基准、RBM OCR +42.5pp 独占强项；绝不写"超过现有方法"。M3 swap≡pre 限 Qwen3，Qwen2.5=M1+stage law+VZ≡post，swap 不复制如实写。digests: j7_main_table / j3_mechanism_crossarch / j4_probe_qwen3vl / j5_qa_gate_result / j2_crossgen_matrix / j1_qwen2vl_mrope_fix .md。
+> 项目：VLM 视觉 token 压缩 · 目标升级：**Rank-Before-Merge → ACM MM'27**（user 批准 cascade + InternVL3 强化包）
+> 最近更新：2026-07-29 · 会话交接（user 要求全停、换窗口继续；git token 已更新）。**论文不急，实验优先**（user 指示）。
 
-## ★ 完成条件（user）：Qwen3-VL-8B + Qwen2.5-VL-7B 结论一致 / 官方完整 split（TextVQA·DocVQA·OCRBench·GQA）/ 强 baseline 充分（FastV·VisionZip-port·PyramidDrop）/ 机制+效率消融闭环 / 论文 submission-ready。**不跨模型宣 SOTA；仅同模型同 harness 领先才写"超现有方法"**。
-## ★ 队列（串行 A40，每 job<6GPU·h）：J1 修通 Qwen2.5-VL → J2 跨代矩阵+官方 rescore+GQA n=200 tie 双模型确证 → J3 机制跨代复制 → J4 FastV/PyramidDrop port 探针 → **J5 QA 单次止损 gate（预注册：均值≥RBM+1pp 且 ≥3/4 基准不回退>0.5pp 且 z≥1.5，否则冻结 plain RBM、不再搜 hybrid/router，≤2GPU·h）** → J6 效率表 → J7 官方完整 split 主表（headline 先行，~50–60h 断点续跑）→ J8 消融闭环 → J9 paper_v4+venue（投稿前升级 user）。
-## ★ 测绘要点：① Qwen2.5-VL 崩溃根因=`_patched_pii` 绕过 vllm mrope 重算（block [16,24,24] θ1e6 剪后三轴错位；Qwen3 interleaved 自洽）→ 剪后调 `recompute_mrope_positions` 或 wrap 不替换（qwen2_5_vl.py:1342-1397）；`--model-family qwen2vl` 已全链路、baseline 正常 → 仅压缩路径坏 ② VisionZip-style≡post（11/11），官方码不可跑→port+mismatched 锚 ③ 官方 scorer 补 OCRBench/1000+GQA exact-match ④ 完整 split：GQA 在盘，余三下载到 runs/data/（~ 90% 满勿写）⑤ fairness=同 keep ratio+报绝对 token 数+统一 min/max pixels（patch14≠16 需 family 校准 iso-token）。
-## ★ 已确立 claim（推翻才动）：pre 弱占优无 crossover（GQA tie，n=200 待双模型确证）；text-dense 大胜（textvqa +38.3pp / docvqa +26.5pp / ocrbench +41.5pp）；M1–M3 机制因果链（swap≡pre）；selector-invariant；hybrid/router/adaptive 负结果如实报（强化机制 claim）。
-## ★ 约束：env qwen3vl_clean（vllm0.19 V1）；权重 /data/models/huggingface/hub（~/.cache 同）；runs/ gitignore，每 run 交 experiments/<exp>.md digest；commit=**Code-Yan-ZX 禁 AI 署名**；升级=凭据/>6GPU·h 训练/claim 推翻/投稿前。
-## 资产：runner src/v3_premerger/v3_premerger_runner.py（mode none/post/pre/hybrid, mask-ranking swap, selector l2/attn, visionzip-style, dry-check）；official_scorers.py（+J0b 补 OCR/GQA）；paper drafts/paper_v3.md；细节 ORCHESTRATION.md。
+## ★ 实验已完成
+- **主表 26/26（官方指标·完整 split·零缺失）**：text-dense pre 全胜（Q3 TextVQA +38.4/DocVQA +24.3/OCRBench +363pts；Q2.5 +26.1/+11.0/+293；z≥12）；GQA post 显著微胜 +2.6–2.8pp（量级 1/10，无 text-dense crossover）；DocVQA none 锚补齐（Q3 0.956 skip0）。digest experiments/j7_main_table.md
+- **Baseline 同模型同预算**：FastV 胜 TextVQA/GQA/DocVQA-600k（query-conditioned），RBM 胜 OCRBench +25.9pp；VZ-style≡post 字节一致双代；Pyramid canon@62.5% 近无损；K 敏感性 k3 最优（0.751 vs k2 0.646）。digest j7hf_baselines_n500.md
+- **机制**：M1–M3 + **Jaccard≡1.000 双架构 → 因果=选择级、架构通用**（Qwen2.5 残差=reverse_indices 序置换 artifact）；**InternVL3 smoke 通过=模式同构**（TextVQA pre 0.75 vs post 0.375 +37.5pp、GQA tie）。digest r1_1_swap_jaccard.md / internvl3_onboarding.md
+- **效率**：stage 中性 ±3%；25% 保留 +68% 吞吐、延迟 −36%。**负结果**：QA-gate λ 全负、hybrid/router FAIL（pre 不动点）。
+
+## ★ 待办（按序，GPU 串行；sunlogin 钉 ~40% 幻影 util——等待逻辑只认 mem<6000，已修）
+1. **Cascade gate 续跑**（幂等）：`bash runs/cascade/run_all.sh >> runs/cascade/run_all.out 2>&1 &`（gate 24 cell 已跑部分，续完→`runs/cascade/gate_result.json` 裁决：**GO=每基准 ≥max(两 alone)−0.5pp 且 ≥1 严格胜两者 z≥1.5 → full_splits.sh 自动；NO-GO→入负结果、方法冻结 plain RBM**）。digest experiments/cascade_gate.md（待终表）
+2. **InternVL3 主矩阵**：`bash scripts/internvl3_main_matrix.sh`（none/pre/post×4 基准 full split，smoke 已绿）
+3. **FastV k3 同 scope 补**：`bash runs/r2_same_scope/r2b_fastv_k3.sh`（双模型 k3；公平性=报最优 K）
+4. **论文重构**（ACM MM 版，user 说不急）：方法泛化 merger-equipped VLMs + cascade 节（若 GO）+ InternVL3 泛化表；drafts/paper_v4.md 已 95% 完成（Qwen 双模型版）；审稿模拟一轮在 drafts/pre_submission_review.md
+5. **投稿前升级 user**（charter 强制）
+
+## ★ 红线（判据锁定于 DECISIONS.md，勿挪）
+不跨模型宣 SOTA、不写 "beats existing methods"；GQA 只报显著微胜/无 crossover；VisionZip 官方数仅 mismatched 锚；cascade/QA gate 判据预注册不改；claim 标配置边界。
+
+## ★ 约束/资产
+env qwen3vl_clean（vllm 0.19 V1）；权重 /data/models/huggingface/hub（Qwen3/2.5/InternVL3 齐）；runner=src/v3_premerger/v3_premerger_runner.py（internvl3 family 已接入）；HF harness=src/v3_premerger/baselines_hf.py（pre/cascade/fastv/pyramid 模式）；runs/ gitignore、digest 入 experiments/；commit=Code-Yan-ZX 禁 AI 署名；升级=凭据/>6GPU·h 训练/claim 推翻/投稿前。手册 ORCHESTRATION.md。
