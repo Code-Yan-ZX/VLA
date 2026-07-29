@@ -83,15 +83,37 @@ gqa exact-match, ocrbench official 0/1 (+ 5-category /1000 extrap). Pixels:
 docvqa 600k cap (HF eager-attn constraint, disclosed), others processor default.
 
 ### Main — total keep 25% (cas r_pre=.5/Y=.5, K=2 vs pre@25% vs FastV@25%)
-| benchmark | cascade | pre-alone | fastv-alone | z vs pre | z vs fastv | Pareto | strict |
+| benchmark | cascade | pre-alone | fastv-alone | z vs pre | z vs fastv | Pareto (≥max−0.5pp) | strict (both z≥1.5) |
 |---|---|---|---|---|---|---|---|
-<!-- FILL from gate_result.json -->
+| textvqa | 0.5950 | 0.5967 | **0.6800** | −0.152 | −2.335 | ❌ (0.595 ≪ 0.675) | no |
+| docvqa | 0.4779 | 0.4239 | **0.5183** | +2.066 | −1.500 | ❌ (0.478 < 0.513) | no |
+| ocrbench | 0.3978 | **0.5801** | 0.1713 | −5.154 | +6.112 | ❌ (0.398 ≪ 0.575) | no |
+| gqa | 0.4050 | 0.4150 | **0.4900** | −0.333 | −2.429 | ❌ (0.405 < 0.485) | no |
 
 ### Aux — total keep 12.5% (cas r_pre=.5/Y=.75 vs pre@12.5% vs FastV@12.5%)
-<!-- FILL -->
+| benchmark | cascade | pre-alone | fastv-alone | z vs pre | z vs fastv | Pareto | strict |
+|---|---|---|---|---|---|---|---|
+| textvqa | 0.4050 | **0.5000** | 0.4450 | −2.540 | −0.896 | ❌ | no |
+| docvqa | 0.2070 | **0.2980** | 0.2779 | −2.012 | −2.064 | ❌ | no |
+| ocrbench | 0.1713 | **0.3591** | 0.0884 | −5.013 | +3.441 | ❌ | no |
+| gqa | 0.3500 | 0.3950 | **0.4550** | −1.286 | −3.130 | ❌ | no |
 
-## Verdict
-<!-- FILL: GO/NO-GO -->
+OCRBench /1000 extrap: cascade r25 = 370.5 (pre 580, fastv 171); r12 = 160.4 (pre 359, fastv 88).
+Pairing integrity: n_common matched (200/200/181/200), mean_ptid IDENTICAL across the three arms in every cell → same images, same budget, fair paired comparison. All 24/24 gate cells present (missing_cells: []).
+
+## Verdict — NO-GO
+Cascade fails condition 1 on ALL 8 (budget×bench) cells — never within 0.5pp
+of max(pre, fastv), typically 8–18pp below — and condition 2 holds nowhere
+(the only positive cas-vs-pre z, docvqa r25 +2.07, is paired with a loss to
+fastv, z −1.5). Pattern is structural, not noise: cascade sits BETWEEN the two
+single methods and is dominated by the better one on every benchmark —
+query-blind Stage-1 discards degrade the token set that query-conditioned
+Stage-2 (FastV) attends over, while on text-dense/OCR the FastV stage
+destroys exactly the raw-patch information Stage-1 was built to protect
+(cas OCRBench 0.398 ≈ between pre 0.580 and fastv 0.171; same shape at r12).
+Two training-free selectors composed in series do NOT complement. Consistent
+with the earlier hybrid/router FAIL (pre is a fixed point; nothing downstream
+recovers what pre- or fastv-stage threw away).
 Locked consequences: NO-GO → cascade reported as negative result (paper §6,
 "tried the cascade, no Pareto improvement"), method frozen = plain RBM, no
 further hyper-parameter search. GO → full-split campaign
@@ -100,7 +122,9 @@ further hyper-parameter search. GO → full-split campaign
 rungs K=4 and r_pre=0.35 (r_fastv=0.2857) at n=500.
 
 ## Full-split numbers (only if GO)
-<!-- FILL or "N/A — NO-GO" -->
+N/A — NO-GO. `runs/cascade/full_splits.sh` NOT executed (pre-registered
+consequence). Cascade reported as negative result in paper §6; method frozen =
+plain RBM; no further cascade hyper-parameter search (DECISIONS 2026-07-29).
 
 ## Assets
 - scripts: runs/cascade/{lib,check_engine_consistency,gate_n200,full_splits,run_all}.sh, runs/cascade/gate_analyze.py
