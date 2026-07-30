@@ -2,7 +2,12 @@
 
 ## Config
 Model OpenGVLab/InternVL3-8B (pixel-shuffle merger family; runner family branch).
-Modes none / pre (RBM L2 top-κ pre-merger) / post (FastV-style layer-2 attn prune),
+Modes none / pre (RBM L2 top-κ over merger INPUT units) / post (**post-merger L2
+top-k over merged tokens**, `--mode post --selector l2`, runner setup_post_merger_internvl)
+— pre and post arms are **iso-selector (both L2) and iso-budget (ptid identical:
+690.5/859.5/555.4/690.1)**, so the matrix is a pure stage-variable test on this family.
+(FastV intra-LLM attn pruning is a SEPARATE baseline campaign — runs/r2_same_scope/
+r2b_fastv_k3.sh — and never enters this matrix's post arm.)
 @ r0.75 (25% keep; waves 1–3) + pre/post @ r0.875 (12.5% keep; wave 4, text-dense only).
 Benchmarks full splits: TextVQA val 5000 / GQA testdev 12578 / OCRBench 1000 / DocVQA val 5349.
 DocVQA pixel cap = 4M px (script STD; PIL pre-resize path — NOT Qwen's 600k: InternVL3
