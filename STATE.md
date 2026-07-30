@@ -1,7 +1,7 @@
 # STATE.md — 当前项目状态（主窗口维护，保持 ≤30 行）
 
 > 项目：VLM 视觉 token 压缩 · 目标：**Rank-Before-Merge → ACM MM'27**
-> 最近更新：2026-07-30 · **全部实验落定**（InternVL3 16/16 含 backfill、k3 8/8、cascade NO-GO）→ 进入 ④ 论文重构。
+> 最近更新：2026-07-30 · 全部实验落定 + **r2c 同 scope 配对数齐**（Table 3  backing：无全域胜者，RBM 胜 OCR 双族+Q2.5 微胜，FastV-k3 胜 Q3 text-dense）→ ④ 终稿修订进行中，完成后升级 user（投稿前 charter）。
 
 ## ★ 实验已完成（全官方指标·full split）
 - **Qwen 主表 26/26**：text-dense pre 全胜 vs post（Q3 +38.4/+24.3pp/+363pts，z≥12）；GQA post 显著微胜 +2.6–2.8pp（1/10 量级，无 crossover）。digest j7_main_table.md
