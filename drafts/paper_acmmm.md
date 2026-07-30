@@ -29,12 +29,15 @@ merger-equipped vision-language models (VLMs) already reduce tokens with a nativ
 the *stage* at which token selection happens — before or after that merger — as an experimental
 variable under iso-model / iso-token / iso-selector control, and report three findings. **(1) A stage
 law.** On text-dense workloads, query-blind pre-merger selection systematically beats post-merger
-selection — +11.0 to +38.4 pp across two Qwen-VL generations — and, on a third family, InternVL3-8B
-(a different merger design: pixel-shuffle rather than Qwen's PatchMerger), beats the stronger
-query-conditioned in-layer pruning stage by +34.6 to +432 pts. The law has no text-dense crossover,
+selection — +11.0 to +38.4 pp across two Qwen-VL generations and +34.6 to +432 pts on a third
+family, InternVL3-8B (a different merger design: pixel-shuffle rather than Qwen's PatchMerger), under
+iso-selector / iso-budget control (same query-blind L2 scorer, identical token budgets across stages).
+The law has no text-dense crossover at the native-resolution full splits (one shallow 600k-cap DocVQA
+configuration reverses; configuration boundary in §8),
 the gap widens monotonically under deeper compression, and object-centric GQA shows at most a small
-significant post-stage edge (Qwen +2.6–2.8 pp) or a tie (InternVL3, −0.4 pp); against the same
-query-conditioned baseline, RBM wins dense OCR yet concedes scene-text/object benchmarks on Qwen, so
+significant post-stage edge (Qwen +2.6–2.8 pp) or a tie (InternVL3, −0.4 pp); against a separate
+query-conditioned in-layer baseline (FastV), RBM wins dense OCR yet concedes scene-text/object
+benchmarks on Qwen, so
 it is a robust default, not a uniform winner. **(2) A selection-level causal mechanism.** A ranking-swap control
 recovers pre-merger accuracy exactly, and the kept unit sets are identical across stages (Jaccard =
 1.000 on both architectures tested): the gap is the ranking the merger rewrites, not the forward
@@ -62,9 +65,9 @@ though practitioners knew the merger matters: the Qwen2.5-VL authors themselves 
 compresses, and merging is reported to degrade OCR.
 
 **What we find — a stage law.** Under strict iso-model / iso-token / iso-selector control, applying
-the *same* text-agnostic L2 scorer before the merger versus after it — or versus a
-query-conditioned in-layer attention prune — produces a large accuracy gap on text-dense benchmarks
-and at most a small, reversed gap on object-centric GQA. On the official full splits, pre-merger
+the *same* text-agnostic L2 scorer before the merger versus after it — iso-selector and iso-budget,
+so a pure stage variable — produces a large accuracy gap on text-dense benchmarks and at most a small,
+reversed gap on object-centric GQA. On the official full splits, pre-merger
 selection leads by +11.0 to +38.4 pp on text-dense benchmarks across two Qwen-VL generations
 (primary paired McNemar |z| = 14.6–43.0), and by +34.6 to +432 pts on a third model family,
 InternVL3-8B, whose merger is a different design (pixel-shuffle downsampling rather than Qwen's
@@ -100,11 +103,11 @@ benchmarks) is reachable only after the LLM's cross-attention layers mix in the 
 
 **Contributions.**
 1. **A stage law for merger-equipped VLMs.** Query-blind pre-merger selection systematically beats
-   post-merger selection on text-dense workloads (+11.0 to +38.4 pp, Qwen full splits), and beats the
-   query-conditioned in-layer stage on a third family, InternVL3-8B (+34.6 to +432 pts), across two
+   post-merger selection on text-dense workloads (+11.0 to +38.4 pp, Qwen full splits; +34.6 to
+   +432 pts on a third family, InternVL3-8B, under iso-selector / iso-budget control), across two
    merger designs — with no text-dense crossover and a gap that widens monotonically under
-   compression — while remaining a robust default (it wins dense OCR) where that same query-conditioned
-   baseline leads on scene-text/object benchmarks.
+   compression — while remaining a robust default (it wins dense OCR) where a separate
+   query-conditioned in-layer baseline (FastV) leads on scene-text/object benchmarks.
 2. **A selection-level causal mechanism.** A ranking-swap control plus a kept-set identity
    (Jaccard = 1.000 on both architectures) attributes 100% of the gap to the ranking the merger
    rewrites (M1 reshuffle, M2 text-stroke demotion, M3 swap ≡ pre), not the forward path.
@@ -187,7 +190,8 @@ happens, with model, token count, and scorer held fixed:
 - **Post stage (contrast).** Either score the N *merged* units on merger-*output* features and keep
   the top-κN (the stage used by published compression methods for merger-equipped VLMs, including
   VisionZip's Qwen path), or — the stronger, query-conditioned contrast — prune inside the LLM by
-  layer-2 attention (the FastV stage). We use both contrasts where noted.
+  layer-2 attention (the FastV stage). The main matrices (Tables 1–2) use the post-merger-L2 contrast,
+  iso-selector with the pre arm; the layer-2 FastV contrast is used only in Table 3.
 
 [FIG:1 — pipeline schematic. Two panels: (a) RBM scores raw merger-input unit features, keeps top-κ,
 then invokes the native merger on survivors only; (b) post-stage selection merges all units first (or
@@ -331,12 +335,14 @@ superiority on object-centric data; all other sections refer here for the GQA st
 
 To test whether the stage law is a Qwen-family artifact or a property of merger-equipped VLMs, we run
 RBM and the post stage on **InternVL3-8B**, whose merger is pixel-shuffle downsampling — a different
-design from Qwen's PatchMerger. The post contrast here is the *stronger*, query-conditioned one:
-FastV-style pruning at LLM layer 2 (layer-2 attention has already mixed in the question), at the same
-25% retention.
+design from Qwen's PatchMerger. The post arm here is **post-merger L2 top-k** — the *same*
+query-blind L2 selector as the pre arm, at an identical token budget (ptid equal across arms), so
+Table 2 is a **pure stage-variable experiment under iso-selector / iso-budget control** at 25%
+retention. The query-conditioned in-layer FastV contrast is a separate campaign, reported in Table 3.
 
 **Table 2.** InternVL3-8B, official full splits (n = 5000 / 5349 / 1000 / 12578), greedy. pre = RBM
-(pre-merger L2); post = FastV-style layer-2 attention prune (query-conditioned). ptid = mean
+(pre-merger L2); post = post-merger L2 top-k (query-blind, same L2 selector as pre; iso-selector and
+iso-budget — ptid identical across arms). The query-conditioned FastV contrast is Table 3. ptid = mean
 post-merger visual tokens/request (pre and post iso-token). Source: internvl3_main_matrix.md (16/16
 cells, zero missing).
 
@@ -354,9 +360,10 @@ compression, as on Qwen.
 **Cross-family isomorphism.** InternVL3's pre−post text-dense gaps (+37.4 / +34.6 pp / +432 pts) are
 the same order and direction as Qwen3-VL's (+38.4 / +24.3 / +363 pts) on all three text-dense
 benchmarks, and GQA stays within the red line — a tie here (−0.4 pp) versus Qwen3-VL's small post
-edge (+2.8 pp), both small, with no text-dense crossover. The stage law — query-blind selection at
-the merger boundary protects the raw-patch text information that layer-2 attention pruning destroys —
-is therefore established on a **third model family with a different merger**, supporting the
+edge (+2.8 pp), both small, with no text-dense crossover. The stage law — the same query-blind L2
+scorer beats when applied before the merger because selection deferred past it loses raw-patch text
+information to the merger's ranking rewrite (§5), at identical selector and budget — is therefore
+established on a **third model family with a different merger**, supporting the
 "merger-equipped VLMs" generalization rather than a family-specific claim.
 
 [FIG:2 — cross-family stage-law bars. Pre−post Δ on the three text-dense benchmarks, one bar group
@@ -675,10 +682,11 @@ is no universal winner.
 We isolated the *stage* of visual-token selection — before versus after the native merger — as an
 experimental variable in merger-equipped VLMs, and found a **stage law**: on text-dense workloads,
 query-blind pre-merger selection systematically beats post-merger selection — +11.0 to +38.4 pp across
-two Qwen-VL generations — and beats the query-conditioned in-layer stage on a third family,
-InternVL3-8B (+34.6 to +432 pts), with two different merger designs (PatchMerger and pixel-shuffle),
-no text-dense crossover, a gap that widens monotonically under compression, and at most a small
-post-stage edge on object-centric GQA; against that same query-conditioned baseline RBM wins dense OCR
+two Qwen-VL generations and +34.6 to +432 pts on a third family, InternVL3-8B, under iso-selector /
+iso-budget control — with two different merger designs (PatchMerger and pixel-shuffle), no text-dense
+crossover at the native-resolution full splits (configuration boundary in §8), a gap that widens
+monotonically under compression, and at most a small post-stage edge on object-centric GQA; against a
+separate query-conditioned in-layer baseline (FastV) RBM wins dense OCR
 yet concedes scene-text/object benchmarks, so it is a robust default, not a uniform winner. A ranking-swap control plus a kept-set identity (Jaccard = 1.000 on both
 architectures) makes the mechanism **selection-level causal**: the merger rewrites unit saliency in a
 text-hostile direction (M1 reshuffle, M2 text-stroke demotion), and the entire pre>post gap is that
@@ -772,14 +780,15 @@ Code will be released.
    as experimental variable + causal mechanism (Jaccard≡1.000 / swap≡pre), not the scorer; minimalism
    is the control design, and the four negatives are the scientific content (a fixed-point theorem by
    experiment). Add one sentence in §3.2 framing minimalism-as-control more explicitly if room.
-2. "Cross-family generalization is overclaimed: InternVL3's 'post' is FastV-style layer-2 pruning,
-   not post-merger L2, and budgets/scopes differ (Qwen main table post = post-merger L2; FastV-k3
-   table is n200/cross-scope)." This is the sharpest technical risk — the two contrast operators are
-   not identical across families. Mitigation already in draft (labeled explicitly: Table 2 post =
-   layer-2 attn; Table 3 = best-K same-scope). Consider a reviewer-facing sentence in §4.3 noting that
-   pre beats BOTH contrast operators on text-dense InternVL3-equivalent terms — but only if a
-   post-merger-L2 InternVL3 cell exists (it does not in the digest → do not claim; flag as a possible
-   rebuttal experiment).
+2. "Cross-family generalization is overclaimed: InternVL3's 'post' is a different operator from
+   Qwen's." RESOLVED at artifact level: the InternVL3 main-matrix post arm is **post-merger L2 top-k**
+   (runner `--mode post --selector l2`, setup_post_merger_internvl) — the SAME query-blind L2 selector
+   as the pre arm, at IDENTICAL token budget (ptid equal across arms): a pure stage variable,
+   iso-selector + iso-budget, exactly like the Qwen main table (post = post-merger L2). FastV
+   (in-layer query-conditioned attn) is a SEPARATE baseline campaign (Table 3 / r2b_fastv_k3), never
+   the main-matrix post arm; the R1-style objection ("post = FastV-style layer-2 pruning") does not
+   hold. The paper now proactively discloses the iso-selector / iso-budget design in §4.3 and the
+   Table 2 caption, so no rebuttal-only experiment is needed.
 3. "DocVQA numbers are not comparable across models and RBM loses 19.4pp to none — the 'robust'
    framing hides a real regression." Defense: we state this outright (Table 2 notes, §8 items 3–4);
    the claim is pre>post on text-dense, never pre=none on DocVQA. Strengthen by moving the −19.4pp
