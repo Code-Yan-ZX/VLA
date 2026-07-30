@@ -1,7 +1,7 @@
 # STATE.md — 当前项目状态（主窗口维护，保持 ≤30 行）
 
 > 项目：VLM 视觉 token 压缩 · 目标：**Rank-Before-Merge → ACM MM'27**
-> 最近更新：2026-07-30 · **④ 重构+二审+修订闭环**（终稿 drafts/paper_acmmm.md @89450ae：must-fix 7/8、红线全净、溯源逐表）→ 已升级 user（charter 投稿前）；剩投稿形态（真图/acmart 渲染/压页 ~1–2d CPU）。
+> 最近更新：2026-07-30 · **投稿形态仅差渲染**：acmart 转换就绪（drafts/latex/，静态自查全 PASS）+ supp 全填（S1–S9）+ bib 20 条核真。**user 指示：图 user 手绘（规格 drafts/figs_spec_for_user.md），渲染押后至图齐**；编译环境届时再定。渲染定稿 → 二次升级 user 投稿 go/no-go。
 
 ## ★ 实验已完成（全官方指标·full split）
 - **Qwen 主表 26/26**：text-dense pre 全胜 vs post（Q3 +38.4/+24.3pp/+363pts，z≥12）；GQA post 显著微胜 +2.6–2.8pp（1/10 量级，无 crossover）。digest j7_main_table.md
@@ -11,9 +11,9 @@
 - **机制**：Jaccard≡1.000 双架构（因果=选择级）。**效率**：25% 保留 +68% 吞吐。**负结果链**：QA-gate/hybrid/router/cascade 四连（pre 不动点）。
 
 ## ★ 待办
-1. **已升级 user（charter 投稿前强制）**：终稿 drafts/paper_acmmm.md + supp 骨架 + 二审报告 drafts/review_round2.md；等 user 投稿决策
-2. **投稿形态（user 点头后执行，~1–2d CPU）**：按 FIG spec 块真画 3 图 + acmart sigconf 渲染 + 压页至 ≤8+2（§3.3/§5.2/§6a 移 supp、图单栏）+ supp S4/S5/S6 从 runs JSON 填体 + .bib（zhu2025internvl3 已占位）
-3. **投稿行政**：OpenReview 账号/profile、author list 早锁（abstract 截止后不可改）
+1. **等 user 手绘 3 图**（规格 drafts/figs_spec_for_user.md → drafts/figs/fig{1,2,3}.pdf）
+2. **图齐后**：嵌图 + 渲染 + 实测压页 ≤8+2（预估 9–11pp；4 个 COMPRESS-OPTIONAL 杠杆已埋于 tex；编译环境届时定：装轻量 TeX 链（需 sudo，升级 user）或 user 环境编）→ **二次升级 user 投稿 go/no-go（charter）**
+3. **投稿行政**：OpenReview 账号/profile、author list 早锁（abstract 截止后不可改）、MM'27 官方 CFP 待出（现按 MM'26 proxy）
 
 ## ★ 红线（判据锁定 DECISIONS.md）
 不跨模型宣 SOTA、不写 beats existing methods；GQA 只报微胜/tie·无 crossover；VZ 官方数仅 mismatched 锚；预注册判据不改；claim 标配置边界（像素 cap/预算/n）。
