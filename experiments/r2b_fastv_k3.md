@@ -28,8 +28,10 @@ placeholder in the batch script — derived from subset filename; DECISIONS
 - OCRBench n200 cells skip ~10% (Qwen3 19/200, Qwen2.5 20/200 — empty FastV
   outputs on some OCR prompts); reported acc over attempted, disclose in paper.
 - Qwen2.5 cells are n200 (dev-scope); Qwen3 TextVQA/GQA full-split, DocVQA/OCR n200.
-- k=3 ≈ 214 mean visual tokens (ptid 214) — lower budget than RBM@25% (690 ptid);
-  the comparison is "each method at its strong config", state budgets in the table.
+- k=3 ≈ 214 mean visual tokens (ptid 214) — comparable budget to Qwen3-VL
+  RBM@25% (pre mean_ptid ≈213 on textvqa, gate cells); note InternVL3 pre@25%
+  ptid is 690 (different merger/tokenization — never mix the two in one table).
+  The comparison is "each method at its strong config", state budgets in the table.
 
 ## Claim impact
 No change: "FastV (query-conditioned) wins TextVQA/GQA/DocVQA; RBM wins OCRBench
