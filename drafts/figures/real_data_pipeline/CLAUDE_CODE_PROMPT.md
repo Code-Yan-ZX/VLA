@@ -33,6 +33,10 @@ The user will place several `.png`, `.jpg`, or `.jpeg` files in `inputs/`.
 Process every supported image deterministically. Use the filename stem as the
 sample id, and record a SHA-256 hash of the original file.
 
+The images already tracked in `inputs/` are explicitly authorized by the user
+for transfer to this server. Do not add or redistribute any other untracked
+image unless the user explicitly authorizes it.
+
 ## 2. Non-negotiable scientific rule
 
 Do not use CLIP, SigLIP, a generic vision encoder, fabricated saliency, or LLM
@@ -170,6 +174,39 @@ Render each selected input separately, for example
 sample. Produce a contact sheet so the author can choose an example while
 seeing all candidates.
 
+## 5.1 Same-image method comparison
+
+For every input image, also produce a separate qualitative comparison artifact
+`outputs/compare_<sample_id>.{pdf,png}` using the exact same processor-resized
+image, unit grid, retention ratio, and final visual-token count.
+
+The mandatory comparison is:
+
+1. original image / full unit grid;
+2. RBM: measured pre-merger L2 top-k;
+3. post-merger L2 top-k: measured with the same L2 selector and budget;
+4. a difference view with four states: kept by both, RBM-only, post-only, and
+   dropped by both.
+
+Compute and show compact measured diagnostics: top-k Jaccard and full-ranking
+Spearman. Use consistent state colors and shape/outline redundancy. Do not
+invent a performance answer for an arbitrary uploaded image; this panel
+compares measured selection behavior, not task accuracy.
+
+FastV is an optional fifth panel only when a real question is provided for that
+image in `inputs/manifest.json`. Never invent a question. If implemented, use
+the repository's actual FastV layer-2 capture path and its measured kept-token
+indices, enforce the same final token count, and label it clearly as
+`FastV-k3 (query-conditioned, in-LLM)`. It is not an iso-selector control and
+must not be merged into the pre-vs-post stage-law claim. If no manifest or no
+question is present, write `fastv_status: skipped_missing_question` to metadata
+and render only the mandatory four panels.
+
+VisionZip or any additional baseline is optional and may appear only if its
+repository implementation is actually executed on the same processed image
+and the mask/token-budget mapping is validated. No schematic or guessed mask
+may be presented as measured baseline output.
+
 ## 6. FIG:2 and FIG:3 renderers
 
 Create canonical data files and plotting scripts rather than hard-coding
@@ -233,8 +270,8 @@ At completion, return a digest of at most 20 lines containing:
 - remaining limitations
 - Git commit hash
 
-Commit only source code, small canonical JSON/CSV data, manifests without
-private paths, and documentation. Do not commit user input images, raw feature
-tensors, model weights, caches, logs, credentials, or unapproved copyrighted
-previews. Use the repository's configured human Git identity and add no AI
-attribution.
+Commit only source code, the already tracked/user-authorized input set, small
+canonical JSON/CSV data, manifests without private paths, and documentation.
+Do not commit additional unapproved input images, raw feature tensors, model
+weights, caches, logs, credentials, or unapproved copyrighted previews. Use
+the repository's configured human Git identity and add no AI attribution.

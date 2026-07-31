@@ -1,5 +1,8 @@
 inputs/*
 !inputs/.gitkeep
+!inputs/*.jpg
+!inputs/*.jpeg
+!inputs/*.png
 data/*
 !data/.gitkeep
 outputs/*

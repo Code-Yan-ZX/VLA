@@ -11,7 +11,7 @@
 - **机制**：Jaccard≡1.000 双架构（因果=选择级）。**效率**：25% 保留 +68% 吞吐。**负结果链**：QA-gate/hybrid/router/cascade 四连（pre 不动点）。
 
 ## ★ 待办
-1. **在 GPU 服务器执行 `drafts/figures/real_data_pipeline/CLAUDE_CODE_PROMPT.md`**：FIG:1 用实测 merger-input/output L2 网格替换 layout proxy；FIG:2/3 从审计数据文件绘制
+1. **在 GPU 服务器执行 `drafts/figures/real_data_pipeline/CLAUDE_CODE_PROMPT.md`**：`inputs/` 已放 10 张候选图；逐图捕获真实 merger-input/output L2，生成 RBM vs post-L2 同图同预算差异图并替换 FIG:1 proxy；有真实 question 才追加 FastV；FIG:2/3 从审计数据文件绘制
 2. **图齐后**：嵌图 + 渲染 + 实测压页 ≤8+2（预估 9–11pp；4 个 COMPRESS-OPTIONAL 杠杆已埋于 tex；编译环境届时定：装轻量 TeX 链（需 sudo，升级 user）或 user 环境编）→ **二次升级 user 投稿 go/no-go（charter）**
 3. **投稿行政**：OpenReview 账号/profile、author list 早锁（abstract 截止后不可改）、MM'27 官方 CFP 待出（现按 MM'26 proxy）
 

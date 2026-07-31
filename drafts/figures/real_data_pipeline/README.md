@@ -5,8 +5,9 @@ publication rendering.
 
 ## Directory contract
 
-- `inputs/`: user-provided source images. These may be copyrighted or private
-  and are ignored by Git.
+- `inputs/`: user-provided source images. The current candidate set is tracked
+  because the user explicitly requested server hand-off through Git. Do not add
+  private or unlicensed images without the same explicit authorization.
 - `data/`: measured per-image score arrays and provenance manifests. Large or
   private captures are ignored by Git.
 - `scripts/`: capture, validation, and rendering programs created on the GPU
@@ -26,3 +27,8 @@ exact `_score_units` and `_score_tokens` functions from the experiment runner.
 FIG:2 and FIG:3 must read versioned JSON/CSV values derived from the audited
 experiment digests. Plotting code must never contain unverified or generated
 numbers.
+
+For same-image qualitative comparison, RBM versus post-merger L2 is the
+mandatory iso-selector/iso-budget pair. FastV is optional and requires a real
+question supplied by the user; it must be labeled as query-conditioned and
+must not be presented as an iso-selector stage control.
