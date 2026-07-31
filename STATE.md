@@ -1,7 +1,7 @@
 # STATE.md — 当前项目状态（主窗口维护，保持 ≤30 行）
 
 > 项目：VLM 视觉 token 压缩 · 目标：**Rank-Before-Merge → ACM MM'27**
-> 最近更新：2026-07-31 · **投稿形态仅差渲染**：acmart 转换就绪（drafts/latex/，静态自查全 PASS）+ supp 全填（S1–S9）+ bib 20 条核真。图规格已按顶会实图补齐；FIG:1 依 user 参考更新为“输入/patch + 中央 pre/post stage + 右侧 token-grid 对照”三栏（`drafts/figs_spec_for_user.md`，调研 `drafts/research/method_figure_survey.md`）；**user 手绘 3 图，渲染押后至图齐**。渲染定稿 → 二次升级 user 投稿 go/no-go。
+> 最近更新：2026-07-31 · **投稿形态仅差渲染**：acmart 转换就绪（drafts/latex/，静态自查全 PASS）+ supp 全填（S1–S9）+ bib 20 条核真。图规格已按顶会实图补齐；FIG:1 已产出代码版内部草稿（`drafts/figures/gen_fig1_rbm.py` → `drafts/figs/fig1.{pdf,png}`），采用共享输入 + pre/post 双行布局；当前遮罩为明确标注的 layout proxy，投稿前须替换为实测 L2 网格。FIG:2/3 待绘制。图齐渲染定稿 → 二次升级 user 投稿 go/no-go。
 
 ## ★ 实验已完成（全官方指标·full split）
 - **Qwen 主表 26/26**：text-dense pre 全胜 vs post（Q3 +38.4/+24.3pp/+363pts，z≥12）；GQA post 显著微胜 +2.6–2.8pp（1/10 量级，无 crossover）。digest j7_main_table.md
@@ -11,7 +11,7 @@
 - **机制**：Jaccard≡1.000 双架构（因果=选择级）。**效率**：25% 保留 +68% 吞吐。**负结果链**：QA-gate/hybrid/router/cascade 四连（pre 不动点）。
 
 ## ★ 待办
-1. **等 user 手绘 3 图**（规格 drafts/figs_spec_for_user.md → drafts/figs/fig{1,2,3}.pdf）
+1. **FIG:1 用实测 merger-input/output L2 网格替换 layout proxy；绘制 FIG:2/3**（规格 drafts/figs_spec_for_user.md → drafts/figs/fig{1,2,3}.pdf）
 2. **图齐后**：嵌图 + 渲染 + 实测压页 ≤8+2（预估 9–11pp；4 个 COMPRESS-OPTIONAL 杠杆已埋于 tex；编译环境届时定：装轻量 TeX 链（需 sudo，升级 user）或 user 环境编）→ **二次升级 user 投稿 go/no-go（charter）**
 3. **投稿行政**：OpenReview 账号/profile、author list 早锁（abstract 截止后不可改）、MM'27 官方 CFP 待出（现按 MM'26 proxy）
 
