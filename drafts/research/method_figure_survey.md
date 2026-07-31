@@ -1,6 +1,6 @@
 # VLM 视觉 Token 压缩方法图调研（FIG:1 参考）
 
-> 日期：2026-07-31。范围：近年 CVPR / ICCV / ECCV / EMNLP 中与视觉 token pruning、merging、projector compression 最相关的方法总览图。下列结论均来自实际查看论文 PDF 中的指定 Figure，而非只读摘要或二手网页。颜色为从 PDF 页渲染图中采样得到的近似 hex；不是作者发布的品牌色规范。
+> 日期：2026-07-31。范围：近年 CVPR / ICCV / ECCV / IJCV 中与视觉 token pruning、merging、projector compression 最相关的方法总览图。下列结论均来自实际查看论文 PDF 中的指定 Figure，而非只读摘要或二手网页。颜色为从 PDF 页渲染图中采样得到的近似 hex；不是作者发布的品牌色规范。
 
 ## 1. 结论先行
 
@@ -17,7 +17,7 @@ FastV Fig. 5 适合借“在模型栈中标出一次插入点”和 token 图例
 | 论文 | 会议 | 实看来源 | 指定图 | 与 RBM 的相关度 |
 |---|---|---|---|---|
 | *An Image is Worth 1/2 Tokens After Layer 2: Plug-and-Play Inference Acceleration for Large Vision-Language Models* (FastV) | ECCV 2024 Oral | [PDF](https://arxiv.org/pdf/2403.06764) · [项目/代码](https://github.com/pkunlp-icler/FastV) | **Fig. 5, p.7** | 高：明确画出剪枝插入层与过滤前后 token |
-| *TokenPacker: Efficient Visual Projector for Multimodal LLM* | EMNLP 2024 | [PDF](https://aclanthology.org/2024.emnlp-main.469.pdf) · [项目/代码](https://github.com/CircleRadon/TokenPacker) | **Fig. 2, p.4** | 高：总览 + 模块放大，且位于 encoder/LLM 之间 |
+| *TokenPacker: Efficient Visual Projector for Multimodal LLM* | IJCV 2025 | [期刊/DOI](https://doi.org/10.1007/s11263-025-02491-7) · [arXiv PDF](https://arxiv.org/pdf/2407.02392) · [项目/代码](https://github.com/CircleRadon/TokenPacker) | **Fig. 2（arXiv PDF）** | 高：总览 + 模块放大，且位于 encoder/LLM 之间 |
 | *VisionZip: Longer is Better but Not Necessary in Vision Language Models* | CVPR 2025 | [CVF PDF](https://openaccess.thecvf.com/content/CVPR2025/papers/Yang_VisionZip_Longer_is_Better_but_Not_Necessary_in_Vision_Language_CVPR_2025_paper.pdf) · [项目/代码](https://github.com/dvlab-research/VisionZip) | **Fig. 3, p.3** | 很高：selection + contextual merge 与 token 数缩短均可视化 |
 | *Conical Visual Concentration for Efficient Large Vision-Language Models*（PyramidDrop） | CVPR 2025 | [CVF PDF](https://openaccess.thecvf.com/content/CVPR2025/papers/Xing_Conical_Visual_Concentration_for_Efficient_Large_Vision-Language_Models_CVPR_2025_paper.pdf) · [项目/代码](https://github.com/Cooperx521/PyramidDrop) | **Fig. 2, p.4** | 很高：stage 是整图主轴，rank/drop 点非常清楚 |
 | *LLaVA-PruMerge: Adaptive Token Reduction for Efficient Large Multimodal Models* | ICCV 2025 | [CVF PDF](https://openaccess.thecvf.com/content/ICCV2025/papers/Shang_LLaVA-PruMerge_Adaptive_Token_Reduction_for_Efficient_Large_Multimodal_Models_ICCV_2025_paper.pdf) · [项目页](https://llava-prumerge.github.io/) | **Fig. 2, p.4** | 很高：最接近“先选后并”的 token selection/cluster/merge 图 |
@@ -111,6 +111,6 @@ FastV Fig. 5 适合借“在模型栈中标出一次插入点”和 token 图例
 
 ## 6. 核验记录
 
-- 实际下载并查看 PDF 页：FastV p.7 Fig.5；TokenPacker p.4 Fig.2；VisionZip p.3 Fig.3；PyramidDrop p.4 Fig.2；LLaVA-PruMerge p.4 Fig.2。
+- 实际下载并查看 PDF 页：FastV p.7 Fig.5；TokenPacker arXiv PDF Fig.2；VisionZip p.3 Fig.3；PyramidDrop p.4 Fig.2；LLaVA-PruMerge p.4 Fig.2。
 - 会议/年份以 ECCV、ACL Anthology、CVF Open Access 页面及论文 camera-ready 信息为准；VisionZip/PyramidDrop 的 CVPR camera-ready 标题与早期 arXiv 标题可能有细微差异，表中采用正式标题。
 - hex 为 160-dpi PDF 渲染后对图形区域的主色采样近似值，适合“学习配色”，不应宣称为原作者官方色板。

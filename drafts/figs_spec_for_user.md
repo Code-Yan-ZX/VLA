@@ -4,10 +4,12 @@
 > 单位陷阱：OCRBench 是 /1000 pts，其余 pp —— 同图混用必须标注。
 
 ## FIG:1 — 方法示意（pipeline，无数据）
-**推荐画法**：双面板、共享"stage 轴"。
+**推荐画法**：横向三栏、中央双面板，共享"stage 轴"。整体学习 PyramidDrop Fig.2 的三栏总览，但把中央改成严格对齐的 pre/post 两条流程；右栏学习 SparseVLM Fig.1 的同图 token 保留对照。
+- 左栏：同一张输入图 + patch division + ViT，只画一次，避免上下重复
 - (a) RBM：ViT → 对 merger **输入**端 2×2 unit 特征打 L2 分 → top-κ 保留 → 原生 merger 只作用于存活 unit → LLM
 - (b) Post：ViT → 原生 merger 全量合并 → 对 merger **输出**打 L2 分 → top-κ → LLM（虚线变体：FastV 在 LLM layer-2 剪）
 - 两面板 merger/LLM 图形**完全相同**，只有打分抽头位置不同 → 视觉传达 "stage 是唯一被操纵变量"
+- 右栏：同一输入的两张简化 token-grid 局部图，分别标 `rank before merger` / `rank after merger`；只显示选择位置与 token 状态，不放答案文本，也不伪造 attention heatmap
 - 标注：2×2 unit（32px footprint）、κ 预算箭头
 - Takeaway 句（caption）：iso-model / iso-token / iso-selector，仅 stage 不同
 
@@ -52,7 +54,7 @@
 | 论文（会议） | 实看图 | 本稿借鉴 | 明确不照搬 |
 |---|---|---|---|
 | [FastV](https://arxiv.org/pdf/2403.06764)（ECCV 2024 Oral） | Fig.1, p.1；Fig.5, p.7 | 蓝/橙/绿三系列、共享图例；在模型栈中明确标剪枝插入点 | 聚合成含义模糊的 Average Performance；大段答案文本和视频胶片 |
-| [TokenPacker](https://aclanthology.org/2024.emnlp-main.469.pdf)（EMNLP 2024） | Fig.2, p.4 | 全局 pipeline + 局部模块放大，减少重复 | 过多内部算子和竖排长文本 |
+| [TokenPacker](https://doi.org/10.1007/s11263-025-02491-7)（IJCV 2025） | Fig.2（[arXiv PDF](https://arxiv.org/pdf/2407.02392)） | 全局 pipeline + 局部模块放大，减少重复 | 过多内部算子和竖排长文本 |
 | [VisionZip](https://openaccess.thecvf.com/content/CVPR2025/papers/Yang_VisionZip_Longer_is_Better_but_Not_Necessary_in_Vision_Language_CVPR_2025_paper.pdf)（CVPR 2025） | Fig.1, p.1；Fig.3, p.3；Fig.4, p.7 | token 状态、压缩前后长度、1×N benchmark 小面板 | 雷达图；不同单位共轴；以相近颜色承载不同语义 |
 | [Conical Visual Concentration / PyramidDrop](https://openaccess.thecvf.com/content/CVPR2025/papers/Xing_Conical_Visual_Concentration_for_Efficient_Large_Vision-Language_Models_CVPR_2025_paper.pdf)（CVPR 2025） | Fig.1, p.2；Fig.2, p.4；Fig.3, p.8 | 共享 stage 轴、暖色操作条、等宽同构曲线分面 | 每个 panel 随意换主色，使颜色含义漂移 |
 | [SparseVLM](https://arxiv.org/pdf/2410.04417)（ICML 2025） | Fig.1, p.2；Fig.2, p.4 | 白底细描边、矩阵/token ID 的紧凑语法、严格列对齐 | 红/蓝只靠色相区分；大面积装饰性圆角底板 |
@@ -84,11 +86,11 @@
 ### FIG:1 prompt — RBM vs post-merger pipeline
 
 ```text
-Create an editable vector scientific figure for a top-tier computer-vision paper, full-width landscape, about 7.1 x 2.8 inches, white background, flat 2D vector style, ACM two-column print readability. Use a strict two-row comparison with one shared left-to-right stage axis and perfectly aligned columns. Panel (a) title: "RBM: pre-merger selection (ours)". Panel (b) title: "Post-merger selection".
+Create an editable vector scientific figure for a top-tier computer-vision paper, full-width landscape, about 7.1 x 3.0 inches, white background, flat 2D vector style, ACM two-column print readability. Use a three-column overview inspired by recent VLM compression papers, with no decorative outer card. Left column (about 22% width): one real input image, a clean patch-division inset, and a shared ViT block, shown only once. Middle column (about 53% width): a strict two-row comparison with one shared left-to-right stage axis and perfectly aligned modules. Panel (a) title: "RBM: pre-merger selection (ours)". Panel (b) title: "Post-merger selection". Right column (about 25% width): two aligned token-grid close-ups from the same input, labeled "rank before merger" and "rank after merger", showing only token state and operation order, similar in layout density to SparseVLM Fig.1.
 
 In both rows use exactly the same shapes, sizes, colors, and typography for the shared modules: Image -> ViT -> native 2x2 merger -> LLM. Only the position of one identical amber module labeled "L2 rank + top-k" changes. In panel (a), place it between ViT and native merger: Image -> ViT, subtitle "2x2 units (N)" -> L2 rank + top-k -> "kN kept" -> native 2x2 merger -> LLM. In panel (b), place it after the native merger: Image -> ViT, subtitle "2x2 units (N)" -> native 2x2 merger -> "N merged" -> L2 rank + top-k -> "kN kept" -> LLM. Add a small dashed orange callout from the panel-(b) ranking stage to "FastV: prune at LLM layer 2"; it is a secondary variant, not part of the main lane.
 
-Show token states with compact glyphs: a 2x2 blue grid for a raw 32 px unit, solid blue squares for kept tokens, pale gray hatched squares with x marks for dropped tokens, and four small cells converging into one pale-yellow outlined square for a merged token. Add one compact shared legend at the bottom: "kept", "dropped", "merged". Add the labels "32 px footprint" and "retention k" once, without prose paragraphs.
+Show token states with compact glyphs: a 2x2 blue grid for a raw 32 px unit, solid blue squares for kept tokens, pale gray hatched squares with x marks for dropped tokens, and four small cells converging into one pale-yellow outlined square for a merged token. In the right-column close-ups, use a lightly faded copy of the same image under an aligned patch grid; kept units remain saturated and dropped units become pale gray with x marks. These are schematic selection masks, not attention heatmaps: do not invent attention values, saliency colors, or question-specific evidence. Add one compact shared legend at the bottom: "kept", "dropped", "merged". Add the labels "32 px footprint" and "retention k" once, without prose paragraphs.
 
 Color system: shared backbone light blue #DCE6F5 with dark blue border #2F5597; identical ranking module amber #F2BA02 with pale fill #FFF2CC; post/FastV secondary dashed accent #EE822F; kept token #3A7EC7; dropped token #D9DEE7 plus hatch/x; text #222222; arrows #5B6573. Use Arial/Helvetica, panel titles 9-10 pt semibold, all other text at least 7 pt at final size, 0.9-1.1 pt borders, orthogonal arrows. The visual message must be that stage is the only manipulated variable: iso-model, iso-token, iso-selector. No gradients, shadows, 3D, clip-art, decorative icons, rounded card background, or extra modules. Do not invent labels.
 ```
