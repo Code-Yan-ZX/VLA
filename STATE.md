@@ -1,7 +1,7 @@
 # STATE.md — 当前项目状态（主窗口维护，保持 ≤30 行）
 
 > 项目：VLM 视觉 token 压缩 · 目标：**Rank-Before-Merge → ACM MM'27**
-> 最近更新：2026-07-30 · **投稿形态仅差渲染**：acmart 转换就绪（drafts/latex/，静态自查全 PASS）+ supp 全填（S1–S9）+ bib 20 条核真。**user 指示：图 user 手绘（规格 drafts/figs_spec_for_user.md），渲染押后至图齐**；编译环境届时再定。渲染定稿 → 二次升级 user 投稿 go/no-go。
+> 最近更新：2026-07-31 · **投稿形态仅差渲染**：acmart 转换就绪（drafts/latex/，静态自查全 PASS）+ supp 全填（S1–S9）+ bib 20 条核真。图规格已按 7 篇顶会论文实图补齐（配色/版式/FIG:1–4 prompts；`drafts/figs_spec_for_user.md`，调研 `drafts/research/method_figure_survey.md`）；**user 手绘 3 图，渲染押后至图齐**。渲染定稿 → 二次升级 user 投稿 go/no-go。
 
 ## ★ 实验已完成（全官方指标·full split）
 - **Qwen 主表 26/26**：text-dense pre 全胜 vs post（Q3 +38.4/+24.3pp/+363pts，z≥12）；GQA post 显著微胜 +2.6–2.8pp（1/10 量级，无 crossover）。digest j7_main_table.md
