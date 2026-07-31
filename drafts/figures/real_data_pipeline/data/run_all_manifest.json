@@ -1,0 +1,84 @@
+{
+  "pipeline": "real_data_pipeline_run_all",
+  "orchestrator": "drafts/figures/real_data_pipeline/scripts/run_all.sh",
+  "timestamp_utc": "2026-07-31T09:12:26+00:00",
+  "git_head": "4b3b74f3b6e8f1722c30f6ad86a278b1af99427e",
+  "source_date_epoch": "0",
+  "conda_env": "qwen3vl_clean",
+  "python": "3.10.20",
+  "package_versions": {
+    "numpy": "2.2.6",
+    "matplotlib": "3.10.9",
+    "scipy": "1.15.3",
+    "torch": "2.10.0",
+    "pillow": "12.2.0",
+    "vllm": "0.19.0",
+    "transformers": "4.57.6"
+  },
+  "poppler": "pdfinfo version 0.86.1",
+  "stages_available": [
+    "capture",
+    "validate",
+    "render_fig1",
+    "render_fig2",
+    "render_fig3",
+    "verify_pdf"
+  ],
+  "stages_selected": [
+    "capture",
+    "validate",
+    "render_fig1",
+    "render_fig2",
+    "render_fig3",
+    "verify_pdf"
+  ],
+  "stage_status": {
+    "capture": "ok",
+    "validate": "ok",
+    "render_fig1": "ok",
+    "render_fig2": "ok",
+    "render_fig3": "ok",
+    "verify_pdf": "ok"
+  },
+  "commands": [
+    {
+      "stage": "capture",
+      "command": "python drafts/figures/real_data_pipeline/scripts/capture_real_l2.py --input-dir drafts/figures/real_data_pipeline/inputs --output-dir drafts/figures/real_data_pipeline/data --model-family qwen3vl --model-id Qwen/Qwen3-VL-8B-Instruct --keep-ratio 0.25 --max-pixels 1500000 --seed 0 --skip-existing"
+    },
+    {
+      "stage": "validate",
+      "command": "python drafts/figures/real_data_pipeline/scripts/validate_real_l2.py --data-dir drafts/figures/real_data_pipeline/data --keep-ratio 0.25"
+    },
+    {
+      "stage": "render_fig1",
+      "command": "python drafts/figures/gen_fig1_rbm.py --batch-dir drafts/figures/real_data_pipeline/data --inputs-dir drafts/figures/real_data_pipeline/inputs --outdir drafts/figures/real_data_pipeline/outputs"
+    },
+    {
+      "stage": "render_fig1",
+      "command": "python drafts/figures/real_data_pipeline/scripts/render_compare.py --data-dir drafts/figures/real_data_pipeline/data --inputs-dir drafts/figures/real_data_pipeline/inputs --outdir drafts/figures/real_data_pipeline/outputs --validation-report drafts/figures/real_data_pipeline/data/validation_report.json"
+    },
+    {
+      "stage": "render_fig1",
+      "command": "python - drafts/figures/real_data_pipeline/data/comparison_summary.json 10"
+    },
+    {
+      "stage": "render_fig2",
+      "command": "python drafts/figures/real_data_pipeline/scripts/render_fig2.py --values drafts/figures/real_data_pipeline/data/fig2_values.json --outdir drafts/figures/real_data_pipeline/outputs"
+    },
+    {
+      "stage": "render_fig3",
+      "command": "python drafts/figures/real_data_pipeline/scripts/render_fig3.py --values drafts/figures/real_data_pipeline/data/fig3_values.json --outdir drafts/figures/real_data_pipeline/outputs"
+    },
+    {
+      "stage": "verify_pdf",
+      "command": "python drafts/figures/real_data_pipeline/scripts/run_visual_qa.py --all-final --outdir drafts/figures/real_data_pipeline/outputs --scratch /tmp/qa/all_final"
+    }
+  ],
+  "notes": [
+    "all commands executed from the repo root (relative paths only)",
+    "capture runs with --skip-existing (resume; no model load if all exist)",
+    "validate always runs the gate-7 GPU re-capture (never --skip-repeatability)",
+    "render stages are deterministic for a fixed SOURCE_DATE_EPOCH",
+    "verify_pdf = run_visual_qa.py --all-final (23 final PDFs)"
+  ]
+}

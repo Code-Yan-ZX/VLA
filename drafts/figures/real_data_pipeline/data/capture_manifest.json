@@ -1,0 +1,199 @@
+{
+  "pipeline": "real_data_l2_capture",
+  "input_dir": "drafts/figures/real_data_pipeline/inputs",
+  "capture_script": "drafts/figures/real_data_pipeline/scripts/capture_real_l2.py",
+  "model_family": "qwen3vl",
+  "model_id": "Qwen/Qwen3-VL-8B-Instruct",
+  "resolved_revision": "0c351dd01ed87e9c1b53cbc748cba10e6187ff3b",
+  "processor_class": "Qwen3VLProcessor",
+  "model_class": "Qwen3VLForConditionalGeneration",
+  "visual_class": "Qwen3_VisionTransformer",
+  "package_versions": {
+    "vllm": "0.19.0",
+    "transformers": "4.57.6",
+    "torch": "2.10.0+cu128",
+    "numpy": "2.2.6"
+  },
+  "repo_git_commit": "4b3b74f3b6e8f1722c30f6ad86a278b1af99427e",
+  "dtype": "bfloat16",
+  "device": "cuda:0 (NVIDIA A40)",
+  "seed": 0,
+  "max_pixels": 1500000,
+  "keep_ratio": 0.25,
+  "patch_size": 16,
+  "spatial_merge_size": 2,
+  "pre_hook_module": "visual.deepstack_merger_list[0]",
+  "post_hook_definition": "cat([main,ds0,ds1,ds2],dim=1) scored per image split",
+  "score_definitions": {
+    "pre": "pre: mean over 4 patch-feature L2 norms per unit",
+    "post": "post: L2 norm of concatenated [main,ds0,ds1,ds2] post-merger row per unit"
+  },
+  "tie_break_rule": "sort by score descending; ties broken by ascending unit index (stable deterministic top-k); rank 1 = largest score",
+  "capture_prompt": "Describe this image.",
+  "k_formula": "max(1, round(N*keep_ratio))",
+  "n_samples": 10,
+  "samples": [
+    {
+      "sample_id": "df7282e1-f246-4955-9fdb-f65bea9844f1",
+      "original_filename": "df7282e1-f246-4955-9fdb-f65bea9844f1.png",
+      "n_units": 1144,
+      "k": 286,
+      "grid_thw": [
+        1,
+        52,
+        88
+      ],
+      "unit_grid_hw": [
+        26,
+        44
+      ],
+      "pre_post_topk_jaccard": 0.2599
+    },
+    {
+      "sample_id": "微信图片_20260731144845_69_123",
+      "original_filename": "微信图片_20260731144845_69_123.jpg",
+      "n_units": 6820,
+      "k": 1705,
+      "grid_thw": [
+        1,
+        220,
+        124
+      ],
+      "unit_grid_hw": [
+        110,
+        62
+      ],
+      "pre_post_topk_jaccard": 0.3478
+    },
+    {
+      "sample_id": "微信图片_20260731144850_70_123",
+      "original_filename": "微信图片_20260731144850_70_123.jpg",
+      "n_units": 11844,
+      "k": 2961,
+      "grid_thw": [
+        1,
+        188,
+        252
+      ],
+      "unit_grid_hw": [
+        94,
+        126
+      ],
+      "pre_post_topk_jaccard": 0.3001
+    },
+    {
+      "sample_id": "微信图片_20260731144854_71_123",
+      "original_filename": "微信图片_20260731144854_71_123.jpg",
+      "n_units": 11844,
+      "k": 2961,
+      "grid_thw": [
+        1,
+        188,
+        252
+      ],
+      "unit_grid_hw": [
+        94,
+        126
+      ],
+      "pre_post_topk_jaccard": 0.291
+    },
+    {
+      "sample_id": "微信图片_20260731144900_72_123",
+      "original_filename": "微信图片_20260731144900_72_123.jpg",
+      "n_units": 16224,
+      "k": 4056,
+      "grid_thw": [
+        1,
+        208,
+        312
+      ],
+      "unit_grid_hw": [
+        104,
+        156
+      ],
+      "pre_post_topk_jaccard": 0.2482
+    },
+    {
+      "sample_id": "微信图片_20260731144904_73_123",
+      "original_filename": "微信图片_20260731144904_73_123.jpg",
+      "n_units": 8160,
+      "k": 2040,
+      "grid_thw": [
+        1,
+        136,
+        240
+      ],
+      "unit_grid_hw": [
+        68,
+        120
+      ],
+      "pre_post_topk_jaccard": 0.2683
+    },
+    {
+      "sample_id": "微信图片_20260731144908_74_123",
+      "original_filename": "微信图片_20260731144908_74_123.jpg",
+      "n_units": 8160,
+      "k": 2040,
+      "grid_thw": [
+        1,
+        136,
+        240
+      ],
+      "unit_grid_hw": [
+        68,
+        120
+      ],
+      "pre_post_topk_jaccard": 0.3377
+    },
+    {
+      "sample_id": "微信图片_20260731144913_75_123",
+      "original_filename": "微信图片_20260731144913_75_123.jpg",
+      "n_units": 16170,
+      "k": 4042,
+      "grid_thw": [
+        1,
+        220,
+        294
+      ],
+      "unit_grid_hw": [
+        110,
+        147
+      ],
+      "pre_post_topk_jaccard": 0.2252
+    },
+    {
+      "sample_id": "微信图片_20260731145013_76_123",
+      "original_filename": "微信图片_20260731145013_76_123.jpg",
+      "n_units": 11844,
+      "k": 2961,
+      "grid_thw": [
+        1,
+        188,
+        252
+      ],
+      "unit_grid_hw": [
+        94,
+        126
+      ],
+      "pre_post_topk_jaccard": 0.2541
+    },
+    {
+      "sample_id": "微信图片_20260731145021_77_123",
+      "original_filename": "微信图片_20260731145021_77_123.jpg",
+      "n_units": 16170,
+      "k": 4042,
+      "grid_thw": [
+        1,
+        220,
+        294
+      ],
+      "unit_grid_hw": [
+        110,
+        147
+      ],
+      "pre_post_topk_jaccard": 0.313
+    }
+  ],
+  "timestamp_utc": "2026-07-31T07:20:28+00:00",
+  "capture_command": "drafts/figures/real_data_pipeline/scripts/capture_real_l2.py --input-dir drafts/figures/real_data_pipeline/inputs --output-dir drafts/figures/real_data_pipeline/data --model-family qwen3vl --model-id Qwen/Qwen3-VL-8B-Instruct --keep-ratio 0.25 --max-pixels 1500000 --seed 0"
+}

@@ -5,5 +5,10 @@ inputs/*
 !inputs/*.png
 data/*
 !data/.gitkeep
+# small canonical JSON manifests (safe to commit; NPZ arrays + per-sample sidecars stay ignored)
+!data/capture_manifest.json
+!data/validation_report.json
+!data/fig2_values.json
+!data/fig3_values.json
 outputs/*
 !outputs/.gitkeep

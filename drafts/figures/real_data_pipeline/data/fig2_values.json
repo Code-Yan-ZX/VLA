@@ -1,0 +1,80 @@
+{
+  "figure": "FIG:2",
+  "title": "Three-family pre-minus-post deltas at 25% retention (full official splits)",
+  "sign_convention": "Delta = pre - post, where pre = RBM pre-merger L2 top-k selection and post = post-merger L2 top-k selection (iso-selector, iso-budget). Negative => post wins (GQA).",
+  "retention_pct": 25,
+  "split": "full",
+  "panel_order": ["TextVQA", "DocVQA", "OCRBench", "GQA"],
+  "models": ["Qwen3-VL-8B", "Qwen2.5-VL-7B", "InternVL3-8B"],
+  "benchmarks": {
+    "TextVQA": {
+      "metric": "VQA-acc",
+      "unit": "pp",
+      "unit_long": "percentage points (pp)",
+      "suggested_y_range": [0, 45]
+    },
+    "DocVQA": {
+      "metric": "ANLS",
+      "unit": "pp",
+      "unit_long": "percentage points (pp)",
+      "suggested_y_range": [0, 40]
+    },
+    "OCRBench": {
+      "metric": "OCRBench Final/1000",
+      "unit": "pts",
+      "unit_long": "points on the OCRBench Final/1000 scale (NOT pp)",
+      "suggested_y_range": [0, 480]
+    },
+    "GQA": {
+      "metric": "accuracy",
+      "unit": "pp",
+      "unit_long": "percentage points (pp)",
+      "suggested_y_range": [-3.5, 0.5]
+    }
+  },
+  "values": {
+    "Qwen3-VL-8B": {"TextVQA": 38.4, "DocVQA": 24.3, "OCRBench": 363, "GQA": -2.8},
+    "Qwen2.5-VL-7B": {"TextVQA": 26.1, "DocVQA": 11.0, "OCRBench": 293, "GQA": -2.6},
+    "InternVL3-8B": {"TextVQA": 37.4, "DocVQA": 34.6, "OCRBench": 432, "GQA": -0.4}
+  },
+  "provenance": {
+    "audited": true,
+    "primary_source": {
+      "file": "drafts/figs_spec_for_user.md",
+      "lines": "L16-26 (FIG:2 spec; audited value table at L19-23)",
+      "note": "authoritative layout spec; values marked official + audited"
+    },
+    "cross_checks": [
+      {
+        "file": "experiments/j7_main_table.md",
+        "lines": "L7-13 (Qwen3-VL-8B: L10 TextVQA, L11 DocVQA, L12 OCRBench, L13 GQA); L15-21 (Qwen2.5-VL-7B: L18 TextVQA, L19 DocVQA, L20 OCRBench, L21 GQA)",
+        "covers": ["Qwen3-VL-8B", "Qwen2.5-VL-7B"],
+        "result": "match: all 8 audited deltas identical to spec (incl. GQA -2.8 / -2.6 with post significantly ahead, z~4.5 / 4.1, n=12578)"
+      },
+      {
+        "file": "experiments/internvl3_main_matrix.md",
+        "lines": "L23-26 (L23 TextVQA, L24 DocVQA, L25 OCRBench, L26 GQA)",
+        "covers": ["InternVL3-8B"],
+        "result": "match: all 4 audited deltas identical to spec (+37.4 / +34.6 / +432 / -0.4 tie)"
+      }
+    ],
+    "rounding_note": "Display-rounding only: recomputing deltas from the 3-dp pre/post values printed in the digests gives +38.3 (TextVQA Q3) and +26.0 (TextVQA Q2.5) vs audited +38.4 / +26.1; the full-precision audited deltas agree across all three sources. The figure plots the audited values.",
+    "raw_arms_reference": {
+      "note": "pre@25% / post@25% raw values as printed in digests (3 dp), for traceability",
+      "Qwen3-VL-8B": {
+        "TextVQA": [0.605, 0.222], "DocVQA": [0.481, 0.238],
+        "OCRBench": [547, 184], "GQA": [0.449, 0.477]
+      },
+      "Qwen2.5-VL-7B": {
+        "TextVQA": [0.702, 0.442], "DocVQA": [0.636, 0.526],
+        "OCRBench": [476, 183], "GQA": [0.559, 0.585]
+      },
+      "InternVL3-8B": {
+        "TextVQA": [0.789, 0.4148], "DocVQA": [0.7284, 0.382],
+        "OCRBench": [753, 321], "GQA": [0.5993, 0.6031]
+      }
+    },
+    "generated": "2026-07-31",
+    "uncertainty": "none plotted; per spec no error bars (binomial stderr available in j7 digest but not part of this figure's definition)"
+  }
+}

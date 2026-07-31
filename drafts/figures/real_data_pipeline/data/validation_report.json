@@ -1,0 +1,554 @@
+{
+  "pipeline": "real_data_l2_validation",
+  "data_dir": "drafts/figures/real_data_pipeline/data",
+  "keep_ratio": 0.25,
+  "k_formula": "max(1, round(N*keep_ratio))",
+  "geometry_assertion_basis": "Verified Qwen3-VL geometry: PRE and POST per-unit arrays are both derived from the SAME grid_thw patch grid (t=1, h, w). num_units = h*w//MERGE^2 (MERGE=spatial_merge_size=2). Units are in row-major patch order with NO window permutation (qwen3_vl.py visual.forward: patch_embed -> +pos_embeds -> 27 blocks in row-major patch order -> mergers), so unit u maps to (u//n_cols, u%n_cols) with n_cols = w//MERGE. PRE = deepstack_merger_list[0] input reshaped (num_units, 4, ctx); POST = cat([main,ds0,ds1,ds2],dim=1) split per image -> both index the identical unit u in the identical order.",
+  "hook_check": {
+    "pass": true,
+    "detail": "inspect.getsource(wrap_capture): wrappers call original forward (_orig(...))=True and return its output unchanged (return out)=True; cap is reset (mts.reset) and rebuilt per sample in capture_real_l2, and only derived float32 arrays are persisted (gate 8 per-sample checks NPZ keys == 8 expected, no hidden states)."
+  },
+  "repeatability": {
+    "pass": true,
+    "sample_id": "df7282e1-f246-4955-9fdb-f65bea9844f1",
+    "bit_identical": true,
+    "observed_max_abs_diff": 0.0,
+    "tolerance_recorded": 0.0,
+    "int_bool_exact": true,
+    "per_array": {
+      "pre_l2": {
+        "dtype": "float32",
+        "max_abs_diff": 0.0
+      },
+      "post_l2": {
+        "dtype": "float32",
+        "max_abs_diff": 0.0
+      },
+      "pre_keep": {
+        "dtype": "bool",
+        "identical": true
+      },
+      "post_keep": {
+        "dtype": "bool",
+        "identical": true
+      },
+      "pre_rank": {
+        "dtype": "int32",
+        "identical": true
+      },
+      "post_rank": {
+        "dtype": "int32",
+        "identical": true
+      },
+      "grid_thw": {
+        "dtype": "int32",
+        "identical": true
+      },
+      "unit_grid_hw": {
+        "dtype": "int32",
+        "identical": true
+      }
+    },
+    "temp_output_dir": "<tmp-recapture-dir>",
+    "recapture_log": "<tmp-recapture-log>",
+    "command": "python drafts/figures/real_data_pipeline/scripts/capture_real_l2.py --input-dir drafts/figures/real_data_pipeline/inputs --output-dir <tmp-recapture-dir> --model-family qwen3vl --model-id Qwen/Qwen3-VL-8B-Instruct --keep-ratio 0.25 --max-pixels 1500000 --seed 0 --only-sample df7282e1-f246-4955-9fdb-f65bea9844f1",
+    "detail": "bit_identical=True observed_max_abs_diff=0.0 tolerance=0.0 (expect bit-identical under enforce_eager)"
+  },
+  "tolerance_recorded": 0.0,
+  "n_samples": 10,
+  "all_passed": true,
+  "validation_command": "drafts/figures/real_data_pipeline/scripts/validate_real_l2.py --data-dir drafts/figures/real_data_pipeline/data --keep-ratio 0.25",
+  "timestamp_utc": "2026-07-31T09:11:15+00:00",
+  "samples": [
+    {
+      "sample_id": "df7282e1-f246-4955-9fdb-f65bea9844f1",
+      "n_units": 1144,
+      "k": 286,
+      "grid_thw": [
+        1,
+        52,
+        88
+      ],
+      "unit_grid_hw": [
+        26,
+        44
+      ],
+      "gates": {
+        "1_finite_1d": {
+          "pass": true,
+          "detail": "pre.shape=(1144,) post.shape=(1144,) finite_pre=True finite_post=True"
+        },
+        "2_geometry_count": {
+          "pass": true,
+          "detail": "N=1144 unit_grid_hw=(26,44) product=1144 grid_thw=(1,52,88) h*w//MERGE^2=1144"
+        },
+        "3_k_counts": {
+          "pass": true,
+          "detail": "k=286 (max(1,round(1144*0.25))) pre_keep.sum=286 post_keep.sum=286"
+        },
+        "4_topk_tiebreak": {
+          "pass": true,
+          "detail": "pre_keep matches=True post_keep matches=True rule=score-desc/index-asc"
+        },
+        "5_rank_perm_consistent": {
+          "pass": true,
+          "detail": "permutation_of_1..N=True consistent_with_scores+ties=True"
+        },
+        "6_unit_identity": {
+          "pass": true,
+          "detail": "Verified Qwen3-VL geometry: PRE and POST per-unit arrays are both derived from the SAME grid_thw patch grid (t=1, h, w). num_units = h*w//MERGE^2 (MERGE=spatial_merge_size=2). Units are in row-major patch order with NO window permutation (qwen3_vl.py visual.forward: patch_embed -> +pos_embeds -> 27 blocks in row-major patch order -> mergers), so unit u maps to (u//n_cols, u%n_cols) with n_cols = w//MERGE. PRE = deepstack_merger_list[0] input reshaped (num_units, 4, ctx); POST = cat([main,ds0,ds1,ds2],dim=1) split per image -> both index the identical unit u in the identical order."
+        },
+        "8_no_hidden_states": {
+          "pass": true,
+          "detail": "npz_keys=['grid_thw', 'post_keep', 'post_l2', 'post_rank', 'pre_keep', 'pre_l2', 'pre_rank', 'unit_grid_hw'] == expected_8_keys=True"
+        }
+      },
+      "diagnostics": {
+        "topk_jaccard": 0.259912,
+        "spearman_pre_post_rank": 0.314148
+      },
+      "sample_passed": true
+    },
+    {
+      "sample_id": "微信图片_20260731144845_69_123",
+      "n_units": 6820,
+      "k": 1705,
+      "grid_thw": [
+        1,
+        220,
+        124
+      ],
+      "unit_grid_hw": [
+        110,
+        62
+      ],
+      "gates": {
+        "1_finite_1d": {
+          "pass": true,
+          "detail": "pre.shape=(6820,) post.shape=(6820,) finite_pre=True finite_post=True"
+        },
+        "2_geometry_count": {
+          "pass": true,
+          "detail": "N=6820 unit_grid_hw=(110,62) product=6820 grid_thw=(1,220,124) h*w//MERGE^2=6820"
+        },
+        "3_k_counts": {
+          "pass": true,
+          "detail": "k=1705 (max(1,round(6820*0.25))) pre_keep.sum=1705 post_keep.sum=1705"
+        },
+        "4_topk_tiebreak": {
+          "pass": true,
+          "detail": "pre_keep matches=True post_keep matches=True rule=score-desc/index-asc"
+        },
+        "5_rank_perm_consistent": {
+          "pass": true,
+          "detail": "permutation_of_1..N=True consistent_with_scores+ties=True"
+        },
+        "6_unit_identity": {
+          "pass": true,
+          "detail": "Verified Qwen3-VL geometry: PRE and POST per-unit arrays are both derived from the SAME grid_thw patch grid (t=1, h, w). num_units = h*w//MERGE^2 (MERGE=spatial_merge_size=2). Units are in row-major patch order with NO window permutation (qwen3_vl.py visual.forward: patch_embed -> +pos_embeds -> 27 blocks in row-major patch order -> mergers), so unit u maps to (u//n_cols, u%n_cols) with n_cols = w//MERGE. PRE = deepstack_merger_list[0] input reshaped (num_units, 4, ctx); POST = cat([main,ds0,ds1,ds2],dim=1) split per image -> both index the identical unit u in the identical order."
+        },
+        "8_no_hidden_states": {
+          "pass": true,
+          "detail": "npz_keys=['grid_thw', 'post_keep', 'post_l2', 'post_rank', 'pre_keep', 'pre_l2', 'pre_rank', 'unit_grid_hw'] == expected_8_keys=True"
+        }
+      },
+      "diagnostics": {
+        "topk_jaccard": 0.347826,
+        "spearman_pre_post_rank": 0.477407
+      },
+      "sample_passed": true
+    },
+    {
+      "sample_id": "微信图片_20260731144850_70_123",
+      "n_units": 11844,
+      "k": 2961,
+      "grid_thw": [
+        1,
+        188,
+        252
+      ],
+      "unit_grid_hw": [
+        94,
+        126
+      ],
+      "gates": {
+        "1_finite_1d": {
+          "pass": true,
+          "detail": "pre.shape=(11844,) post.shape=(11844,) finite_pre=True finite_post=True"
+        },
+        "2_geometry_count": {
+          "pass": true,
+          "detail": "N=11844 unit_grid_hw=(94,126) product=11844 grid_thw=(1,188,252) h*w//MERGE^2=11844"
+        },
+        "3_k_counts": {
+          "pass": true,
+          "detail": "k=2961 (max(1,round(11844*0.25))) pre_keep.sum=2961 post_keep.sum=2961"
+        },
+        "4_topk_tiebreak": {
+          "pass": true,
+          "detail": "pre_keep matches=True post_keep matches=True rule=score-desc/index-asc"
+        },
+        "5_rank_perm_consistent": {
+          "pass": true,
+          "detail": "permutation_of_1..N=True consistent_with_scores+ties=True"
+        },
+        "6_unit_identity": {
+          "pass": true,
+          "detail": "Verified Qwen3-VL geometry: PRE and POST per-unit arrays are both derived from the SAME grid_thw patch grid (t=1, h, w). num_units = h*w//MERGE^2 (MERGE=spatial_merge_size=2). Units are in row-major patch order with NO window permutation (qwen3_vl.py visual.forward: patch_embed -> +pos_embeds -> 27 blocks in row-major patch order -> mergers), so unit u maps to (u//n_cols, u%n_cols) with n_cols = w//MERGE. PRE = deepstack_merger_list[0] input reshaped (num_units, 4, ctx); POST = cat([main,ds0,ds1,ds2],dim=1) split per image -> both index the identical unit u in the identical order."
+        },
+        "8_no_hidden_states": {
+          "pass": true,
+          "detail": "npz_keys=['grid_thw', 'post_keep', 'post_l2', 'post_rank', 'pre_keep', 'pre_l2', 'pre_rank', 'unit_grid_hw'] == expected_8_keys=True"
+        }
+      },
+      "diagnostics": {
+        "topk_jaccard": 0.30011,
+        "spearman_pre_post_rank": 0.379072
+      },
+      "sample_passed": true
+    },
+    {
+      "sample_id": "微信图片_20260731144854_71_123",
+      "n_units": 11844,
+      "k": 2961,
+      "grid_thw": [
+        1,
+        188,
+        252
+      ],
+      "unit_grid_hw": [
+        94,
+        126
+      ],
+      "gates": {
+        "1_finite_1d": {
+          "pass": true,
+          "detail": "pre.shape=(11844,) post.shape=(11844,) finite_pre=True finite_post=True"
+        },
+        "2_geometry_count": {
+          "pass": true,
+          "detail": "N=11844 unit_grid_hw=(94,126) product=11844 grid_thw=(1,188,252) h*w//MERGE^2=11844"
+        },
+        "3_k_counts": {
+          "pass": true,
+          "detail": "k=2961 (max(1,round(11844*0.25))) pre_keep.sum=2961 post_keep.sum=2961"
+        },
+        "4_topk_tiebreak": {
+          "pass": true,
+          "detail": "pre_keep matches=True post_keep matches=True rule=score-desc/index-asc"
+        },
+        "5_rank_perm_consistent": {
+          "pass": true,
+          "detail": "permutation_of_1..N=True consistent_with_scores+ties=True"
+        },
+        "6_unit_identity": {
+          "pass": true,
+          "detail": "Verified Qwen3-VL geometry: PRE and POST per-unit arrays are both derived from the SAME grid_thw patch grid (t=1, h, w). num_units = h*w//MERGE^2 (MERGE=spatial_merge_size=2). Units are in row-major patch order with NO window permutation (qwen3_vl.py visual.forward: patch_embed -> +pos_embeds -> 27 blocks in row-major patch order -> mergers), so unit u maps to (u//n_cols, u%n_cols) with n_cols = w//MERGE. PRE = deepstack_merger_list[0] input reshaped (num_units, 4, ctx); POST = cat([main,ds0,ds1,ds2],dim=1) split per image -> both index the identical unit u in the identical order."
+        },
+        "8_no_hidden_states": {
+          "pass": true,
+          "detail": "npz_keys=['grid_thw', 'post_keep', 'post_l2', 'post_rank', 'pre_keep', 'pre_l2', 'pre_rank', 'unit_grid_hw'] == expected_8_keys=True"
+        }
+      },
+      "diagnostics": {
+        "topk_jaccard": 0.29104,
+        "spearman_pre_post_rank": 0.420849
+      },
+      "sample_passed": true
+    },
+    {
+      "sample_id": "微信图片_20260731144900_72_123",
+      "n_units": 16224,
+      "k": 4056,
+      "grid_thw": [
+        1,
+        208,
+        312
+      ],
+      "unit_grid_hw": [
+        104,
+        156
+      ],
+      "gates": {
+        "1_finite_1d": {
+          "pass": true,
+          "detail": "pre.shape=(16224,) post.shape=(16224,) finite_pre=True finite_post=True"
+        },
+        "2_geometry_count": {
+          "pass": true,
+          "detail": "N=16224 unit_grid_hw=(104,156) product=16224 grid_thw=(1,208,312) h*w//MERGE^2=16224"
+        },
+        "3_k_counts": {
+          "pass": true,
+          "detail": "k=4056 (max(1,round(16224*0.25))) pre_keep.sum=4056 post_keep.sum=4056"
+        },
+        "4_topk_tiebreak": {
+          "pass": true,
+          "detail": "pre_keep matches=True post_keep matches=True rule=score-desc/index-asc"
+        },
+        "5_rank_perm_consistent": {
+          "pass": true,
+          "detail": "permutation_of_1..N=True consistent_with_scores+ties=True"
+        },
+        "6_unit_identity": {
+          "pass": true,
+          "detail": "Verified Qwen3-VL geometry: PRE and POST per-unit arrays are both derived from the SAME grid_thw patch grid (t=1, h, w). num_units = h*w//MERGE^2 (MERGE=spatial_merge_size=2). Units are in row-major patch order with NO window permutation (qwen3_vl.py visual.forward: patch_embed -> +pos_embeds -> 27 blocks in row-major patch order -> mergers), so unit u maps to (u//n_cols, u%n_cols) with n_cols = w//MERGE. PRE = deepstack_merger_list[0] input reshaped (num_units, 4, ctx); POST = cat([main,ds0,ds1,ds2],dim=1) split per image -> both index the identical unit u in the identical order."
+        },
+        "8_no_hidden_states": {
+          "pass": true,
+          "detail": "npz_keys=['grid_thw', 'post_keep', 'post_l2', 'post_rank', 'pre_keep', 'pre_l2', 'pre_rank', 'unit_grid_hw'] == expected_8_keys=True"
+        }
+      },
+      "diagnostics": {
+        "topk_jaccard": 0.248192,
+        "spearman_pre_post_rank": 0.299854
+      },
+      "sample_passed": true
+    },
+    {
+      "sample_id": "微信图片_20260731144904_73_123",
+      "n_units": 8160,
+      "k": 2040,
+      "grid_thw": [
+        1,
+        136,
+        240
+      ],
+      "unit_grid_hw": [
+        68,
+        120
+      ],
+      "gates": {
+        "1_finite_1d": {
+          "pass": true,
+          "detail": "pre.shape=(8160,) post.shape=(8160,) finite_pre=True finite_post=True"
+        },
+        "2_geometry_count": {
+          "pass": true,
+          "detail": "N=8160 unit_grid_hw=(68,120) product=8160 grid_thw=(1,136,240) h*w//MERGE^2=8160"
+        },
+        "3_k_counts": {
+          "pass": true,
+          "detail": "k=2040 (max(1,round(8160*0.25))) pre_keep.sum=2040 post_keep.sum=2040"
+        },
+        "4_topk_tiebreak": {
+          "pass": true,
+          "detail": "pre_keep matches=True post_keep matches=True rule=score-desc/index-asc"
+        },
+        "5_rank_perm_consistent": {
+          "pass": true,
+          "detail": "permutation_of_1..N=True consistent_with_scores+ties=True"
+        },
+        "6_unit_identity": {
+          "pass": true,
+          "detail": "Verified Qwen3-VL geometry: PRE and POST per-unit arrays are both derived from the SAME grid_thw patch grid (t=1, h, w). num_units = h*w//MERGE^2 (MERGE=spatial_merge_size=2). Units are in row-major patch order with NO window permutation (qwen3_vl.py visual.forward: patch_embed -> +pos_embeds -> 27 blocks in row-major patch order -> mergers), so unit u maps to (u//n_cols, u%n_cols) with n_cols = w//MERGE. PRE = deepstack_merger_list[0] input reshaped (num_units, 4, ctx); POST = cat([main,ds0,ds1,ds2],dim=1) split per image -> both index the identical unit u in the identical order."
+        },
+        "8_no_hidden_states": {
+          "pass": true,
+          "detail": "npz_keys=['grid_thw', 'post_keep', 'post_l2', 'post_rank', 'pre_keep', 'pre_l2', 'pre_rank', 'unit_grid_hw'] == expected_8_keys=True"
+        }
+      },
+      "diagnostics": {
+        "topk_jaccard": 0.268262,
+        "spearman_pre_post_rank": 0.311274
+      },
+      "sample_passed": true
+    },
+    {
+      "sample_id": "微信图片_20260731144908_74_123",
+      "n_units": 8160,
+      "k": 2040,
+      "grid_thw": [
+        1,
+        136,
+        240
+      ],
+      "unit_grid_hw": [
+        68,
+        120
+      ],
+      "gates": {
+        "1_finite_1d": {
+          "pass": true,
+          "detail": "pre.shape=(8160,) post.shape=(8160,) finite_pre=True finite_post=True"
+        },
+        "2_geometry_count": {
+          "pass": true,
+          "detail": "N=8160 unit_grid_hw=(68,120) product=8160 grid_thw=(1,136,240) h*w//MERGE^2=8160"
+        },
+        "3_k_counts": {
+          "pass": true,
+          "detail": "k=2040 (max(1,round(8160*0.25))) pre_keep.sum=2040 post_keep.sum=2040"
+        },
+        "4_topk_tiebreak": {
+          "pass": true,
+          "detail": "pre_keep matches=True post_keep matches=True rule=score-desc/index-asc"
+        },
+        "5_rank_perm_consistent": {
+          "pass": true,
+          "detail": "permutation_of_1..N=True consistent_with_scores+ties=True"
+        },
+        "6_unit_identity": {
+          "pass": true,
+          "detail": "Verified Qwen3-VL geometry: PRE and POST per-unit arrays are both derived from the SAME grid_thw patch grid (t=1, h, w). num_units = h*w//MERGE^2 (MERGE=spatial_merge_size=2). Units are in row-major patch order with NO window permutation (qwen3_vl.py visual.forward: patch_embed -> +pos_embeds -> 27 blocks in row-major patch order -> mergers), so unit u maps to (u//n_cols, u%n_cols) with n_cols = w//MERGE. PRE = deepstack_merger_list[0] input reshaped (num_units, 4, ctx); POST = cat([main,ds0,ds1,ds2],dim=1) split per image -> both index the identical unit u in the identical order."
+        },
+        "8_no_hidden_states": {
+          "pass": true,
+          "detail": "npz_keys=['grid_thw', 'post_keep', 'post_l2', 'post_rank', 'pre_keep', 'pre_l2', 'pre_rank', 'unit_grid_hw'] == expected_8_keys=True"
+        }
+      },
+      "diagnostics": {
+        "topk_jaccard": 0.337705,
+        "spearman_pre_post_rank": 0.396347
+      },
+      "sample_passed": true
+    },
+    {
+      "sample_id": "微信图片_20260731144913_75_123",
+      "n_units": 16170,
+      "k": 4042,
+      "grid_thw": [
+        1,
+        220,
+        294
+      ],
+      "unit_grid_hw": [
+        110,
+        147
+      ],
+      "gates": {
+        "1_finite_1d": {
+          "pass": true,
+          "detail": "pre.shape=(16170,) post.shape=(16170,) finite_pre=True finite_post=True"
+        },
+        "2_geometry_count": {
+          "pass": true,
+          "detail": "N=16170 unit_grid_hw=(110,147) product=16170 grid_thw=(1,220,294) h*w//MERGE^2=16170"
+        },
+        "3_k_counts": {
+          "pass": true,
+          "detail": "k=4042 (max(1,round(16170*0.25))) pre_keep.sum=4042 post_keep.sum=4042"
+        },
+        "4_topk_tiebreak": {
+          "pass": true,
+          "detail": "pre_keep matches=True post_keep matches=True rule=score-desc/index-asc"
+        },
+        "5_rank_perm_consistent": {
+          "pass": true,
+          "detail": "permutation_of_1..N=True consistent_with_scores+ties=True"
+        },
+        "6_unit_identity": {
+          "pass": true,
+          "detail": "Verified Qwen3-VL geometry: PRE and POST per-unit arrays are both derived from the SAME grid_thw patch grid (t=1, h, w). num_units = h*w//MERGE^2 (MERGE=spatial_merge_size=2). Units are in row-major patch order with NO window permutation (qwen3_vl.py visual.forward: patch_embed -> +pos_embeds -> 27 blocks in row-major patch order -> mergers), so unit u maps to (u//n_cols, u%n_cols) with n_cols = w//MERGE. PRE = deepstack_merger_list[0] input reshaped (num_units, 4, ctx); POST = cat([main,ds0,ds1,ds2],dim=1) split per image -> both index the identical unit u in the identical order."
+        },
+        "8_no_hidden_states": {
+          "pass": true,
+          "detail": "npz_keys=['grid_thw', 'post_keep', 'post_l2', 'post_rank', 'pre_keep', 'pre_l2', 'pre_rank', 'unit_grid_hw'] == expected_8_keys=True"
+        }
+      },
+      "diagnostics": {
+        "topk_jaccard": 0.22522,
+        "spearman_pre_post_rank": 0.297159
+      },
+      "sample_passed": true
+    },
+    {
+      "sample_id": "微信图片_20260731145013_76_123",
+      "n_units": 11844,
+      "k": 2961,
+      "grid_thw": [
+        1,
+        188,
+        252
+      ],
+      "unit_grid_hw": [
+        94,
+        126
+      ],
+      "gates": {
+        "1_finite_1d": {
+          "pass": true,
+          "detail": "pre.shape=(11844,) post.shape=(11844,) finite_pre=True finite_post=True"
+        },
+        "2_geometry_count": {
+          "pass": true,
+          "detail": "N=11844 unit_grid_hw=(94,126) product=11844 grid_thw=(1,188,252) h*w//MERGE^2=11844"
+        },
+        "3_k_counts": {
+          "pass": true,
+          "detail": "k=2961 (max(1,round(11844*0.25))) pre_keep.sum=2961 post_keep.sum=2961"
+        },
+        "4_topk_tiebreak": {
+          "pass": true,
+          "detail": "pre_keep matches=True post_keep matches=True rule=score-desc/index-asc"
+        },
+        "5_rank_perm_consistent": {
+          "pass": true,
+          "detail": "permutation_of_1..N=True consistent_with_scores+ties=True"
+        },
+        "6_unit_identity": {
+          "pass": true,
+          "detail": "Verified Qwen3-VL geometry: PRE and POST per-unit arrays are both derived from the SAME grid_thw patch grid (t=1, h, w). num_units = h*w//MERGE^2 (MERGE=spatial_merge_size=2). Units are in row-major patch order with NO window permutation (qwen3_vl.py visual.forward: patch_embed -> +pos_embeds -> 27 blocks in row-major patch order -> mergers), so unit u maps to (u//n_cols, u%n_cols) with n_cols = w//MERGE. PRE = deepstack_merger_list[0] input reshaped (num_units, 4, ctx); POST = cat([main,ds0,ds1,ds2],dim=1) split per image -> both index the identical unit u in the identical order."
+        },
+        "8_no_hidden_states": {
+          "pass": true,
+          "detail": "npz_keys=['grid_thw', 'post_keep', 'post_l2', 'post_rank', 'pre_keep', 'pre_l2', 'pre_rank', 'unit_grid_hw'] == expected_8_keys=True"
+        }
+      },
+      "diagnostics": {
+        "topk_jaccard": 0.25413,
+        "spearman_pre_post_rank": 0.284473
+      },
+      "sample_passed": true
+    },
+    {
+      "sample_id": "微信图片_20260731145021_77_123",
+      "n_units": 16170,
+      "k": 4042,
+      "grid_thw": [
+        1,
+        220,
+        294
+      ],
+      "unit_grid_hw": [
+        110,
+        147
+      ],
+      "gates": {
+        "1_finite_1d": {
+          "pass": true,
+          "detail": "pre.shape=(16170,) post.shape=(16170,) finite_pre=True finite_post=True"
+        },
+        "2_geometry_count": {
+          "pass": true,
+          "detail": "N=16170 unit_grid_hw=(110,147) product=16170 grid_thw=(1,220,294) h*w//MERGE^2=16170"
+        },
+        "3_k_counts": {
+          "pass": true,
+          "detail": "k=4042 (max(1,round(16170*0.25))) pre_keep.sum=4042 post_keep.sum=4042"
+        },
+        "4_topk_tiebreak": {
+          "pass": true,
+          "detail": "pre_keep matches=True post_keep matches=True rule=score-desc/index-asc"
+        },
+        "5_rank_perm_consistent": {
+          "pass": true,
+          "detail": "permutation_of_1..N=True consistent_with_scores+ties=True"
+        },
+        "6_unit_identity": {
+          "pass": true,
+          "detail": "Verified Qwen3-VL geometry: PRE and POST per-unit arrays are both derived from the SAME grid_thw patch grid (t=1, h, w). num_units = h*w//MERGE^2 (MERGE=spatial_merge_size=2). Units are in row-major patch order with NO window permutation (qwen3_vl.py visual.forward: patch_embed -> +pos_embeds -> 27 blocks in row-major patch order -> mergers), so unit u maps to (u//n_cols, u%n_cols) with n_cols = w//MERGE. PRE = deepstack_merger_list[0] input reshaped (num_units, 4, ctx); POST = cat([main,ds0,ds1,ds2],dim=1) split per image -> both index the identical unit u in the identical order."
+        },
+        "8_no_hidden_states": {
+          "pass": true,
+          "detail": "npz_keys=['grid_thw', 'post_keep', 'post_l2', 'post_rank', 'pre_keep', 'pre_l2', 'pre_rank', 'unit_grid_hw'] == expected_8_keys=True"
+        }
+      },
+      "diagnostics": {
+        "topk_jaccard": 0.312977,
+        "spearman_pre_post_rank": 0.386555
+      },
+      "sample_passed": true
+    }
+  ]
+}

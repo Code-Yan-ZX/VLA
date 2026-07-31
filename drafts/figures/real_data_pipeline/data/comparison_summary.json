@@ -1,0 +1,263 @@
+{
+  "pipeline": "real_data_compare_render",
+  "model": "Qwen3-VL-8B measured merger L2",
+  "keep_ratio": 0.25,
+  "budget_note": "same image, same unit grid, same 25% budget per panel",
+  "fastv_status_global": "skipped_missing_question",
+  "n_rendered": 10,
+  "n_failed": 0,
+  "cross_check_tolerance": 1e-05,
+  "samples": [
+    {
+      "id": "df7282e1-f246-4955-9fdb-f65bea9844f1",
+      "filename": "df7282e1-f246-4955-9fdb-f65bea9844f1.png",
+      "sha256": "9a8350248bbec31d26c18f7b0ff574f64367061bf224ebeeb007149005b7d5b3",
+      "N": 1144,
+      "k": 286,
+      "grid": {
+        "grid_thw": [
+          1,
+          52,
+          88
+        ],
+        "unit_grid_hw": [
+          26,
+          44
+        ]
+      },
+      "jaccard": 0.259912,
+      "spearman": 0.314148,
+      "fastv_status": "skipped_missing_question",
+      "rendered_paths": [
+        "outputs/compare_df7282e1-f246-4955-9fdb-f65bea9844f1.pdf",
+        "outputs/compare_df7282e1-f246-4955-9fdb-f65bea9844f1.png"
+      ]
+    },
+    {
+      "id": "微信图片_20260731144845_69_123",
+      "filename": "微信图片_20260731144845_69_123.jpg",
+      "sha256": "9da09019b1bfc4dc7ba62c0e53f77b43c18e42945d90160845f92224cf48fe41",
+      "N": 6820,
+      "k": 1705,
+      "grid": {
+        "grid_thw": [
+          1,
+          220,
+          124
+        ],
+        "unit_grid_hw": [
+          110,
+          62
+        ]
+      },
+      "jaccard": 0.347826,
+      "spearman": 0.477407,
+      "fastv_status": "skipped_missing_question",
+      "rendered_paths": [
+        "outputs/compare_微信图片_20260731144845_69_123.pdf",
+        "outputs/compare_微信图片_20260731144845_69_123.png"
+      ]
+    },
+    {
+      "id": "微信图片_20260731144850_70_123",
+      "filename": "微信图片_20260731144850_70_123.jpg",
+      "sha256": "912b22a8d0f46a550efd2c7e161ee03557f636d30d5dc22c13096d7270ed2003",
+      "N": 11844,
+      "k": 2961,
+      "grid": {
+        "grid_thw": [
+          1,
+          188,
+          252
+        ],
+        "unit_grid_hw": [
+          94,
+          126
+        ]
+      },
+      "jaccard": 0.30011,
+      "spearman": 0.379072,
+      "fastv_status": "skipped_missing_question",
+      "rendered_paths": [
+        "outputs/compare_微信图片_20260731144850_70_123.pdf",
+        "outputs/compare_微信图片_20260731144850_70_123.png"
+      ]
+    },
+    {
+      "id": "微信图片_20260731144854_71_123",
+      "filename": "微信图片_20260731144854_71_123.jpg",
+      "sha256": "a5be6b38176ad22df8dde54152636ff465bcc6f293b1452c7de74387b4dec937",
+      "N": 11844,
+      "k": 2961,
+      "grid": {
+        "grid_thw": [
+          1,
+          188,
+          252
+        ],
+        "unit_grid_hw": [
+          94,
+          126
+        ]
+      },
+      "jaccard": 0.29104,
+      "spearman": 0.420849,
+      "fastv_status": "skipped_missing_question",
+      "rendered_paths": [
+        "outputs/compare_微信图片_20260731144854_71_123.pdf",
+        "outputs/compare_微信图片_20260731144854_71_123.png"
+      ]
+    },
+    {
+      "id": "微信图片_20260731144900_72_123",
+      "filename": "微信图片_20260731144900_72_123.jpg",
+      "sha256": "af1e9500cc41a98faf172885e2e6423978c2d7e636e012872a907509619f85ec",
+      "N": 16224,
+      "k": 4056,
+      "grid": {
+        "grid_thw": [
+          1,
+          208,
+          312
+        ],
+        "unit_grid_hw": [
+          104,
+          156
+        ]
+      },
+      "jaccard": 0.248192,
+      "spearman": 0.299854,
+      "fastv_status": "skipped_missing_question",
+      "rendered_paths": [
+        "outputs/compare_微信图片_20260731144900_72_123.pdf",
+        "outputs/compare_微信图片_20260731144900_72_123.png"
+      ]
+    },
+    {
+      "id": "微信图片_20260731144904_73_123",
+      "filename": "微信图片_20260731144904_73_123.jpg",
+      "sha256": "c169936d139457494e51500c2d5d3d2d7ef5cd58cd928c8ce8d09fdcdeedc95c",
+      "N": 8160,
+      "k": 2040,
+      "grid": {
+        "grid_thw": [
+          1,
+          136,
+          240
+        ],
+        "unit_grid_hw": [
+          68,
+          120
+        ]
+      },
+      "jaccard": 0.268262,
+      "spearman": 0.311274,
+      "fastv_status": "skipped_missing_question",
+      "rendered_paths": [
+        "outputs/compare_微信图片_20260731144904_73_123.pdf",
+        "outputs/compare_微信图片_20260731144904_73_123.png"
+      ]
+    },
+    {
+      "id": "微信图片_20260731144908_74_123",
+      "filename": "微信图片_20260731144908_74_123.jpg",
+      "sha256": "19a5c741a26c08a0a4d512d53c875d40466db0bbbd3d27bf44562d14513eeca3",
+      "N": 8160,
+      "k": 2040,
+      "grid": {
+        "grid_thw": [
+          1,
+          136,
+          240
+        ],
+        "unit_grid_hw": [
+          68,
+          120
+        ]
+      },
+      "jaccard": 0.337705,
+      "spearman": 0.396347,
+      "fastv_status": "skipped_missing_question",
+      "rendered_paths": [
+        "outputs/compare_微信图片_20260731144908_74_123.pdf",
+        "outputs/compare_微信图片_20260731144908_74_123.png"
+      ]
+    },
+    {
+      "id": "微信图片_20260731144913_75_123",
+      "filename": "微信图片_20260731144913_75_123.jpg",
+      "sha256": "94a46f2067ddfb89e624420fae9de07ffc52357b8d382d983150fb2ff9dea832",
+      "N": 16170,
+      "k": 4042,
+      "grid": {
+        "grid_thw": [
+          1,
+          220,
+          294
+        ],
+        "unit_grid_hw": [
+          110,
+          147
+        ]
+      },
+      "jaccard": 0.22522,
+      "spearman": 0.297159,
+      "fastv_status": "skipped_missing_question",
+      "rendered_paths": [
+        "outputs/compare_微信图片_20260731144913_75_123.pdf",
+        "outputs/compare_微信图片_20260731144913_75_123.png"
+      ]
+    },
+    {
+      "id": "微信图片_20260731145013_76_123",
+      "filename": "微信图片_20260731145013_76_123.jpg",
+      "sha256": "4a8576c238445def4b806d7e641f54a2de50145c82723bcf7853da8751f4b5ac",
+      "N": 11844,
+      "k": 2961,
+      "grid": {
+        "grid_thw": [
+          1,
+          188,
+          252
+        ],
+        "unit_grid_hw": [
+          94,
+          126
+        ]
+      },
+      "jaccard": 0.25413,
+      "spearman": 0.284473,
+      "fastv_status": "skipped_missing_question",
+      "rendered_paths": [
+        "outputs/compare_微信图片_20260731145013_76_123.pdf",
+        "outputs/compare_微信图片_20260731145013_76_123.png"
+      ]
+    },
+    {
+      "id": "微信图片_20260731145021_77_123",
+      "filename": "微信图片_20260731145021_77_123.jpg",
+      "sha256": "441b83ae6099ddde59fb6a11803b512278aa35d2085eb9866e6768d39dd35dbf",
+      "N": 16170,
+      "k": 4042,
+      "grid": {
+        "grid_thw": [
+          1,
+          220,
+          294
+        ],
+        "unit_grid_hw": [
+          110,
+          147
+        ]
+      },
+      "jaccard": 0.312977,
+      "spearman": 0.386555,
+      "fastv_status": "skipped_missing_question",
+      "rendered_paths": [
+        "outputs/compare_微信图片_20260731145021_77_123.pdf",
+        "outputs/compare_微信图片_20260731145021_77_123.png"
+      ]
+    }
+  ],
+  "failures": []
+}
