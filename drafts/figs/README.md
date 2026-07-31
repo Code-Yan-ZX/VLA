@@ -8,3 +8,5 @@ PDF 矢量优先（SVG 亦可）；caption 草稿见 paper_acmmm.tex 内 FIG 占
 
 FIG:1 生成器：`drafts/figures/gen_fig1_rbm.py`。当前图像遮罩只用于排版检查，
 投稿前必须用实测 merger-input/output L2 网格替换；输入截图因授权问题不入库。
+服务器端真实数据捕获、校验和三图重绘任务说明见
+`drafts/figures/real_data_pipeline/CLAUDE_CODE_PROMPT.md`。
