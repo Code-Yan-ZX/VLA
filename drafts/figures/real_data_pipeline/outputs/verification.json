@@ -1,0 +1,933 @@
+{
+  "schema": "real_data_pipeline_verification/v1",
+  "generated_utc": "2026-07-31T09:13:15+00:00",
+  "pipeline_dir": "drafts/figures/real_data_pipeline",
+  "pdf_qa": {
+    "tool": "run_visual_qa.py --all-final",
+    "thresholds": {
+      "std_min": 6.0,
+      "mean_max": 251.0,
+      "white_thresh": 248,
+      "white_frac_max": 0.96,
+      "fig1_expected_width_in": 7.09,
+      "width_tol_in": 0.01,
+      "clip_frame_px": 2,
+      "clip_ink_frac_max": 0.3
+    },
+    "composition": {
+      "counts": {
+        "fig1": 10,
+        "compare": 10,
+        "contact_sheet": 1,
+        "fig2": 1,
+        "fig3": 1
+      },
+      "expected_total": 23,
+      "actual_total": 23,
+      "ok": true
+    },
+    "n_files": 23,
+    "n_pass": 23,
+    "all_pass": true,
+    "files": [
+      {
+        "file": "compare_df7282e1-f246-4955-9fdb-f65bea9844f1.pdf",
+        "kind": "compare",
+        "pages": 1,
+        "width_in": 7.09,
+        "height_in": 6.55,
+        "dpi_checked": 250,
+        "blank_check": {
+          "pass": true,
+          "pixel_mean": 203.19,
+          "pixel_std": 65.8,
+          "white_fraction": 0.464,
+          "is_blank": false,
+          "excessive_whitespace": false
+        },
+        "clip_check": {
+          "pass": true,
+          "frame_px": 2,
+          "frame_ink_fraction": 0.0,
+          "clipped": false
+        },
+        "verdict": "PASS"
+      },
+      {
+        "file": "compare_微信图片_20260731144845_69_123.pdf",
+        "kind": "compare",
+        "pages": 1,
+        "width_in": 7.09,
+        "height_in": 6.55,
+        "dpi_checked": 250,
+        "blank_check": {
+          "pass": true,
+          "pixel_mean": 232.86,
+          "pixel_std": 49.82,
+          "white_fraction": 0.8082,
+          "is_blank": false,
+          "excessive_whitespace": false
+        },
+        "clip_check": {
+          "pass": true,
+          "frame_px": 2,
+          "frame_ink_fraction": 0.0,
+          "clipped": false
+        },
+        "verdict": "PASS"
+      },
+      {
+        "file": "compare_微信图片_20260731144850_70_123.pdf",
+        "kind": "compare",
+        "pages": 1,
+        "width_in": 7.09,
+        "height_in": 6.55,
+        "dpi_checked": 250,
+        "blank_check": {
+          "pass": true,
+          "pixel_mean": 201.56,
+          "pixel_std": 69.07,
+          "white_fraction": 0.5715,
+          "is_blank": false,
+          "excessive_whitespace": false
+        },
+        "clip_check": {
+          "pass": true,
+          "frame_px": 2,
+          "frame_ink_fraction": 0.0,
+          "clipped": false
+        },
+        "verdict": "PASS"
+      },
+      {
+        "file": "compare_微信图片_20260731144854_71_123.pdf",
+        "kind": "compare",
+        "pages": 1,
+        "width_in": 7.09,
+        "height_in": 6.55,
+        "dpi_checked": 250,
+        "blank_check": {
+          "pass": true,
+          "pixel_mean": 212.15,
+          "pixel_std": 59.51,
+          "white_fraction": 0.5715,
+          "is_blank": false,
+          "excessive_whitespace": false
+        },
+        "clip_check": {
+          "pass": true,
+          "frame_px": 2,
+          "frame_ink_fraction": 0.0,
+          "clipped": false
+        },
+        "verdict": "PASS"
+      },
+      {
+        "file": "compare_微信图片_20260731144900_72_123.pdf",
+        "kind": "compare",
+        "pages": 1,
+        "width_in": 7.09,
+        "height_in": 6.55,
+        "dpi_checked": 250,
+        "blank_check": {
+          "pass": true,
+          "pixel_mean": 201.19,
+          "pixel_std": 64.0,
+          "white_fraction": 0.5231,
+          "is_blank": false,
+          "excessive_whitespace": false
+        },
+        "clip_check": {
+          "pass": true,
+          "frame_px": 2,
+          "frame_ink_fraction": 0.0,
+          "clipped": false
+        },
+        "verdict": "PASS"
+      },
+      {
+        "file": "compare_微信图片_20260731144904_73_123.pdf",
+        "kind": "compare",
+        "pages": 1,
+        "width_in": 7.09,
+        "height_in": 6.55,
+        "dpi_checked": 250,
+        "blank_check": {
+          "pass": true,
+          "pixel_mean": 189.18,
+          "pixel_std": 71.39,
+          "white_fraction": 0.4664,
+          "is_blank": false,
+          "excessive_whitespace": false
+        },
+        "clip_check": {
+          "pass": true,
+          "frame_px": 2,
+          "frame_ink_fraction": 0.0,
+          "clipped": false
+        },
+        "verdict": "PASS"
+      },
+      {
+        "file": "compare_微信图片_20260731144908_74_123.pdf",
+        "kind": "compare",
+        "pages": 1,
+        "width_in": 7.09,
+        "height_in": 6.55,
+        "dpi_checked": 250,
+        "blank_check": {
+          "pass": true,
+          "pixel_mean": 193.99,
+          "pixel_std": 69.51,
+          "white_fraction": 0.4671,
+          "is_blank": false,
+          "excessive_whitespace": false
+        },
+        "clip_check": {
+          "pass": true,
+          "frame_px": 2,
+          "frame_ink_fraction": 0.0,
+          "clipped": false
+        },
+        "verdict": "PASS"
+      },
+      {
+        "file": "compare_微信图片_20260731144913_75_123.pdf",
+        "kind": "compare",
+        "pages": 1,
+        "width_in": 7.09,
+        "height_in": 6.55,
+        "dpi_checked": 250,
+        "blank_check": {
+          "pass": true,
+          "pixel_mean": 201.42,
+          "pixel_std": 68.16,
+          "white_fraction": 0.5728,
+          "is_blank": false,
+          "excessive_whitespace": false
+        },
+        "clip_check": {
+          "pass": true,
+          "frame_px": 2,
+          "frame_ink_fraction": 0.0,
+          "clipped": false
+        },
+        "verdict": "PASS"
+      },
+      {
+        "file": "compare_微信图片_20260731145013_76_123.pdf",
+        "kind": "compare",
+        "pages": 1,
+        "width_in": 7.09,
+        "height_in": 6.55,
+        "dpi_checked": 250,
+        "blank_check": {
+          "pass": true,
+          "pixel_mean": 210.42,
+          "pixel_std": 61.89,
+          "white_fraction": 0.5715,
+          "is_blank": false,
+          "excessive_whitespace": false
+        },
+        "clip_check": {
+          "pass": true,
+          "frame_px": 2,
+          "frame_ink_fraction": 0.0,
+          "clipped": false
+        },
+        "verdict": "PASS"
+      },
+      {
+        "file": "compare_微信图片_20260731145021_77_123.pdf",
+        "kind": "compare",
+        "pages": 1,
+        "width_in": 7.09,
+        "height_in": 6.55,
+        "dpi_checked": 250,
+        "blank_check": {
+          "pass": true,
+          "pixel_mean": 205.45,
+          "pixel_std": 64.12,
+          "white_fraction": 0.5728,
+          "is_blank": false,
+          "excessive_whitespace": false
+        },
+        "clip_check": {
+          "pass": true,
+          "frame_px": 2,
+          "frame_ink_fraction": 0.0,
+          "clipped": false
+        },
+        "verdict": "PASS"
+      },
+      {
+        "file": "fig1_contact_sheet.pdf",
+        "kind": "contact_sheet",
+        "pages": 1,
+        "width_in": 7.09,
+        "height_in": 3.22,
+        "dpi_checked": 250,
+        "blank_check": {
+          "pass": true,
+          "pixel_mean": 212.84,
+          "pixel_std": 52.01,
+          "white_fraction": 0.4907,
+          "is_blank": false,
+          "excessive_whitespace": false
+        },
+        "clip_check": {
+          "pass": true,
+          "frame_px": 2,
+          "frame_ink_fraction": 0.0,
+          "clipped": false
+        },
+        "verdict": "PASS"
+      },
+      {
+        "file": "fig1_df7282e1-f246-4955-9fdb-f65bea9844f1.pdf",
+        "kind": "fig1",
+        "pages": 1,
+        "width_in": 7.09,
+        "height_in": 3.85,
+        "dpi_checked": 250,
+        "blank_check": {
+          "pass": true,
+          "pixel_mean": 218.73,
+          "pixel_std": 59.59,
+          "white_fraction": 0.4679,
+          "is_blank": false,
+          "excessive_whitespace": false
+        },
+        "clip_check": {
+          "pass": true,
+          "frame_px": 2,
+          "frame_ink_fraction": 0.0,
+          "clipped": false
+        },
+        "verdict": "PASS"
+      },
+      {
+        "file": "fig1_微信图片_20260731144845_69_123.pdf",
+        "kind": "fig1",
+        "pages": 1,
+        "width_in": 7.09,
+        "height_in": 3.85,
+        "dpi_checked": 250,
+        "blank_check": {
+          "pass": true,
+          "pixel_mean": 231.19,
+          "pixel_std": 52.36,
+          "white_fraction": 0.5028,
+          "is_blank": false,
+          "excessive_whitespace": false
+        },
+        "clip_check": {
+          "pass": true,
+          "frame_px": 2,
+          "frame_ink_fraction": 0.0,
+          "clipped": false
+        },
+        "verdict": "PASS"
+      },
+      {
+        "file": "fig1_微信图片_20260731144850_70_123.pdf",
+        "kind": "fig1",
+        "pages": 1,
+        "width_in": 7.09,
+        "height_in": 3.85,
+        "dpi_checked": 250,
+        "blank_check": {
+          "pass": true,
+          "pixel_mean": 213.54,
+          "pixel_std": 68.26,
+          "white_fraction": 0.4782,
+          "is_blank": false,
+          "excessive_whitespace": false
+        },
+        "clip_check": {
+          "pass": true,
+          "frame_px": 2,
+          "frame_ink_fraction": 0.0,
+          "clipped": false
+        },
+        "verdict": "PASS"
+      },
+      {
+        "file": "fig1_微信图片_20260731144854_71_123.pdf",
+        "kind": "fig1",
+        "pages": 1,
+        "width_in": 7.09,
+        "height_in": 3.85,
+        "dpi_checked": 250,
+        "blank_check": {
+          "pass": true,
+          "pixel_mean": 222.27,
+          "pixel_std": 55.87,
+          "white_fraction": 0.4782,
+          "is_blank": false,
+          "excessive_whitespace": false
+        },
+        "clip_check": {
+          "pass": true,
+          "frame_px": 2,
+          "frame_ink_fraction": 0.0,
+          "clipped": false
+        },
+        "verdict": "PASS"
+      },
+      {
+        "file": "fig1_微信图片_20260731144900_72_123.pdf",
+        "kind": "fig1",
+        "pages": 1,
+        "width_in": 7.09,
+        "height_in": 3.85,
+        "dpi_checked": 250,
+        "blank_check": {
+          "pass": true,
+          "pixel_mean": 215.11,
+          "pixel_std": 62.57,
+          "white_fraction": 0.4732,
+          "is_blank": false,
+          "excessive_whitespace": false
+        },
+        "clip_check": {
+          "pass": true,
+          "frame_px": 2,
+          "frame_ink_fraction": 0.0,
+          "clipped": false
+        },
+        "verdict": "PASS"
+      },
+      {
+        "file": "fig1_微信图片_20260731144904_73_123.pdf",
+        "kind": "fig1",
+        "pages": 1,
+        "width_in": 7.09,
+        "height_in": 3.85,
+        "dpi_checked": 250,
+        "blank_check": {
+          "pass": true,
+          "pixel_mean": 206.63,
+          "pixel_std": 71.85,
+          "white_fraction": 0.4699,
+          "is_blank": false,
+          "excessive_whitespace": false
+        },
+        "clip_check": {
+          "pass": true,
+          "frame_px": 2,
+          "frame_ink_fraction": 0.0,
+          "clipped": false
+        },
+        "verdict": "PASS"
+      },
+      {
+        "file": "fig1_微信图片_20260731144908_74_123.pdf",
+        "kind": "fig1",
+        "pages": 1,
+        "width_in": 7.09,
+        "height_in": 3.85,
+        "dpi_checked": 250,
+        "blank_check": {
+          "pass": true,
+          "pixel_mean": 210.88,
+          "pixel_std": 68.67,
+          "white_fraction": 0.4702,
+          "is_blank": false,
+          "excessive_whitespace": false
+        },
+        "clip_check": {
+          "pass": true,
+          "frame_px": 2,
+          "frame_ink_fraction": 0.0,
+          "clipped": false
+        },
+        "verdict": "PASS"
+      },
+      {
+        "file": "fig1_微信图片_20260731144913_75_123.pdf",
+        "kind": "fig1",
+        "pages": 1,
+        "width_in": 7.09,
+        "height_in": 3.85,
+        "dpi_checked": 250,
+        "blank_check": {
+          "pass": true,
+          "pixel_mean": 213.79,
+          "pixel_std": 67.33,
+          "white_fraction": 0.4782,
+          "is_blank": false,
+          "excessive_whitespace": false
+        },
+        "clip_check": {
+          "pass": true,
+          "frame_px": 2,
+          "frame_ink_fraction": 0.0,
+          "clipped": false
+        },
+        "verdict": "PASS"
+      },
+      {
+        "file": "fig1_微信图片_20260731145013_76_123.pdf",
+        "kind": "fig1",
+        "pages": 1,
+        "width_in": 7.09,
+        "height_in": 3.85,
+        "dpi_checked": 250,
+        "blank_check": {
+          "pass": true,
+          "pixel_mean": 220.84,
+          "pixel_std": 58.87,
+          "white_fraction": 0.4782,
+          "is_blank": false,
+          "excessive_whitespace": false
+        },
+        "clip_check": {
+          "pass": true,
+          "frame_px": 2,
+          "frame_ink_fraction": 0.0,
+          "clipped": false
+        },
+        "verdict": "PASS"
+      },
+      {
+        "file": "fig1_微信图片_20260731145021_77_123.pdf",
+        "kind": "fig1",
+        "pages": 1,
+        "width_in": 7.09,
+        "height_in": 3.85,
+        "dpi_checked": 250,
+        "blank_check": {
+          "pass": true,
+          "pixel_mean": 216.81,
+          "pixel_std": 63.07,
+          "white_fraction": 0.4782,
+          "is_blank": false,
+          "excessive_whitespace": false
+        },
+        "clip_check": {
+          "pass": true,
+          "frame_px": 2,
+          "frame_ink_fraction": 0.0,
+          "clipped": false
+        },
+        "verdict": "PASS"
+      },
+      {
+        "file": "fig2.pdf",
+        "kind": "fig2",
+        "pages": 1,
+        "width_in": 7.09,
+        "height_in": 2.8,
+        "dpi_checked": 250,
+        "blank_check": {
+          "pass": true,
+          "pixel_mean": 217.98,
+          "pixel_std": 65.98,
+          "white_fraction": 0.7252,
+          "is_blank": false,
+          "excessive_whitespace": false
+        },
+        "clip_check": {
+          "pass": true,
+          "frame_px": 2,
+          "frame_ink_fraction": 0.0,
+          "clipped": false
+        },
+        "verdict": "PASS"
+      },
+      {
+        "file": "fig3.pdf",
+        "kind": "fig3",
+        "pages": 1,
+        "width_in": 7.09,
+        "height_in": 4.6,
+        "dpi_checked": 250,
+        "blank_check": {
+          "pass": true,
+          "pixel_mean": 249.48,
+          "pixel_std": 30.37,
+          "white_fraction": 0.9558,
+          "is_blank": false,
+          "excessive_whitespace": false
+        },
+        "clip_check": {
+          "pass": true,
+          "frame_px": 2,
+          "frame_ink_fraction": 0.0002,
+          "clipped": false
+        },
+        "verdict": "PASS"
+      }
+    ]
+  },
+  "capture": {
+    "n_samples": 10,
+    "model_family": "qwen3vl",
+    "model_id": "Qwen/Qwen3-VL-8B-Instruct",
+    "resolved_revision": "0c351dd01ed87e9c1b53cbc748cba10e6187ff3b",
+    "model_class": "Qwen3VLForConditionalGeneration",
+    "visual_class": "Qwen3_VisionTransformer",
+    "processor_class": "Qwen3VLProcessor",
+    "keep_ratio": 0.25,
+    "k_formula": "max(1, round(N*keep_ratio))",
+    "seed": 0,
+    "max_pixels": 1500000,
+    "dtype": "bfloat16",
+    "patch_size": 16,
+    "spatial_merge_size": 2,
+    "pre_hook_module": "visual.deepstack_merger_list[0]",
+    "post_hook_definition": "cat([main,ds0,ds1,ds2],dim=1) scored per image split",
+    "score_definitions": {
+      "pre": "pre: mean over 4 patch-feature L2 norms per unit",
+      "post": "post: L2 norm of concatenated [main,ds0,ds1,ds2] post-merger row per unit"
+    },
+    "tie_break_rule": "sort by score descending; ties broken by ascending unit index (stable deterministic top-k); rank 1 = largest score",
+    "capture_prompt": "Describe this image.",
+    "max_generated_tokens": 1,
+    "samples": [
+      {
+        "sample_id": "df7282e1-f246-4955-9fdb-f65bea9844f1",
+        "original_filename": "df7282e1-f246-4955-9fdb-f65bea9844f1.png",
+        "n_units": 1144,
+        "k": 286,
+        "grid_thw": [
+          1,
+          52,
+          88
+        ],
+        "unit_grid_hw": [
+          26,
+          44
+        ],
+        "pre_post_topk_jaccard": 0.2599
+      },
+      {
+        "sample_id": "微信图片_20260731144845_69_123",
+        "original_filename": "微信图片_20260731144845_69_123.jpg",
+        "n_units": 6820,
+        "k": 1705,
+        "grid_thw": [
+          1,
+          220,
+          124
+        ],
+        "unit_grid_hw": [
+          110,
+          62
+        ],
+        "pre_post_topk_jaccard": 0.3478
+      },
+      {
+        "sample_id": "微信图片_20260731144850_70_123",
+        "original_filename": "微信图片_20260731144850_70_123.jpg",
+        "n_units": 11844,
+        "k": 2961,
+        "grid_thw": [
+          1,
+          188,
+          252
+        ],
+        "unit_grid_hw": [
+          94,
+          126
+        ],
+        "pre_post_topk_jaccard": 0.3001
+      },
+      {
+        "sample_id": "微信图片_20260731144854_71_123",
+        "original_filename": "微信图片_20260731144854_71_123.jpg",
+        "n_units": 11844,
+        "k": 2961,
+        "grid_thw": [
+          1,
+          188,
+          252
+        ],
+        "unit_grid_hw": [
+          94,
+          126
+        ],
+        "pre_post_topk_jaccard": 0.291
+      },
+      {
+        "sample_id": "微信图片_20260731144900_72_123",
+        "original_filename": "微信图片_20260731144900_72_123.jpg",
+        "n_units": 16224,
+        "k": 4056,
+        "grid_thw": [
+          1,
+          208,
+          312
+        ],
+        "unit_grid_hw": [
+          104,
+          156
+        ],
+        "pre_post_topk_jaccard": 0.2482
+      },
+      {
+        "sample_id": "微信图片_20260731144904_73_123",
+        "original_filename": "微信图片_20260731144904_73_123.jpg",
+        "n_units": 8160,
+        "k": 2040,
+        "grid_thw": [
+          1,
+          136,
+          240
+        ],
+        "unit_grid_hw": [
+          68,
+          120
+        ],
+        "pre_post_topk_jaccard": 0.2683
+      },
+      {
+        "sample_id": "微信图片_20260731144908_74_123",
+        "original_filename": "微信图片_20260731144908_74_123.jpg",
+        "n_units": 8160,
+        "k": 2040,
+        "grid_thw": [
+          1,
+          136,
+          240
+        ],
+        "unit_grid_hw": [
+          68,
+          120
+        ],
+        "pre_post_topk_jaccard": 0.3377
+      },
+      {
+        "sample_id": "微信图片_20260731144913_75_123",
+        "original_filename": "微信图片_20260731144913_75_123.jpg",
+        "n_units": 16170,
+        "k": 4042,
+        "grid_thw": [
+          1,
+          220,
+          294
+        ],
+        "unit_grid_hw": [
+          110,
+          147
+        ],
+        "pre_post_topk_jaccard": 0.2252
+      },
+      {
+        "sample_id": "微信图片_20260731145013_76_123",
+        "original_filename": "微信图片_20260731145013_76_123.jpg",
+        "n_units": 11844,
+        "k": 2961,
+        "grid_thw": [
+          1,
+          188,
+          252
+        ],
+        "unit_grid_hw": [
+          94,
+          126
+        ],
+        "pre_post_topk_jaccard": 0.2541
+      },
+      {
+        "sample_id": "微信图片_20260731145021_77_123",
+        "original_filename": "微信图片_20260731145021_77_123.jpg",
+        "n_units": 16170,
+        "k": 4042,
+        "grid_thw": [
+          1,
+          220,
+          294
+        ],
+        "unit_grid_hw": [
+          110,
+          147
+        ],
+        "pre_post_topk_jaccard": 0.313
+      }
+    ]
+  },
+  "validation": {
+    "all_passed": true,
+    "gates_passed": "8/8",
+    "gate_ids": [
+      "1_finite_1d",
+      "2_geometry_count",
+      "3_k_counts",
+      "4_topk_tiebreak",
+      "5_rank_perm_consistent",
+      "6_unit_identity",
+      "7_repeatability",
+      "8_hooks_no_hidden_states"
+    ],
+    "n_samples": 10,
+    "tolerance_recorded": 0.0,
+    "k_formula": "max(1, round(N*keep_ratio))",
+    "tie_break_rule": "sort by score descending; ties broken by ascending unit index (stable deterministic top-k); rank 1 = largest score",
+    "hook_check": {
+      "pass": true,
+      "detail": "inspect.getsource(wrap_capture): wrappers call original forward (_orig(...))=True and return its output unchanged (return out)=True; cap is reset (mts.reset) and rebuilt per sample in capture_real_l2, and only derived float32 arrays are persisted (gate 8 per-sample checks NPZ keys == 8 expected, no hidden states)."
+    },
+    "repeatability_gate7": {
+      "pass": true,
+      "bit_identical": true,
+      "observed_max_abs_diff": 0.0,
+      "tolerance_recorded": 0.0,
+      "detail": "bit_identical=True observed_max_abs_diff=0.0 tolerance=0.0 (expect bit-identical under enforce_eager)"
+    },
+    "per_sample": [
+      {
+        "sample_id": "df7282e1-f246-4955-9fdb-f65bea9844f1",
+        "gates_passed": "7/7",
+        "sample_passed": true,
+        "topk_jaccard": 0.259912,
+        "spearman_pre_post_rank": 0.314148
+      },
+      {
+        "sample_id": "微信图片_20260731144845_69_123",
+        "gates_passed": "7/7",
+        "sample_passed": true,
+        "topk_jaccard": 0.347826,
+        "spearman_pre_post_rank": 0.477407
+      },
+      {
+        "sample_id": "微信图片_20260731144850_70_123",
+        "gates_passed": "7/7",
+        "sample_passed": true,
+        "topk_jaccard": 0.30011,
+        "spearman_pre_post_rank": 0.379072
+      },
+      {
+        "sample_id": "微信图片_20260731144854_71_123",
+        "gates_passed": "7/7",
+        "sample_passed": true,
+        "topk_jaccard": 0.29104,
+        "spearman_pre_post_rank": 0.420849
+      },
+      {
+        "sample_id": "微信图片_20260731144900_72_123",
+        "gates_passed": "7/7",
+        "sample_passed": true,
+        "topk_jaccard": 0.248192,
+        "spearman_pre_post_rank": 0.299854
+      },
+      {
+        "sample_id": "微信图片_20260731144904_73_123",
+        "gates_passed": "7/7",
+        "sample_passed": true,
+        "topk_jaccard": 0.268262,
+        "spearman_pre_post_rank": 0.311274
+      },
+      {
+        "sample_id": "微信图片_20260731144908_74_123",
+        "gates_passed": "7/7",
+        "sample_passed": true,
+        "topk_jaccard": 0.337705,
+        "spearman_pre_post_rank": 0.396347
+      },
+      {
+        "sample_id": "微信图片_20260731144913_75_123",
+        "gates_passed": "7/7",
+        "sample_passed": true,
+        "topk_jaccard": 0.22522,
+        "spearman_pre_post_rank": 0.297159
+      },
+      {
+        "sample_id": "微信图片_20260731145013_76_123",
+        "gates_passed": "7/7",
+        "sample_passed": true,
+        "topk_jaccard": 0.25413,
+        "spearman_pre_post_rank": 0.284473
+      },
+      {
+        "sample_id": "微信图片_20260731145021_77_123",
+        "gates_passed": "7/7",
+        "sample_passed": true,
+        "topk_jaccard": 0.312977,
+        "spearman_pre_post_rank": 0.386555
+      }
+    ]
+  },
+  "render_provenance": {
+    "git_head": "4b3b74f3b6e8f1722c30f6ad86a278b1af99427e",
+    "source_date_epoch": "0",
+    "conda_env": "qwen3vl_clean",
+    "python": "3.10.20",
+    "package_versions": {
+      "numpy": "2.2.6",
+      "matplotlib": "3.10.9",
+      "scipy": "1.15.3",
+      "torch": "2.10.0",
+      "pillow": "12.2.0",
+      "vllm": "0.19.0",
+      "transformers": "4.57.6"
+    },
+    "poppler": "pdfinfo version 0.86.1",
+    "stage_status": {
+      "capture": "ok",
+      "validate": "ok",
+      "render_fig1": "ok",
+      "render_fig2": "ok",
+      "render_fig3": "ok",
+      "verify_pdf": "ok"
+    },
+    "commands": [
+      {
+        "stage": "capture",
+        "command": "python drafts/figures/real_data_pipeline/scripts/capture_real_l2.py --input-dir drafts/figures/real_data_pipeline/inputs --output-dir drafts/figures/real_data_pipeline/data --model-family qwen3vl --model-id Qwen/Qwen3-VL-8B-Instruct --keep-ratio 0.25 --max-pixels 1500000 --seed 0 --skip-existing"
+      },
+      {
+        "stage": "validate",
+        "command": "python drafts/figures/real_data_pipeline/scripts/validate_real_l2.py --data-dir drafts/figures/real_data_pipeline/data --keep-ratio 0.25"
+      },
+      {
+        "stage": "render_fig1",
+        "command": "python drafts/figures/gen_fig1_rbm.py --batch-dir drafts/figures/real_data_pipeline/data --inputs-dir drafts/figures/real_data_pipeline/inputs --outdir drafts/figures/real_data_pipeline/outputs"
+      },
+      {
+        "stage": "render_fig1",
+        "command": "python drafts/figures/real_data_pipeline/scripts/render_compare.py --data-dir drafts/figures/real_data_pipeline/data --inputs-dir drafts/figures/real_data_pipeline/inputs --outdir drafts/figures/real_data_pipeline/outputs --validation-report drafts/figures/real_data_pipeline/data/validation_report.json"
+      },
+      {
+        "stage": "render_fig1",
+        "command": "python - drafts/figures/real_data_pipeline/data/comparison_summary.json 10"
+      },
+      {
+        "stage": "render_fig2",
+        "command": "python drafts/figures/real_data_pipeline/scripts/render_fig2.py --values drafts/figures/real_data_pipeline/data/fig2_values.json --outdir drafts/figures/real_data_pipeline/outputs"
+      },
+      {
+        "stage": "render_fig3",
+        "command": "python drafts/figures/real_data_pipeline/scripts/render_fig3.py --values drafts/figures/real_data_pipeline/data/fig3_values.json --outdir drafts/figures/real_data_pipeline/outputs"
+      },
+      {
+        "stage": "verify_pdf",
+        "command": "python drafts/figures/real_data_pipeline/scripts/run_visual_qa.py --all-final --outdir drafts/figures/real_data_pipeline/outputs --scratch <tmp-qa-scratch>"
+      }
+    ],
+    "determinism_note": "renderers pin SOURCE_DATE_EPOCH for PDF metadata; fixed-canvas savefig (no bbox_inches='tight'); fig2/compare/fig1 PNG md5 verified stable across full reruns on this host"
+  },
+  "fastv": {
+    "status": "skipped_missing_question",
+    "reason": "no real question accompanies the input images (inputs/manifest.json absent) -> FastV comparison deliberately not rendered"
+  },
+  "figure_values": {
+    "fig2": {
+      "values_file": "data/fig2_values.json",
+      "figure": "FIG:2",
+      "provenance_audited": true
+    },
+    "fig3": {
+      "values_file": "data/fig3_values.json",
+      "figure": "FIG:3",
+      "provenance_audited": true
+    }
+  },
+  "overall": {
+    "pdf_qa_all_pass": true,
+    "pdf_qa_n_pass": "23/23",
+    "validation_all_passed": true,
+    "capture_n_samples": 10
+  }
+}
