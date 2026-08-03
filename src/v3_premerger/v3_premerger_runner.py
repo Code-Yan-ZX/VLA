@@ -60,6 +60,7 @@ import dataclasses as _dc
 import vllm.model_executor.models.qwen3_vl as _q3vl_mod
 import vllm.model_executor.models.qwen2_5_vl as _q2vl_mod
 import vllm.model_executor.models.internvl as _ivl_mod
+import vllm.model_executor.models.glm4_1v as _glm4v_mod
 
 # Model-family registry. qwen2vl = Qwen2.5-VL (single native 2x2 merger, NO
 # deepstack); qwen3vl = Qwen3-VL (merger + 3 deepstack mergers). The two
@@ -76,10 +77,24 @@ import vllm.model_executor.models.internvl as _ivl_mod
 # The pre/post hooks live on DIFFERENT modules than Qwen (extract_feature /
 # _process_vision_input, not visual.merger / _process_image_input), so the
 # internvl3 branch is fully isolated from the two Qwen families.
+#
+# glm4v = GLM-4.1V-9B-Thinking (fourth, fully Qwen/InternVL-independent family;
+# GLM-4.6V-Flash was the audit TOP-1 but its 5.0rc-era Glm46VProcessor classes
+# do not exist in the pinned transformers 4.57.6 -> pre-registered fallback,
+# identical Glm4v architecture). Its merge stage is a strided 2x2 downsample
+# CONV (1536 -> 4096) followed by the Glm4vPatchMerger MLP; consecutive-4
+# block-major ViT tokens form one merge-unit, same shape semantics as Qwen.
+# PRE hook = patched visual.forward slicing units on the post_layernorm ViT
+# stream BEFORE conv+merger; POST hook = the family-agnostic
+# _process_image_input split prune. mrope IS present (block sections [8,12,12])
+# -> the qwen2vl mrope-position fix applies. NO deepstack.
 MODELS = {
     "qwen3vl": "Qwen/Qwen3-VL-8B-Instruct",
     "qwen2vl": "Qwen/Qwen2.5-VL-7B-Instruct",
     "internvl3": "OpenGVLab/InternVL3-8B",
+    # ModelScope snapshot (dots escaped per modelscope cache convention);
+    # loaded as a local path so no HF_ENDPOINT/modelscope env coupling.
+    "glm4v": "/data/models/modelscope/hub/models/ZhipuAI/GLM-4___1V-9B-Thinking",
 }
 MODEL = MODELS["qwen3vl"]   # default; overridden in main() per --model-family/--model
 
@@ -669,13 +684,16 @@ def parse_args():
                     help="vLLM/torch RNG seed (0 = default). For repeat runs; at "
                          "temp=0 variance comes from GPU-kernel non-determinism.")
     ap.add_argument("--model-family", default="qwen3vl",
-                    choices=["qwen3vl", "qwen2vl", "internvl3"],
+                    choices=["qwen3vl", "qwen2vl", "internvl3", "glm4v"],
                     help="Architecture family. qwen3vl (DEFAULT) hooks "
                          "visual.merger + visual.deepstack_merger_list (current "
                          "behavior, bit-identical). qwen2vl hooks visual.merger "
                          "ONLY -- Qwen2.5-VL has no deepstack mergers. internvl3 "
                          "hooks extract_feature (pre) / _process_vision_input "
-                         "(post) -- pixel-shuffle merger, no deepstack/mrope.")
+                         "(post) -- pixel-shuffle merger, no deepstack/mrope. "
+                         "glm4v patches visual.forward (pre: unit slice on the "
+                         "ViT stream before the downsample-conv + merger MLP) / "
+                         "_process_image_input (post) -- no deepstack, mrope fix.")
     ap.add_argument("--model", default=None,
                     help="HF model id override. If given, family is auto-detected "
                          "from the id (Qwen2* -> qwen2vl, else qwen3vl), overriding "
@@ -701,12 +719,15 @@ def parse_args():
 # --------------------------------------------------------------------------- #
 def detect_family(model_id: str) -> str:
     """Auto-detect family from HF model id. InternVL* -> internvl3;
-    Qwen2/Qwen2.5-VL -> qwen2vl; everything else (incl. Qwen3-VL) -> qwen3vl."""
+    Qwen2/Qwen2.5-VL -> qwen2vl; GLM-4*V* -> glm4v; everything else
+    (incl. Qwen3-VL) -> qwen3vl."""
     mid = model_id.lower()
     if "internvl" in mid:       # InternVL2 / InternVL3 (same vLLM arch)
         return "internvl3"
     if "qwen2" in mid:          # qwen2-vl / qwen2.5-vl / qwen2_5_vl
         return "qwen2vl"
+    if "glm-4" in mid or "glm4" in mid:   # GLM-4.1V / GLM-4.6V (glm4v arch)
+        return "glm4v"
     return "qwen3vl"
 
 
@@ -716,6 +737,8 @@ def _proc_class(family: str):
         return _q2vl_mod.Qwen2_5_VLMultiModalProcessor
     if family == "internvl3":
         return _ivl_mod.InternVLMultiModalProcessor
+    if family == "glm4v":
+        return _glm4v_mod.Glm4vMultiModalProcessor
     return _q3vl_mod.Qwen3VLMultiModalProcessor
 
 
@@ -1097,6 +1120,159 @@ def setup_post_merger_internvl(model, r: float, selector: str = "l2"):
         return tuple(out)
     model._process_vision_input = _patched
     return diag
+
+
+# --------------------------------------------------------------------------- #
+# (D) GLM-4V family (GLM-4.1V-9B-Thinking; fourth, Qwen/InternVL-independent
+# family) -- PRE-merger selection.
+#
+# glm4v's merge stage (vLLM 0.19 glm4_1v.py Glm4vVisionTransformer.forward):
+#   ViT blocks -> post_layernorm -> view(-1,2,2,hidden) -> permute(0,3,1,2)
+#   -> downsample Conv2d(k=stride=2, 1536 -> 4096) -> merger Glm4vPatchMerger
+#   MLP (4096 -> 4096) -> [N/4, 4096] merged tokens.
+# The token stream entering the adapter is BLOCK-MAJOR: 4 consecutive tokens
+# = 1 merge-unit (rot_pos_emb's (h//2,2,w//2,2) pos-id layout), exactly the
+# Qwen2-VL unit semantics. The 2x2 strided conv has NO cross-unit receptive
+# field, so running conv+merger on only the kept units reproduces the native
+# merged tokens for those units BITWISE (and computes fewer tokens = real
+# saving).
+#
+# PRE hook = patched visual.forward: score units on the post_layernorm ViT
+# stream (1536-d, BEFORE any merging), keep the per-image top-k_i =
+# round(full_i*(1-r)) units via the shared PreMergerPruner, then run the
+# NATIVE downsample+merger on survivors only. POST arm = the family-agnostic
+# setup_post_merger (_process_image_input split prune; identical contract to
+# qwen2vl: tuple of per-image merged-token tensors). Placeholder scaling = the
+# generic list-scaler branch of patch_processor (glm4v's image replacement is
+# a plain [image_token_id]*num_units list). Per-image k matches at all three
+# sites -> exact iso-token pre/post. The qwen2vl mrope fix applies (glm4v
+# text backbone has BLOCK mrope sections [8,12,12] -> placeholder shrink needs
+# the same position repair). No deepstack. No Qwen-only machinery (swap /
+# visionzip / hybrid / QA-pre are guarded out in main()).
+# --------------------------------------------------------------------------- #
+def _install_glm4v_pre_visual_forward(visual, pruner):
+    """Replace glm4v visual.forward to prune merge-units on the ViT stream
+    BEFORE the downsample conv + merger MLP.
+
+    LINE-BY-LINE copy of vLLM 0.19's Glm4vVisionTransformer.forward
+    (glm4_1v.py L743-792) with ONE change in the adapter tail: the
+    post_layernorm output is sliced by ``pruner.slice_input`` (per-image
+    top-k units, same L2 selector math as qwen2vl pre mode) before the
+    native downsample conv + merger run on the survivors. r=0 -> slice_input
+    returns its input unchanged -> byte-identical to the native pipeline.
+
+    Assigned as an INSTANCE attribute (nn.Module._call_impl resolves
+    self.forward without descriptor binding, so no implicit self; ``visual``
+    is captured in the closure). The grid_thw-capturing forward_pre_hook
+    (registered on the module in setup_pre_merger_glm4v) still fires, since
+    hooks run in __call__ before forward is resolved.
+    """
+    import torch
+    _visual = visual
+    sm = _visual.spatial_merge_size
+
+    def patched_forward(x, grid_thw):
+        # ── vLLM 0.19 glm4_1v.py Glm4vVisionTransformer.forward ────────── #
+        if isinstance(grid_thw, list):
+            grid_thw = torch.tensor(grid_thw, dtype=torch.int32)
+
+        # patchify
+        x = x.to(device=_visual.device, dtype=_visual.dtype)
+        x = _visual.patch_embed(x)
+        x = _visual.post_conv_layernorm(x)
+
+        # compute position embedding
+        rotary_pos_emb_cos, rotary_pos_emb_sin, image_type_ids = \
+            _visual.rot_pos_emb(grid_thw)
+        # compute cu_seqlens
+        cu_seqlens = torch.repeat_interleave(
+            grid_thw[:, 1] * grid_thw[:, 2], grid_thw[:, 0]
+        ).cumsum(dim=0, dtype=torch.int32)
+        cu_seqlens = torch.cat([cu_seqlens.new_zeros(1), cu_seqlens])
+        max_seqlen = _visual.compute_attn_mask_seqlen(cu_seqlens)
+        seqlens = (cu_seqlens[1:] - cu_seqlens[:-1]).tolist()
+        cu_seqlens = cu_seqlens.to(_visual.device, non_blocking=True)
+        x = _visual.embeddings(
+            x, seqlens, grid_thw, image_type_ids[:, 0], image_type_ids[:, 1]
+        )
+
+        # transformers
+        x = x.unsqueeze(1)
+        for blk in _visual.blocks:
+            x = blk(
+                x,
+                cu_seqlens=cu_seqlens,
+                rotary_pos_emb_cos=rotary_pos_emb_cos,
+                rotary_pos_emb_sin=rotary_pos_emb_sin,
+                max_seqlen=max_seqlen,
+            )
+
+        # adapter
+        x = _visual.post_layernorm(x)
+
+        # ── PATCH: rank-before-merge unit slice (pre-merge ViT stream) ──── #
+        # x: [seq, 1, 1536] block-major; slice_input keeps top-k_i units per
+        # image (mask cached once per pass; one visual call may batch SEVERAL
+        # images -> the per-image full_units/k_units lists keep the split
+        # exact) and returns [4*sum(k_i), 1, 1536].
+        x = pruner.slice_input(x, _visual.merger)
+
+        x = x.view(-1, sm, sm, x.shape[-1])
+        x = x.permute(0, 3, 1, 2)
+        x = _visual.downsample(x).view(-1, _visual.out_hidden_size)
+        x = _visual.merger(x)
+
+        return x
+
+    patched_forward._premerger_original = visual.forward
+    visual.forward = patched_forward
+    return patched_forward._premerger_original
+
+
+def setup_pre_merger_glm4v(model, r: float, selector: str = "l2"):
+    """glm4v PRE-merger arm (stage ranking only; Qwen-only machinery guarded
+    out in main()). Mirrors setup_pre_merger's qwen2vl contract:
+      (1) visual.forward pre_hook -> pruner.begin_pass(grid_thw);
+      (2) the visual.forward wrap performs the unit slice (glm4v has no
+          deepstack and the slice lands BEFORE the conv+merger, so no
+          merger.forward wrap);
+      (3) _process_image_input replaced to split by the PRUNED counts."""
+    visual = model.visual
+    pruner = PreMergerPruner(r, visual.spatial_merge_size, selector)
+    visual.merger._premerger_tag = "main"
+
+    # (1) visual.forward pre_hook: capture grid_thw -> plan k_units.
+    def _visual_prehook(module, args, kwargs):
+        grid_thw = kwargs.get("grid_thw")
+        if grid_thw is None and len(args) >= 2:
+            grid_thw = args[1]
+        if grid_thw is not None:
+            pruner.begin_pass(grid_thw)
+        return None
+    handle_v = visual.register_forward_pre_hook(_visual_prehook, with_kwargs=True)
+
+    # (2) visual.forward wrap: unit slice on the pre-merge ViT stream.
+    _install_glm4v_pre_visual_forward(visual, pruner)
+
+    # (3) replace _process_image_input: split by PRUNED counts (k_units).
+    #     (Skips the use_data_parallel branch deliberately -- same contract as
+    #     the qwen2vl _patched_pii; TP=1 runs visual() directly.)
+    def _patched_pii(image_input):
+        grid_thw = image_input["image_grid_thw"]
+        assert grid_thw.ndim == 2
+        if image_input["type"] == "image_embeds":
+            image_embeds = image_input["image_embeds"].type(visual.dtype)
+        else:
+            pixel_values = image_input["pixel_values"].type(visual.dtype)
+            image_embeds = visual(pixel_values, grid_thw=grid_thw)
+        if (r == 0.0) or (pruner.k_units is None):
+            sizes = (grid_thw.prod(-1) // pruner.unit).tolist()
+        else:
+            sizes = pruner.k_units
+        return image_embeds.split(sizes)
+    model._process_image_input = _patched_pii
+
+    return pruner, [handle_v]
 
 
 # --------------------------------------------------------------------------- #
@@ -2202,11 +2378,168 @@ def _run_dry_check_internvl3():
     print(f"[dry-check] ALL PASS for family=internvl3")
 
 
+def _run_dry_check_glm4v():
+    """No-GPU dry check for the glm4v family: processor-class selection + the
+    generic list-scaler on a token-id placeholder, the PRE unit slice through
+    the patched visual.forward (conv+merger run on survivors only), the POST
+    family-agnostic split prune, and the mrope-fix install. Mirrors the Qwen /
+    InternVL3 dry-check contracts with tiny synthetic grids (48+16 patches ->
+    12 units; k=[2,1] at r=0.75)."""
+    import torch.nn as nn
+
+    print(f"[dry-check] family=glm4v  model_id={MODELS['glm4v']}")
+
+    # (a) processor patch installs on the RIGHT class; generic list-scaler
+    #     shrinks a [image_token_id]*16 placeholder to 4 at r=0.75
+    #     (16 units -> keep round(16*0.25)=4; iso with pre/post k).
+    ProcCls = _proc_class("glm4v")
+    assert ProcCls is _glm4v_mod.Glm4vMultiModalProcessor, ProcCls
+    real_orig = ProcCls._get_prompt_updates
+
+    @_dc.dataclass
+    class _FakePR:
+        modality: str
+        target: str
+        replacement: object
+
+    IMG_TOK = 151363
+
+    def _fake_orig(self, a, b, c):
+        return [_FakePR("image", "<|image|>", lambda idx: [IMG_TOK] * 16)]
+    try:
+        ProcCls._get_prompt_updates = _fake_orig
+        proc_log = patch_processor(0.75, "glm4v")
+        assert getattr(ProcCls._get_prompt_updates, "_vtc_patched", False), \
+            "glm4v patch not installed"
+        out = ProcCls._get_prompt_updates(None, None, {}, None)
+        res = out[0].replacement(0)
+        assert res == [IMG_TOK] * 4, res[:6]
+        assert proc_log["counts"] == [(16, 4)], proc_log["counts"]
+    finally:
+        if getattr(ProcCls._get_prompt_updates, "_vtc_patched", False):
+            ProcCls._get_prompt_updates = \
+                ProcCls._get_prompt_updates._vtc_orig
+        ProcCls._get_prompt_updates = real_orig
+    print(f"[dry-check]   OK processor patch on {ProcCls.__name__}: "
+          f"[{IMG_TOK}]*16 -> *4 (counts={proc_log['counts']})")
+
+    # (b) PRE arm: patched visual.forward slices units on the ViT stream and
+    #     runs conv+merger on survivors only.
+    hidden, out_hidden, llm_hidden, patch_dim = 16, 32, 64, 6
+
+    class _DummyGlm4vVisual(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.spatial_merge_size = 2
+            self.out_hidden_size = out_hidden
+            self.patch_embed = nn.Linear(patch_dim, hidden)
+            self.post_conv_layernorm = nn.Identity()
+            self.post_layernorm = nn.Identity()
+            self.downsample = nn.Conv2d(hidden, out_hidden,
+                                        kernel_size=2, stride=2)
+            self.merger = nn.Linear(out_hidden, llm_hidden)
+            self.blocks = nn.ModuleList()
+            self.device = torch.device("cpu")
+            self.dtype = torch.float32
+
+        def rot_pos_emb(self, grid_thw):
+            seq = int(grid_thw.prod(-1).sum())
+            return (torch.zeros(seq, 4), torch.zeros(seq, 4),
+                    torch.zeros(seq, 2, dtype=torch.long))
+
+        def compute_attn_mask_seqlen(self, cu_seqlens):
+            return None
+
+        def embeddings(self, x, seqlens, grid_thw, h_coords, w_coords):
+            return x
+
+        def forward(self, x, grid_thw=None):
+            return x
+
+    class _DummyModel:
+        def __init__(self):
+            self.visual = _DummyGlm4vVisual()
+            self._process_image_input = lambda ii: tuple()
+
+    torch.manual_seed(0)
+    model = _DummyModel()
+    grid_thw = torch.tensor([[1, 4, 8], [1, 4, 4]])   # 32+16 patches, 12 units
+    pruner, handles = setup_pre_merger_glm4v(model, 0.75, "l2")
+    assert pruner.full_units is None                   # planned at pass start
+    x = torch.randn(48, patch_dim)
+    out = model.visual(x, grid_thw=grid_thw)
+    assert pruner.full_units == [8, 4], pruner.full_units
+    assert pruner.k_units == [2, 1], pruner.k_units    # round([8,4]*0.25)
+    assert out.shape == (3, llm_hidden), out.shape     # sum(k) merged tokens
+    assert pruner.diag["mask_compute_count"] == 1, pruner.diag
+    # r=0 -> byte-identical native passthrough (all 12 units merged)
+    model0 = _DummyModel()
+    setup_pre_merger_glm4v(model0, 0.0, "l2")
+    out0 = model0.visual(x, grid_thw=grid_thw)
+    assert out0.shape == (12, llm_hidden), out0.shape
+    print(f"[dry-check]   OK pre visual.forward slice: 48 ViT toks -> units "
+          f"[8,4] -> kept {pruner.k_units} -> {tuple(out.shape)} merged "
+          f"(r=0 passthrough: {tuple(out0.shape)})")
+
+    # (c) POST arm: family-agnostic _process_image_input split prune works on
+    #     glm4v's per-image merged-token layout ([units_i, llm_hidden] splits).
+    model2 = _DummyModel()
+    called = {"n": 0}
+
+    def _fake_orig_pii(ii):
+        called["n"] += 1
+        return (torch.randn(40, llm_hidden), torch.randn(20, llm_hidden))
+    model2._process_image_input = _fake_orig_pii
+    diag_post = setup_post_merger(model2, 0.75, "l2")
+    splits = model2._process_image_input(None)
+    assert called["n"] == 1 and diag_post["fires"] == 1
+    assert [s.shape[0] for s in splits] == [10, 5], [s.shape for s in splits]
+    print(f"[dry-check]   OK post split prune: [40,20] -> "
+          f"{[s.shape[0] for s in splits]} (family-agnostic wrap; iso-token "
+          f"with pre k=[2,1]x5 on equal-unit inputs)")
+
+    # (d) mrope fix installs on a glm4v-shaped model and passes through
+    #     image-free prompts untouched (position repair for r>0 is the same
+    #     placeholder-run mechanism validated for qwen2vl).
+    class _DummyCfgVis:
+        spatial_merge_size = 2
+
+    class _DummyCfg:
+        image_token_id = IMG_TOK
+        vision_config = _DummyCfgVis()
+
+    class _DummyMropeModel:
+        config = _DummyCfg()
+
+        def get_mrope_input_positions(self, input_tokens, mm_features):
+            import numpy as _np
+            n = len(input_tokens)
+            pos = _np.broadcast_to(_np.arange(n), (3, n)).copy()
+            return torch.from_numpy(pos), 0
+
+    mm = _DummyMropeModel()
+    mdiag = setup_qwen2vl_mrope_fix(mm)
+    pos, delta = mm.get_mrope_input_positions([1, 2, 3], [])
+    assert pos.shape == (3, 3) and delta == 0, (pos.shape, delta)
+    assert mdiag["calls"] == 1
+    print(f"[dry-check]   OK mrope fix installs (config.image_token_id="
+          f"{IMG_TOK}); image-free passthrough shape={tuple(pos.shape)}")
+
+    # (e) expected hook/wrap counts for glm4v = 1 (visual.forward) pre +
+    #     1 (_process_image_input) post; NO deepstack; mrope fix applied.
+    print(f"[dry-check]   OK expected glm4v wraps: pre=1 (visual.forward), "
+          f"post=1 (_process_image_input); NO deepstack; mrope fix ON")
+    print(f"[dry-check] ALL PASS for family=glm4v")
+
+
 def run_dry_check(family: str):
     import torch.nn as nn
 
     if family == "internvl3":
         return _run_dry_check_internvl3()
+
+    if family == "glm4v":
+        return _run_dry_check_glm4v()
 
     class _DummyMerger(nn.Module):
         def forward(self, x):
@@ -2452,6 +2785,22 @@ def main():
                              "(pre/post only for the third-family onboarding).")
         if args.qa_lambda > 0.0:
             raise SystemExit("internvl3: --qa-lambda>0 is not supported.")
+    # glm4v fourth-family onboarding: same policy -- the two clean mechanisms
+    # only (stage-ranking pre + post). The Qwen-specific machinery (M3 swap,
+    # VisionZip-style, hybrid, QA-pre) is tied to Qwen merger/deepstack
+    # internals and is NOT ported. Guarded out so it can never silently touch
+    # glm4v behavior.
+    if family == "glm4v":
+        if args.mask_ranking == "swap":
+            raise SystemExit("glm4v: --mask-ranking swap is not supported "
+                             "(Qwen M3 control; stage ranking only).")
+        if args.visionzip_style:
+            raise SystemExit("glm4v: --visionzip-style is not supported.")
+        if args.mode == "hybrid":
+            raise SystemExit("glm4v: --mode hybrid is not supported "
+                             "(pre/post only for the fourth-family onboarding).")
+        if args.qa_lambda > 0.0:
+            raise SystemExit("glm4v: --qa-lambda>0 is not supported.")
     proc_log = patch_processor(r, family)
 
     from vllm import LLM, SamplingParams
@@ -2485,10 +2834,14 @@ def main():
     # pixel budget lands via the PIL pre-resize pass over the samples below
     # (_capped_image_path: same budget, aspect-preserving, edges to /32; the
     # processor then does its native dynamic tiling on the resized image).
+    # glm4v: Glm4vImageProcessor has NO max_pixels parameter either (its
+    # resize budget is the size={shortest_edge,longest_edge} dict) -> same
+    # PIL pre-resize enforcement as internvl3, never the kwarg.
     # Cross-family pixel-budget fairness (DECISIONS 2026-07-24 c79d083) is
     # preserved: the cap VALUE is untouched, only the enforcement mechanism is
     # family-aware (never swap in InternVL's max_num tiles for the budget).
-    if args.max_pixels and args.max_pixels > 0 and family != "internvl3":
+    if args.max_pixels and args.max_pixels > 0 \
+            and family not in ("internvl3", "glm4v"):
         llm_kwargs["mm_processor_kwargs"] = {"max_pixels": args.max_pixels}
     # max_num_batched_tokens also sets the V1 multimodal encoder cache budget
     # (scheduler.py: encoder_cache_size = max_num_batched_tokens). Required for
@@ -2545,6 +2898,12 @@ def main():
             # True rank-before-merge on the pixel-shuffle units (no QA/swap/
             # visionzip/deepstack/mrope machinery -- all Qwen-only, guarded out).
             diag = setup_pre_merger_internvl(model, r, args.selector)
+        elif family == "glm4v":
+            # True rank-before-merge on the glm4v merge-units: L2 selection on
+            # the post_layernorm ViT stream BEFORE the downsample conv + merger
+            # MLP (no QA/swap/visionzip/deepstack machinery -- guarded out).
+            pruner, _handles = setup_pre_merger_glm4v(model, r, args.selector)
+            diag = pruner.diag
         else:
             # J5 QA-pre: build the query-similarity state (embed questions, key
             # by offline unit count) ONLY when λ>0. λ=0 -> qa_state stays None
@@ -2566,14 +2925,21 @@ def main():
                                                  save_kept=args.save_unit_scores)
             diag = pruner.diag
 
-    # Qwen2.5-VL ONLY: fix the mrope-position overshoot that collapses pruned
-    # acc to ~0.004 (see setup_qwen2vl_mrope_fix docstring).  No-op for r=0 and
-    # never installed for qwen3vl/internvl3 -> baseline + qwen3vl behavior
-    # untouched.  InternVL3's LLM is Qwen2 with 1-D RoPE (no mrope) so the
-    # placeholder-count shrink needs NO position repair (confirmed: the fix is
-    # family-gated to qwen2vl and never runs for internvl3).
+    # BLOCK-mrope families: fix the mrope-position overshoot that collapses
+    # pruned acc to ~0.004 (see setup_qwen2vl_mrope_fix docstring).  No-op for
+    # r=0 and never installed for qwen3vl/internvl3 -> baseline + qwen3vl
+    # behavior untouched.  InternVL3's LLM is Qwen2 with 1-D RoPE (no mrope)
+    # so the placeholder-count shrink needs NO position repair (confirmed: the
+    # fix is family-gated to qwen2vl and never runs for internvl3).  glm4v's
+    # GLM-4 text backbone HAS mrope with contiguous block sections [8,12,12]
+    # (config rope_parameters.mrope_section, same shape class as Qwen2-VL's
+    # [16,24,24]) -> the identical placeholder-run repair applies; the fix
+    # reads only config.image_token_id / vision_config.spatial_merge_size and
+    # the (input_tokens, mm_features) get_mrope_input_positions contract,
+    # which glm4v satisfies (image_grid_thw in mm_feature.data, sorted by
+    # offset -- verified against glm4_1v.py iter_mm_grid_thw).
     mrope_fix_diag = None
-    if family == "qwen2vl" and r > 0.0:
+    if family in ("qwen2vl", "glm4v") and r > 0.0:
         mrope_fix_diag = setup_qwen2vl_mrope_fix(model)
 
     scorer = SCORERS[args.benchmark]
@@ -2588,11 +2954,13 @@ def main():
     sp = SamplingParams(max_tokens=args.max_tokens, temperature=0.0)
     # vLLM 0.19 V1 IGNORES engine-level mm_processor_kwargs (verified: DocVQA
     # ptid identical with/without the engine kwarg) -> pass it per request.
-    # internvl3: no per-request kwarg either (its image processor rejects
-    # max_pixels just the same); the PIL pre-resize pass above already enforced
-    # the cap on every sample image, so the budget holds without any kwarg.
+    # internvl3/glm4v: no per-request kwarg either (their image processors
+    # reject max_pixels just the same); the PIL pre-resize pass above already
+    # enforced the cap on every sample image, so the budget holds without any
+    # kwarg.
     chat_kw = {}
-    if args.max_pixels and args.max_pixels > 0 and family != "internvl3":
+    if args.max_pixels and args.max_pixels > 0 \
+            and family not in ("internvl3", "glm4v"):
         chat_kw["mm_processor_kwargs"] = {"max_pixels": args.max_pixels}
 
     # warmup 1 fwd (not timed) so eager kernels are primed

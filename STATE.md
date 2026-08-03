@@ -1,23 +1,27 @@
 # STATE.md — 当前项目状态（主窗口维护，保持 ≤30 行）
 
 > 项目：VLM 视觉 token 压缩 · 目标：**Rank-Before-Merge → ACM MM'27**
-> 最近更新：2026-07-31 · **真实数据图管线全绿**：`drafts/figures/real_data_pipeline/` 端到端跑通——10 张候选图经 Qwen3-VL-8B-Instruct 真实捕获 merger-input/output L2（repo 原版 `_score_units/_score_tokens`，vLLM enforce_eager，max_pixels=1.5M，25% 预算），NPZ 8 门校验全过（重复捕获比特一致 tol=0.0），逐图产出 4 面板对比（原图/pre top-k/post top-k/4 态 diff）+ 真实 Jaccard 0.22–0.35、Spearman 0.28–0.48（渲染值与校验报告逐图匹配）；FIG:1 扩展为 measured 模式（无 NPZ 即拒渲，`--allow-layout-proxy` 才许代理）；FIG:2/3 从审计 JSON 代码绘制（24 值与 j7/internvl3/j8 digest 逐格核对一致）；run_all.sh 六阶段断点续跑 + CPU smoke test 全过；23 个 PDF 回渲染 QA 全清（1 页/7.09in/无空白）。FIG:1 主图作者已定 **df7282e1** 并晋升 `drafts/figs/fig1.{pdf,png}`（measured merger L2，proxy 已替换）。下一步：嵌图渲染压页 ≤8+2→**二次升级 user 投稿 go/no-go**。
+> 最近更新：2026-08-03 · **第四族 GLM gate 完成 + 论文入口重写**：GLM-4.1V-9B-Thinking（独立谱系 GLM-4+AIMv2）n=200/keep25% gate——text-dense pre≫post 强复制（+16.8pp TextVQA / +9.8pp ANLS）；GQA 臂 greedy 协议下 inconclusive（全臂 floor-collapse，none EM 0.15 vs 官方 0.77，thinking loop @4096 仍不收敛）→ 预注册降档、不作方向 claim。论文已重写为机制优先（M1/M2/M3+ranking-swap 因果前置为贡献①、Table 3 → regime map、FastV/RBM 重定位）。GPU 5.5/6 h。**下一步：升级 user 投稿 go/no-go（charter）**。
 
-## ★ 实验已完成（全官方指标·full split）
-- **Qwen 主表 26/26**：text-dense pre 全胜 vs post（Q3 +38.4/+24.3pp/+363pts，z≥12）；GQA post 显著微胜 +2.6–2.8pp（1/10 量级，无 crossover）。digest j7_main_table.md
-- **InternVL3-8B 16/16**：pre−post text-dense **+37.4pp(TextVQA 0.789/0.415) / +34.6pp ANLS(DocVQA 0.728/0.382) / +432pts(OCRBench 753/321) = 与 Qwen3 量级同构，三族确立 stage law**；GQA tie（0.599/0.603）；none 锚 0.834/0.922/852/0.629；r0.875 pre 0.723/0.505 vs post 0.306/0.245；req/s pre≈2.2–2.5× none。注意：DocVQA 4M px cap（≠Qwen 600k，跨模绝对值不可比）；pre vs none DocVQA −19.4pp（非近无损，text-dense 内 TextVQA 才 −4.5pp）。digest internvl3_main_matrix.md
-- **FastV k3 最优 K 基线 8/8**（同 scope 官方重打分）：FastV-k3 胜 RBM TextVQA +17.2/GQA +8.9/DocVQA +16.2pp；**RBM 胜 OCR +16.5pp（最优 K 也救不回 OCR）**。digest r2b_fastv_k3.md
-- **Cascade gate = NO-GO**：8/8 cell 落后 max(pre,fst) 8–18pp → 方法冻结 plain RBM、入负结果节。digest cascade_gate.md
-- **机制**：Jaccard≡1.000 双架构（因果=选择级）。**效率**：25% 保留 +68% 吞吐。**负结果链**：QA-gate/hybrid/router/cascade 四连（pre 不动点）。
-- **定性图（10 图实测）**：pre/post L2 top-k Jaccard 0.22–0.35、Spearman 0.28–0.48 → merger 大幅重排单元秩（stage law 的图像级证据）；FastV 面板跳过（无真实 question，manifest 缺）。
+## ★ 第四族 gate（GLM-4.1V-9B-Thinking · 2026-08-03）
+- 候选审计（ModelScope 20+ 模型筛选、代码级 merger 证据）= experiments/latest_vlm_model_audit.md；TOP-1 GLM-4.6V-Flash processor 类需 transformers≥5.0rc 加载失败 → 按预注册切同架构 4.1V，无 config hack
+- 官方分 n=200/keep25%/L2（none/pre/post）：textvqa 0.242/0.218/0.050；docvqa ANLS 0.104/0.130/0.031；gqa EM 0.150/0.160/0.115
+- Δ(pre−post)：textvqa +16.8pp、docvqa +9.8pp → **text-dense stage law 跨第四独立谱系复制**；iso-token 逐样本精确（pre≡post ptid≈none 25%）
+- GQA +4.5pp 方向反转但 **inconclusive**：greedy 解码 floor-collapse 全臂（containment 锚 0.775≈官方 0.77 证能力完好；模型官方协议=sampling）→ 双向不作方向 claim
+- Runner glm4v 族分支 +340 行纯增量（四族 dry-check 回归全过）；digest = experiments/glm4v_stage_gate.md（含 v2 4096 探针附录）
+
+## ★ 论文（drafts/latex/paper_acmmm.tex ≡ drafts/overleaf_submission/main.tex，双份同步）
+- 入口重写：贡献①=因果机制（M1 秩重排/M2 被贬=文本笔画单元/M3 ranking-swap kept-set identity 定果）→ ②=stage law 为其泛化（三族 full splits）→ ③=封闭设计空间+regime map
+- Table 3 → failure-mode/regime map；FastV=query-conditioned strong baseline；RBM=query-blind OCR-preserving robust default（not uniformly optimal）
+- §4.2 第四族段落+表（claim 边界：仅 text-dense 臂 n=200 复制、GQA inconclusive、greedy 协议/像素 cap/n 边界）；二轮 must-fix 全部保留
 
 ## ★ 待办
-1. ✅ **FIG:1 主图 = df7282e1**（作者选，已晋升 `drafts/figs/fig1.{pdf,png}`，实测数据版；contact sheet + 9 张备选 fig1_* 留 outputs/ 备换；compare_* 10 张可作 supp 定性材料）
-2. **嵌图 + 渲染 + 实测压页 ≤8+2**（预估 9–11pp；4 个 COMPRESS-OPTIONAL 杠杆已埋于 tex；编译环境届时定：装轻量 TeX 链（需 sudo，升级 user）或 user 环境编）→ **二次升级 user 投稿 go/no-go（charter）**
-3. **投稿行政**：OpenReview 账号/profile、author list 早锁（abstract 截止后不可改）、MM'27 官方 CFP 待出（现按 MM'26 proxy）
+1. **升级 user：投稿 go/no-go（charter）**，附 GLM GQA-arm 判决与第四族口径
+2. 嵌图 + 渲染 + 实测压页 ≤8+2（FIG:1 实测版已晋升 drafts/figs/；4 个 COMPRESS-OPTIONAL 杠杆已埋）
+3. 投稿行政：OpenReview 账号/profile、author list 早锁、MM'27 官方 CFP 待出
 
 ## ★ 红线（判据锁定 DECISIONS.md）
-不跨模型宣 SOTA、不写 beats existing methods；GQA 只报微胜/tie·无 crossover；VZ 官方数仅 mismatched 锚；预注册判据不改；claim 标配置边界（像素 cap/预算/n）。图只用实测 merger L2，禁 CLIP/SigLIP/attention 代理（管线已硬编码拒渲）。
+不跨模型宣 SOTA、不写 beats existing methods；Qwen/InternVL GQA 只报微胜/tie·无 crossover；**GLM GQA 臂只报 inconclusive**；claim 标配置边界（像素 cap/预算/n/解码协议）；图只用实测 merger L2。
 
 ## ★ 约束/资产
-env qwen3vl_clean；权重齐；runner=v3_premerger_runner.py；HF harness=baselines_hf.py；runs/ gitignore、digest 入 experiments/；commit=Code-Yan-ZX 禁 AI 署名；升级=凭据/>6GPU·h/claim 推翻/投稿前。真实图管线=real_data_pipeline/（run_all.sh 断点续跑；data/*.npz 不入库，审计 JSON 白名单入库）。手册 ORCHESTRATION.md。
+env qwen3vl_clean；权重齐（qwen3vl/qwen2vl/internvl3/glm4v，ModelScope 布局）；runner=v3_premerger_runner.py（4 族）；runs/ gitignore、digest 入 experiments/；commit=Code-Yan-ZX 禁 AI 署名；升级=凭据/>6GPU·h/claim 推翻/投稿前。手册 ORCHESTRATION.md。
