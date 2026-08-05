@@ -191,7 +191,7 @@ $\geq$-consistent on every other cell.
 
 \subsection*{S4b. Cascade two-stage gate --- paired McNemar counts (Qwen3-VL-8B, $n = 200$, official rescore)}
 
-Cascade gate (body Table~4 / \S\,6): single budget, Stage~1 $=$ pre-merger RBM
+Cascade gate (body Table~5 / \S\,6): single budget, Stage~1 $=$ pre-merger RBM
 keeping fraction $X$ of merger-input units, Stage~2 $=$ FastV at LLM layer~2
 dropping fraction $Y$ of the survivors; total keep $= X\cdot(1 - Y)$. Three arms
 (pre-alone / fastv-alone / cascade) are compared pairwise on identical images
@@ -233,12 +233,12 @@ cas-vs-pre $z$ (DocVQA 25\%, $+2.07$) is paired with a loss to FastV
 training-free selectors composed in series do not complement (body \S\,6).
 
 % =============================================================================
-\section*{S5. Binomial stderrs + skip accounting (Table 1 cells)}
+\section*{S5. Binomial stderrs + skip accounting (Table 1 Qwen blocks)}
 % =============================================================================
 
 $\sigma = \sqrt{p(1 - p)/n}$, greedy decoding (no temperature variance; error
 bars are binomial only). Source: \path{experiments/j7_main_table.md} (stderr
-column) + Table~1 footnotes.
+column) + the Qwen-block footnotes of Table~1.
 
 \begin{itemize}
   \item Qwen3-VL none DocVQA: re-run at max-model-len 49,152, native
@@ -249,7 +249,7 @@ column) + Table~1 footnotes.
     understated and the relative gaps are conservative.
   \item Qwen2.5-VL OCR-Bench @25\% RBM: 4~M-pixel cap (mean tokens 229.6 vs
     post 282.0) $\to$ its $+293$-pt gap is conservative (the one iso-token
-    exception in Table~1, note~d).
+    exception in the Qwen block of Table~1, note~d).
 \end{itemize}
 
 \noindent Per-cell $\sigma$ values (full splits, computed from the printed
@@ -396,12 +396,13 @@ remains the paper's selector, frozen as plain RBM (\S\,3.2).
     \toprule
     Body location & Cells & Runs path & Summary digest \\
     \midrule
-    Table 1 (Qwen full splits)        & 26/26        & \path{runs/full_matrix/j7_*.json} & \path{experiments/j7_main_table.md} \\
-    Table 2 (InternVL3)               & 16/16        & \path{runs/internvl3/internvl3_*.json} + \path{internvl3_official_summary.json} & \path{experiments/internvl3_main_matrix.md} \\
+    Table 1 (Qwen blocks)             & 26/26        & \path{runs/full_matrix/j7_*.json} & \path{experiments/j7_main_table.md} \\
+    Table 1 (InternVL3 block)         & 16/16        & \path{runs/internvl3/internvl3_*.json} + \path{internvl3_official_summary.json} & \path{experiments/internvl3_main_matrix.md} \\
+    Table 2 (GLM gate)                & 9/9          & \path{runs/glm4v_gate/*.json} & \path{experiments/glm4v_stage_gate.md} \\
     Table 3 FastV-k3                  & 8            & \path{runs/r2_same_scope/r2b_*.json} & \path{experiments/r2b_fastv_k3.md} \\
     Table 3 RBM same-scope            & 5            & \path{runs/r2_same_scope/r2c_*.json} & \path{experiments/r2c_rbm_scope.md} \\
-    Table 4 cascade gate              & 24/24        & \path{runs/cascade/gate_*.json} + \path{gate_result.json} & \path{experiments/cascade_gate.md} \\
-    Table 5 efficiency                & 7 configs    & \path{runs/full_matrix/efficiency/*.eff.json} & \path{experiments/j6_efficiency.md} \\
+    Table 5 cascade gate              & 24/24        & \path{runs/cascade/gate_*.json} + \path{gate_result.json} & \path{experiments/cascade_gate.md} \\
+    Table 6 efficiency                & 7 configs    & \path{runs/full_matrix/efficiency/*.eff.json} & \path{experiments/j6_efficiency.md} \\
     \S\,5 kept-set Jaccard / swap     & 8            & \path{runs/r1_1_swap_jaccard/*.json} + \path{jaccard_summary.json} & \path{experiments/r1_1_swap_jaccard.md} \\
     \S\,5.1--5.2 M1/M2                & $n=64 \times 3$ & mechanism campaign (released with code) & mechanism\_verification\_report via \path{drafts/paper_v4.md} \S\,4 \\
     \S\,5.4 retention curve           & $n=200 \times 4$ & j8 ablation runs & \path{experiments/j8_ablations.md} \\
@@ -413,7 +414,7 @@ remains the paper's selector, frozen as plain RBM (\S\,3.2).
   \end{tabular}
 \end{table*}
 
-\subsection*{S9.1 InternVL3-8B full-split cells (Table 2; 16/16)}
+\subsection*{S9.1 InternVL3-8B full-split cells (Table 1; 16/16)}
 
 Model \path{OpenGVLab/InternVL3-8B}, vLLM 0.19, bf16, eager attention, greedy;
 $r =$ TOTAL drop ($0.750 \to \kappa = 25\%$, $0.875 \to \kappa = 12.5\%$); skip
@@ -510,7 +511,7 @@ the per-cell \path{runs/r2_same_scope/r2c_*.json} files.
   \end{tabular}
 \end{table*}
 
-\subsection*{S9.4 Cascade gate cells (Table 4; 24/24, Qwen3-VL-8B)}
+\subsection*{S9.4 Cascade gate cells (Table 5; 24/24, Qwen3-VL-8B)}
 
 Three arms $\times$ two budgets $\times$ four benchmarks; $n = n_{\mathrm{common}}$
 (matched by question id); official $=$ \path{acc_official} from the paired
@@ -635,7 +636,7 @@ intersection is a sparse minority of the budget.
 \begin{figure*}[p]
 \centering
 \begin{minipage}{0.86\textwidth}
-\section*{S11. Fourth-family gate --- full cell and protocol audit
+\section*{S11. Fourth-family gate --- full cell and protocol audit for body Table 2
   (GLM-4.1V-9B-Thinking, $n = 200$)}
 \label{app:s11}
 

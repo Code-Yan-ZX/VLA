@@ -1,7 +1,7 @@
 # STATE.md — 当前项目状态（主窗口维护，保持 ≤30 行）
 
 > 项目：VLM 视觉 token 压缩 · 目标：**Rank-Before-Merge → ACM MM'27**
-> 最近更新：2026-08-05 · **第四族 GLM gate + Overleaf 证据审计完成**：GLM-4.1V-9B-Thinking n=200/keep25% text-dense pre≫post 复制（+16.8pp TextVQA / +9.8pp ANLS）；GQA greedy 协议下 inconclusive。Overleaf 新增 S11 全 cell/iso-token/4096 探针，并修正 S9.2/S9.3 共 13 个误标 raw acc 的 official 索引值与 FastV 过宽 claim；机制优先正文保留。GPU 5.5/6 h。**下一步：升级 user 投稿 go/no-go（charter）**。
+> 最近更新：2026-08-05 · **主结果表重排完成**：Table 1 统一展示 Qwen3-VL-8B、Qwen2.5-VL-7B、InternVL3-8B full splits；Table 2 前置为 GLM-4.1V-9B-Thinking 第四族 gate；后续表顺延并修正补充材料索引。Table 3 单栏溢出已修复。GPU 5.5/6 h。**下一步：升级 user 投稿 go/no-go（charter）**。
 
 ## ★ 第四族 gate（GLM-4.1V-9B-Thinking · 2026-08-03）
 - 候选审计（ModelScope 20+ 模型筛选、代码级 merger 证据）= experiments/latest_vlm_model_audit.md；TOP-1 GLM-4.6V-Flash processor 类需 transformers≥5.0rc 加载失败 → 按预注册切同架构 4.1V，无 config hack
@@ -13,7 +13,7 @@
 ## ★ 论文（投稿权威入口 = drafts/overleaf_submission/main.tex；drafts/latex 仅科学正文同步、仍含图占位）
 - 入口重写：贡献①=因果机制（M1 秩重排/M2 被贬=文本笔画单元/M3 ranking-swap kept-set identity 定果）→ ②=stage law 为其泛化（三族 full splits）→ ③=封闭设计空间+regime map
 - Table 3 → failure-mode/regime map；FastV=query-conditioned strong baseline；RBM=query-blind OCR-preserving robust default（not uniformly optimal）
-- §4.2 第四族段落+表（claim 边界：仅 text-dense 臂 n=200 复制、GQA inconclusive、greedy 协议/像素 cap/n 边界）；二轮 must-fix 全部保留
+- Table 1 = 三族 full-split 主矩阵；Table 2 = GLM 第四族 gate；Table 3 = FastV/RBM regime map；Table 4/5/6 = ranking-swap/cascade/efficiency，正文与补充索引一致
 - Overleaf S11 补齐 GLM 高精度分数/ptid/boxed/4096 诊断；S9.2/S9.3 已统一为 r2b/r2c official rescore；审计 = experiments/recent_submission_commit_audit.md
 
 ## ★ 待办

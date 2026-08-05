@@ -336,7 +336,7 @@ fixed:
     by published compression methods for merger-equipped VLMs, including
     VisionZip's Qwen path), or --- the stronger, query-conditioned contrast ---
     prune inside the LLM by layer-2 attention (the FastV stage). The main
-    matrices (Tables~\ref{tab:tab1}--\ref{tab:tab2}) use the post-merger-L2
+    matrix (Table~\ref{tab:tab1}) uses the post-merger-L2
     contrast, iso-selector with the pre arm; the layer-2 FastV contrast is used
     only in Table~\ref{tab:tab3}.
 \end{itemize}
@@ -480,19 +480,21 @@ on per-sample correctness ($b/c =$ pre-only / post-only correct;
 $z = (b - c)/\sqrt{b + c}$); an independent-binomial $z$ is the cross-check.
 Tables print $\Delta$ with the McNemar $z$ unless noted.
 
-\subsection{Qwen main result --- official full splits (Table 1)}\label{sec:qwen}
+\subsection{Main result across three families --- official full splits (Table 1)}\label{sec:qwen}
 
 % --- TABLE 1 : wide (8 columns) -> table* spanning both columns ---------------
 \begin{table*}[t]
   \centering
   \small
-  \caption{Official metrics, full splits ($n = 5000 / 5349 / 1000 / 12578$),
-    greedy, both Qwen models. RBM = pre-merger L2 (ours); post = post-merger L2
-    (byte-identical to the VisionZip dominant+contextual principle-port on both
-    generations, \S\ref{sec:selector}). $\Delta_{25} =$ pre $-$ post at
-    $\kappa = 0.25$ with the primary paired McNemar $z$ in parentheses;
-    \dag\ marks the (only) significant post-stage lead. Parenthetical stderrs
-    ($\sqrt{p(1-p)/n}$) and skip accounting are in the supplementary material.}
+  \caption{Official full-split metrics ($n = 5000 / 5349 / 1000 / 12578$),
+    greedy, across Qwen3-VL-8B, Qwen2.5-VL-7B, and InternVL3-8B. RBM =
+    pre-merger L2 (ours); post = post-merger L2 at the same token budget.
+    $\Delta_{25} =$ pre $-$ post at $\kappa = 0.25$; paired McNemar $z$ is
+    printed in parentheses for the Qwen cells where measured. \dag\ marks the
+    only significant post-stage leads. InternVL3 uses a different merger and
+    family-specific imaging configuration; compare within-model deltas, not
+    cross-model absolute values. Full protocol and skip accounting are in the
+    supplementary material.}
   \label{tab:tab1}
   \begin{tabular}{@{}ll r r r l r r@{}}
     \toprule
@@ -509,6 +511,12 @@ Tables print $\Delta$ with the McNemar $z$ unless noted.
       & DocVQA (ANLS)       & 0.949 & \textbf{0.636} & 0.526 & \textbf{+11.0 pp (15.6)} & 0.455 & 0.245 \\
       & OCR-Bench (/1000)   & 817   & \textbf{476}   & 183   & \textbf{+293 pts (14.6)} & 335   & 67 \\
       & GQA (exact match)   & 0.604 & 0.559          & 0.585 & $-2.6$~pp \dag\ ($-5.7$) & ---   & --- \\
+    \midrule
+    \multirow{4}{*}{InternVL3-8B}
+      & TextVQA (VQA-acc)   & 0.8338 & \textbf{0.7890} & 0.4148 & \textbf{+37.4 pp} & 0.7230 & 0.3064 \\
+      & DocVQA (ANLS)       & 0.9221 & \textbf{0.7284} & 0.3820 & \textbf{+34.6 pp} & 0.5054 & 0.2451 \\
+      & OCR-Bench (/1000)   & 852    & \textbf{753}    & 321    & \textbf{+432 pts} & ---    & --- \\
+      & GQA (exact match)   & 0.6293 & 0.5993          & 0.6031 & $-0.4$ pp (tie)   & ---    & --- \\
     \bottomrule
   \end{tabular}
 
@@ -527,8 +535,12 @@ Tables print $\Delta$ with the McNemar $z$ unless noted.
   used a 4~M-pixel cap (mean tokens 229.6 vs post 282.0), so its $+293$-pt gap
   is conservative. (e)~Primary test = paired McNemar $z$ (printed);
   independent-binomial cross-check agrees (smallest $|z| = 4.1$, the GQA post
-  lead). No text-dense $\Delta$ cell is direction-only or non-significant
-  (smallest text-dense $|z| = 14.6$).
+  lead). No Qwen text-dense $\Delta$ cell is direction-only or non-significant
+  (smallest text-dense $|z| = 14.6$). (f)~InternVL3 uses pixel-shuffle
+  downsampling and a 4~M-pixel DocVQA cap; its pre/post prompt token counts are
+  identical within every cell. Its GQA $-0.4$~pp difference is a tie. Paired
+  McNemar statistics were not run for InternVL3, so no $z$ is printed for that
+  block.
 \end{table*}
 
 \textbf{The stage law holds on both generations.} Every text-dense
@@ -553,56 +565,24 @@ native-resolution full splits}. We therefore claim \textbf{no} pre-merger
 superiority on object-centric data; all other sections refer here for the GQA
 statistics.
 
-\subsection{Generalization to a third family --- InternVL3-8B (Table 2)}\label{sec:internvl}
+\subsection{Generalization to a third family --- InternVL3-8B (Table 1)}\label{sec:internvl}
 
 To test whether the stage law is a Qwen-family artifact or a property of
 merger-equipped VLMs, we run RBM and the post stage on \textbf{InternVL3-8B},
 whose merger is pixel-shuffle downsampling --- a different design from Qwen's
 PatchMerger. The post arm here is \textbf{post-merger L2 top-k} --- the
 \emph{same} query-blind L2 selector as the pre arm, at an identical token budget
-(ptid equal across arms), so Table~\ref{tab:tab2} is a \textbf{pure
+(ptid equal across arms), so the InternVL3 block of Table~\ref{tab:tab1} is a \textbf{pure
 stage-variable experiment under iso-selector / iso-budget control} at 25\%
 retention. The query-conditioned in-layer FastV contrast is a separate campaign,
 reported in Table~\ref{tab:tab3}.
 
-\begin{table}[t]
-  \centering
-  \small
-  \caption{InternVL3-8B, official full splits ($n = 5000 / 5349 / 1000 /
-    12578$), greedy. pre = RBM (pre-merger L2); post = post-merger L2 top-k
-    (query-blind, same L2 selector as pre; iso-selector and iso-budget --- ptid
-    identical across arms). The query-conditioned FastV contrast is
-    Table~\ref{tab:tab3}. ptid = mean post-merger visual tokens/request (pre and
-    post iso-token).}
-  \label{tab:tab2}
-  \begin{tabular}{@{}l r r r l l r@{}}
-    \toprule
-    Benchmark (metric) & none & pre @25\% & post @25\% & pre $-$ post & pre vs none & ptid \\
-    \midrule
-    TextVQA (VQA-acc) & 0.8338 & \textbf{0.7890} & 0.4148 & \textbf{+37.4 pp} & $-4.5$ pp  & 690 \\
-    DocVQA (ANLS)     & 0.9221 & \textbf{0.7284} & 0.3820 & \textbf{+34.6 pp} & $-19.4$ pp & 860 \\
-    OCR-Bench (/1000) & 852    & \textbf{753}    & 321    & \textbf{+432 pts} & $-99$      & 555 \\
-    GQA (exact match) & 0.6293 & 0.5993          & 0.6031 & $-0.4$ pp (tie)   & $-3.0$ pp  & 690 \\
-    \bottomrule
-  \end{tabular}
-
-  \vspace{3pt}
-  \footnotesize
-  \textbf{Table notes (configuration boundaries --- read before comparing across
-  models).} (i)~\textbf{DocVQA pixel cap differs by family.} InternVL3 DocVQA
-  runs under a \textbf{4~M-pixel} cap (its dynamic tiling tolerates more, and its
-  image processor rejects a smaller cap); the Qwen DocVQA baseline-comparison
-  cells of \S\ref{sec:fastv} use a \textbf{600k} cap. Within-model comparisons
-  are valid; \textbf{cross-model DocVQA absolute values are not comparable} ---
-  compare per-model $\Delta$, not per-model levels. (ii)~\textbf{RBM is not
-  lossless on DocVQA/OCR.} pre@25\% costs $-19.4$~pp vs none on InternVL3 DocVQA
-  and $-99$ /1000 on OCR-Bench, while TextVQA costs only $-4.5$~pp and GQA
-  $-3.0$~pp; a near-lossless reading is \textbf{TextVQA/GQA-scoped only}. On the
-  text-dense benchmarks the claim is the large pre$>$post margin, not pre =
-  none. (iii)~The GQA ``tie'' is at full $n = 12578$ ($-0.4$~pp; no meaningful
-  difference), contrasted with Qwen's small significant post edge ---
-  family-dependent, both small.
-\end{table}
+\textbf{Configuration boundary.} InternVL3 DocVQA uses a 4~M-pixel cap, while
+the Qwen same-scope baseline cells of \S\ref{sec:fastv} use 600k; cross-model
+absolute values are not comparable. At 25\% retention RBM costs $-19.4$~pp vs
+none on InternVL3 DocVQA and $-99$/1000 on OCR-Bench, versus only $-4.5$~pp on
+TextVQA and $-3.0$~pp on GQA. The claim is therefore the large within-model
+pre$>$post margin, not losslessness on every text-dense workload.
 
 Deep budget, 12.5\% retention ($r = 0.875$, text-dense only): TextVQA pre 0.7230
 vs post 0.3064 (\textbf{+41.7 pp}); DocVQA pre 0.5054 vs post 0.2451
@@ -653,12 +633,34 @@ anchor (answer-containment extraction, same model) recovers TextVQA none
 $0.775 \approx$ published $\approx 0.77$ --- the ability is intact; the
 suppression is protocol-level. \textbf{Scope.} This is an $n = 200$ gate,
 not a full split: the full-split generality claim remains the three families
-of Tables~\ref{tab:tab1}--\ref{tab:tab2}, and the gate supports the
+of Table~\ref{tab:tab1}, and the gate supports the
 text-dense arm of the stage law on a fourth lineage;
 cross-family absolute values are not comparable (pixel cap and decoding
 protocol differ), only the direction$\times$workload pattern is. Supplementary
 Section~S11 reports the full-precision cell scores, prompt-token audit, answer
 convergence counts, and the 4096-token diagnostic.
+
+\begin{table}[t]
+  \centering
+  \small
+  \caption{Fourth-family gate --- GLM-4.1V-9B-Thinking (Zhipu, 2025),
+    $n = 200$, 25\% retention ($r = 0.75$), none / pre (RBM) / post under the
+    same query-blind L2 selector, greedy deterministic decoding, and
+    model-default resolution (effective max $\approx 4.82$M px). Pre and post
+    prompt token ids are identical per sample. $\Delta =$ pre $-$ post. This is
+    a gate, not a full split; GQA is protocol-inconclusive under greedy
+    decoding, and cross-family absolute values are not comparable.}
+  \label{tab:glm}
+  \begin{tabular}{@{}l r r r l@{}}
+    \toprule
+    Benchmark (metric) & none & pre & post & $\Delta$ (pre $-$ post) \\
+    \midrule
+    TextVQA (VQA-acc) & 0.242 & \textbf{0.218} & 0.050 & \textbf{+16.8 pp} \\
+    DocVQA (ANLS)     & 0.104 & \textbf{0.130} & 0.031 & \textbf{+9.8 pp} \\
+    GQA (exact match) & 0.150 & 0.160 & 0.115 & $+4.5$ pp (inconclusive) \\
+    \bottomrule
+  \end{tabular}
+\end{table}
 
 % FIG 2 --- grouped bars of the pre-post Delta at 25% retention (headline figure;
 % wired from figs/fig2.pdf, measured full-split values).
@@ -670,7 +672,7 @@ convergence counts, and the 4096-token diagnostic.
     text-dense advantage (TextVQA, DocVQA, OCR-Bench) is the same order and
     direction across three families and two merger designs; GQA stays near zero.
     OCR-Bench is measured in /1000 pts (annotated per bar; units differ from the
-    pp benchmarks). Full-split values, Tables~\ref{tab:tab1}--\ref{tab:tab2}.}
+    pp benchmarks). Full-split values, Table~\ref{tab:tab1}.}
   \label{fig:fig2}
 \end{figure*}
 
@@ -693,6 +695,7 @@ whereas RBM holds (0.60 / 0.42 / 0.58). There is therefore no universal winner.
 \begin{table}[t]
   \centering
   \small
+  \setlength{\tabcolsep}{2pt}
   \caption{Workload-conditioned regime map --- same-scope paired comparison of
     FastV at best $K = 3$ (the query-conditioned strong baseline) vs RBM (pre,
     the query-blind robust default) @25\% retention, both Qwen models, official
@@ -702,27 +705,28 @@ whereas RBM holds (0.60 / 0.42 / 0.58). There is therefore no universal winner.
     reference-grounded home regime, RBM's wins mark the OCR regime
     (\S\ref{sec:modes}).}
   \label{tab:tab3}
-  \begin{tabular}{@{}ll r r r l@{}}
+  \begin{tabular}{@{}l r r r l@{}}
     \toprule
-    Model & Benchmark (scope; pixel cap) & $n$ & FastV-k3 & RBM @25\% & Margin (winner) \\
+    Benchmark (scope; pixel cap) & $n$ & FastV-k3 & RBM @25\% & $\Delta$ (F/R) \\
     \midrule
-    \multirow{4}{*}{Qwen3-VL-8B}
-      & TextVQA (full; default)      & 5000  & \textbf{0.7771} & 0.605  & \textbf{+17.2 pp (FastV)} \\
-      & GQA (full; default)          & 12578 & \textbf{0.5376} & 0.449  & \textbf{+8.9 pp (FastV)} \\
-      & DocVQA (dev; 600k cap)       & 200   & \textbf{0.5863} & 0.4239 & \textbf{+16.2 pp (FastV)} \\
-      & OCR-Bench (dev; native res.) & 200   & 0.415           & \textbf{0.575} & \textbf{+16.0 pp (RBM)} \\
+    \multicolumn{5}{@{}l}{\textbf{Qwen3-VL-8B}} \\
+    TextVQA (full; default)      & 5000  & \textbf{0.7771} & 0.605  & \textbf{+17.2 F} \\
+    GQA (full; default)          & 12578 & \textbf{0.5376} & 0.449  & \textbf{+8.9 F} \\
+    DocVQA (dev; 600k cap)       & 200   & \textbf{0.5863} & 0.4239 & \textbf{+16.2 F} \\
+    OCR-Bench (dev; native res.) & 200   & 0.415           & \textbf{0.575} & \textbf{+16.0 R} \\
     \midrule
-    \multirow{4}{*}{Qwen2.5-VL-7B}
-      & TextVQA (dev; default)       & 200   & \textbf{0.7467} & 0.6683 & \textbf{+7.8 pp (FastV)} \\
-      & GQA (dev; default)           & 200   & 0.475           & \textbf{0.520} & \textbf{+4.5 pp (RBM)} \\
-      & DocVQA (dev; 600k cap)       & 200   & 0.4852          & \textbf{0.5062} & \textbf{+2.1 pp (RBM)} \\
-      & OCR-Bench (dev; native res.) & 200   & 0.285           & \textbf{0.370} & \textbf{+8.5 pp (RBM)} \\
+    \multicolumn{5}{@{}l}{\textbf{Qwen2.5-VL-7B}} \\
+    TextVQA (dev; default)       & 200   & \textbf{0.7467} & 0.6683 & \textbf{+7.8 F} \\
+    GQA (dev; default)           & 200   & 0.475           & \textbf{0.520} & \textbf{+4.5 R} \\
+    DocVQA (dev; 600k cap)       & 200   & 0.4852          & \textbf{0.5062} & \textbf{+2.1 R} \\
+    OCR-Bench (dev; native res.) & 200   & 0.285           & \textbf{0.370} & \textbf{+8.5 R} \\
     \bottomrule
   \end{tabular}
 
   \vspace{3pt}
   \footnotesize
-  \textbf{Table notes.} (i)~Scope and pixels: $n$ is printed per row; DocVQA
+  \textbf{Table notes.} F = FastV; R = RBM; $\Delta$ is the winner's absolute
+  lead in percentage points. (i)~Scope and pixels: $n$ is printed per row; DocVQA
   cells run at a 600k pixel cap on both arms (iso-pixel within this table);
   OCR-Bench runs at native resolution, which is what triggers the skips
   (note~ii); TextVQA/GQA use each model's default imaging configuration.
@@ -903,7 +907,7 @@ L2 is the paper's selector.
 Qwen2.5-VL-7B ($n = 64$, $r = 0.75$: DocVQA pre 0.664 $>$ post 0.531,
 $+13.3$~pp; TextVQA pre 0.719 $>$ post 0.349, $+37.0$~pp; and the VisionZip-style
 port $\equiv$ post byte-for-byte, $0.415 == 0.415$), and now on InternVL3-8B at
-the accuracy level (Table~\ref{tab:tab2}). The causal swap control is byte-exact
+the accuracy level (Table~\ref{tab:tab1}). The causal swap control is byte-exact
 on Qwen3-VL and selection-level (identical kept sets) on Qwen2.5-VL; we claim
 the causal decomposition for Qwen3-VL and present the others as corroboration of
 the ranking law.
@@ -1082,36 +1086,6 @@ $1.8\times$ (OCR-Bench) over none, with post $\approx$ pre req/s at identical
 token counts --- the compression speedup is real on a third family, and remains
 stage-neutral. Serving-side (continuous-batching) efficiency and Qwen2.5-VL
 efficiency are future work.
-
-% --- GLM fourth-family gate table. Defined here (after the efficiency table)
-% so that the compiled numbers of the existing tables --- referenced by the
-% hardcoded subsection title "(Table 3)" and by supp.tex's "Table 1--5"
-% naming --- stay unchanged; this table becomes the last-numbered table.
-% First references: \S\ref{sec:internvl} (fourth-family gate) and the
-% Discussion limitations.
-\begin{table}[t]
-  \centering
-  \small
-  \caption{Fourth-family gate --- GLM-4.1V-9B-Thinking (Zhipu, 2025),
-    $n = 200$, 25\% retention ($r = 0.75$), none / pre (RBM) / post under the
-    same query-blind L2 selector (iso-selector), greedy deterministic
-    decoding, model-default resolution (effective max $\approx 4.82$M px),
-    unified thinking-answer extraction identical across arms, iso-token exact
-    per sample (pre $\equiv$ post prompt token ids). $\Delta =$ pre $-$ post.
-    The GQA arm is protocol-inconclusive (floor collapse under greedy
-    decoding; \S\ref{sec:discussion}, item~6); cross-family absolute values
-    are not comparable (pixel cap and decoding protocol differ).}
-  \label{tab:glm}
-  \begin{tabular}{@{}l r r r l@{}}
-    \toprule
-    Benchmark (metric) & none & pre & post & $\Delta$ (pre $-$ post) \\
-    \midrule
-    TextVQA (VQA-acc) & 0.242 & \textbf{0.218} & 0.050 & \textbf{+16.8 pp} \\
-    DocVQA (ANLS)     & 0.104 & \textbf{0.130} & 0.031 & \textbf{+9.8 pp} \\
-    GQA (exact match) & 0.150 & 0.160 & 0.115 & $+4.5$ pp (inconclusive) \\
-    \bottomrule
-  \end{tabular}
-\end{table}
 
 % =============================================================================
 \section{Discussion and Limitations}\label{sec:discussion}
