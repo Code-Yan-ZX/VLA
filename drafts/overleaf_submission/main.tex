@@ -1198,4 +1198,10 @@ Code will be released.
 \bibliographystyle{ACM-Reference-Format}
 \bibliography{references}
 
+% Append the supplementary material to the same submission PDF. supp.tex also
+% remains independently compilable when \RBMIntegratedSupplement is undefined.
+\clearpage
+\def\RBMIntegratedSupplement{1}
+\input{supp}
+
 \end{document}

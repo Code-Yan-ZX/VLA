@@ -30,11 +30,16 @@ export VLLM_ENABLE_V1_MULTIPROCESSING=0 HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 
 # Weights are a LOCAL modelscope snapshot path -> no hub resolution at all.
 export VLLM_USE_MODELSCOPE=False
 
-OUT=runs/glm4v_gate
+OUT=${OUT:-runs/glm4v_gate}
 mkdir -p $OUT
 FAM=glm4v
 R=0.75
 MAXTOK=1024
+TEMPERATURE=${TEMPERATURE:-0.0}
+TOP_P=${TOP_P:-1.0}
+TOP_K=${TOP_K:--1}
+SEED=${SEED:-0}
+SAMPLE_ARGS="--temperature $TEMPERATURE --top-p $TOP_P --top-k $TOP_K --seed $SEED"
 
 # ---- (0) wait for an idle GPU (>= 40000 MiB free) ----
 echo "[glm4v_gate] $(date -u '+%F %T') waiting for >= 40000 MiB free GPU"
@@ -62,7 +67,7 @@ N=200
 run_cell(){ # bench mode r "flags" tag
   timeout 5400 $PY src/v3_premerger/v3_premerger_runner.py --model-family $FAM --benchmark $1 \
     --subset ${JSONL[$1]} --n $N --r $3 --mode $2 --selector l2 --max-tokens $MAXTOK \
-    $4 --out $OUT/$5.json > $OUT/$5.log 2>&1
+    $SAMPLE_ARGS $4 --out $OUT/$5.json > $OUT/$5.log 2>&1
   tail -2 $OUT/$5.log
 }
 skip_ratio(){ $PY -c "
@@ -95,7 +100,8 @@ for B in textvqa docvqa gqa; do cell pre $B $R; done
 for B in textvqa docvqa gqa; do cell post $B $R; done
 
 echo "=== glm4v official rescore (CPU) ==="
-$PY - <<'EOF'
+GLM_GATE_OUT=$OUT GLM_GATE_TEMPERATURE=$TEMPERATURE GLM_GATE_TOP_P=$TOP_P \
+GLM_GATE_TOP_K=$TOP_K GLM_GATE_SEED=$SEED $PY - <<'EOF'
 import json, glob, sys, os
 sys.path.insert(0, 'src')
 from v3_premerger.official_scorers import (score_textvqa_vqaacc,
@@ -104,7 +110,8 @@ SCORERS = {'textvqa': score_textvqa_vqaacc,
            'docvqa': score_docvqa_anls,
            'gqa': score_gqa}
 rows = []
-for f in sorted(glob.glob('runs/glm4v_gate/glm4v_*.json')):
+out = os.environ['GLM_GATE_OUT']
+for f in sorted(glob.glob(os.path.join(out, 'glm4v_*.json'))):
     if f.endswith('_official_summary.json'):
         continue
     d = json.load(open(f))
@@ -136,8 +143,12 @@ for f in sorted(glob.glob('runs/glm4v_gate/glm4v_*.json')):
           f"{row['official_score']:.4f} (runner acc={row['runner_acc']}, "
           f"skip={n_skip}/{len(ps)})")
 summary = {'gate': 'glm4v_stage_law', 'keep_frac': 0.25, 'selector': 'l2',
+           'temperature': float(os.environ['GLM_GATE_TEMPERATURE']),
+           'top_p': float(os.environ['GLM_GATE_TOP_P']),
+           'top_k': int(os.environ['GLM_GATE_TOP_K']),
+           'seed': int(os.environ['GLM_GATE_SEED']),
            'rows': rows}
-with open('runs/glm4v_gate/glm4v_gate_official_summary.json', 'w') as fh:
+with open(os.path.join(out, 'glm4v_gate_official_summary.json'), 'w') as fh:
     json.dump(summary, fh, indent=2)
 # ---- verdict table ----
 tab = {}

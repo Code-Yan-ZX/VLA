@@ -6,15 +6,16 @@
 2. In Overleaf, set **Main document** = `main.tex`.
 3. Compiler: **pdfLaTeX** (the `acmart` class with `sigconf` option; no
    XeLaTeX/LuaLaTeX-specific packages are used).
-4. The supplement compiles separately: set Main document = `supp.tex` in a
-   second project (or compile locally with the same `.bib` + `figs/`).
+4. Compiling `main.tex` produces one continuous PDF containing the main paper,
+   references, and S1--S11 supplementary material. `supp.tex` remains
+   independently compilable when a separate supplementary PDF is required.
 
 ## File map
 
 | file | role |
 |------|------|
-| `main.tex` | main paper (acmart sigconf, ~10 pp double-column target) |
-| `supp.tex` | supplementary material S1–S11 |
+| `main.tex` | main paper plus appended S1--S11 supplement |
+| `supp.tex` | dual-mode supplementary source (included by `main.tex` or compiled alone) |
 | `references.bib` | 20 verified entries |
 | `figs/fig1.pdf` | FIG 1 — measured method figure (Qwen3-VL-8B merger L2, sample df7282e1) |
 | `figs/fig2.pdf` | FIG 2 — pre−post Δ bar chart, 3 families × 4 benchmarks |

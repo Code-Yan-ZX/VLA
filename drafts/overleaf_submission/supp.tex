@@ -15,27 +15,40 @@
 %  (generic internal filenames; they identify no author / repo / institution).
 % =============================================================================
 
-\documentclass[sigconf,review,anonymous]{acmart}
+% Define \RBMIntegratedSupplement before \input{supp} to append this file to
+% main.tex. Without it, supp.tex remains a standalone ACM supplementary PDF.
+\ifdefined\RBMIntegratedSupplement
+  \appendix
+  \begin{center}
+    {\LARGE\bfseries Supplementary Material\par}
+    \vspace{4pt}
+    {\large Rank Before You Merge: A Stage Law for Training-Free Visual Token
+      Compression in Merger-Equipped Vision-Language Models\par}
+  \end{center}
+  \vspace{6pt}
+\else
+  \documentclass[sigconf,review,anonymous]{acmart}
 
-\usepackage{booktabs}
-\usepackage{multirow}
-\usepackage{pifont}     % \ding{51}=check
-\usepackage{graphicx}
-\usepackage{url}        % \path{} for run/digest paths
+  \usepackage{booktabs}
+  \usepackage{multirow}
+  \usepackage{pifont}     % \ding{51}=check
+  \usepackage{graphicx}
+  \usepackage{url}        % \path{} for run/digest paths
 
-\setcopyright{none}
-\settopmatter{printacmref=false, printccs=false, printfolios=true}
+  \setcopyright{none}
+  \settopmatter{printacmref=false, printccs=false, printfolios=true}
 
-\begin{document}
+  \begin{document}
 
-\title[Rank Before You Merge: Supplementary Material]{Supplementary Material --- Rank Before You Merge: A Stage Law for
-  Training-Free Visual Token Compression in Merger-Equipped Vision-Language
-  Models}
+  \title[Rank Before You Merge: Supplementary Material]{Supplementary Material --- Rank Before You Merge: A Stage Law for
+    Training-Free Visual Token Compression in Merger-Equipped Vision-Language
+    Models}
 
-\author{Anonymous Author(s)}
-\affiliation{\institution{Anonymous Affiliation}\country{}}
+  \author{Anonymous Author(s)}
+  \affiliation{\institution{Anonymous Affiliation}\country{}}
 
-\maketitle
+  \maketitle
+\fi
 
 \noindent\footnotesize Every number is labeled with its source digest
 (\path{experiments/*.md}) or run-JSON path. Tables S1--S3/S7 support
@@ -59,14 +72,15 @@ column is taken from the same M1 table in \path{drafts/paper_v4.md} \S\,4.1.
 
 \begin{table}[h]
   \centering
-  \small
+  \scriptsize
+  \setlength{\tabcolsep}{3pt}
   \begin{tabular}{@{}l r r r@{}}
     \toprule
-    Benchmark (type) & Spearman $\rho$ & Jaccard@25\% & Kendall $\tau$ \\
+    Benchmark & Spearman $\rho$ & Jaccard@25\% & Kendall $\tau$ \\
     \midrule
-    DocVQA (text-dense document) & \textbf{0.137} & \textbf{0.180} & 0.094 \\
-    TextVQA (text-dense scene)   & 0.332          & 0.243          & 0.227 \\
-    GQA (object-centric)         & \textbf{0.360} & \textbf{0.278} & 0.249 \\
+    DocVQA (document) & \textbf{0.137} & \textbf{0.180} & 0.094 \\
+    TextVQA (scene)   & 0.332          & 0.243          & 0.227 \\
+    GQA (object)      & \textbf{0.360} & \textbf{0.278} & 0.249 \\
     \bottomrule
   \end{tabular}
 \end{table}
@@ -89,10 +103,11 @@ from the same M2 table in \path{drafts/paper_v4.md} \S\,4.2.
 
 \begin{table}[h]
   \centering
-  \small
+  \scriptsize
+  \setlength{\tabcolsep}{2pt}
   \begin{tabular}{@{}l r r r l@{}}
     \toprule
-    Benchmark & $\rho$(rank\_shift, Sobel edge) & mean Sobel, post-drops-pre-keeps & mean Sobel, reverse group & \% demoted above per-image median \\
+    Benchmark & $\rho$ & Sobel drop & Sobel reverse & demoted $>$ median \\
     \midrule
     DocVQA  & \textbf{+0.439} & \textbf{0.641} & 0.124 & \textbf{92\% (vs 35\%)} \\
     TextVQA & +0.155          & 0.281          & 0.186 & 72\% (vs 53\%) \\
@@ -303,15 +318,16 @@ $\Delta_{25} =$ pre $-$ post at $\kappa = 0.25$.
 
 \begin{table}[h]
   \centering
-  \small
+  \scriptsize
+  \setlength{\tabcolsep}{2pt}
   \begin{tabular}{@{}l l l l c@{}}
     \toprule
-    Model & Benchmark & full-split $\Delta_{25}$ (Table 1) & $n = 200$ $\Delta_{25}$ & same sign? \\
+    Model & Bench & full $\Delta_{25}$ & $n=200$ $\Delta_{25}$ & sign \\
     \midrule
-    Qwen3-VL-8B   & TextVQA & $+38.4$ pp & $+38.3$ pp & \ding{51} (pre) \\
-    Qwen3-VL-8B   & DocVQA  & $+24.3$ pp & $+26.5$ pp & \ding{51} (pre) \\
-    Qwen2.5-VL-7B & TextVQA & $+26.1$ pp & $+32.0$ pp & \ding{51} (pre) \\
-    Qwen2.5-VL-7B & DocVQA  & $+11.0$ pp & $+18.8$ pp & \ding{51} (pre) \\
+    Qwen3-VL   & TextVQA & $+38.4$ pp & $+38.3$ pp & \ding{51} pre \\
+    Qwen3-VL   & DocVQA  & $+24.3$ pp & $+26.5$ pp & \ding{51} pre \\
+    Qwen2.5-VL & TextVQA & $+26.1$ pp & $+32.0$ pp & \ding{51} pre \\
+    Qwen2.5-VL & DocVQA  & $+11.0$ pp & $+18.8$ pp & \ding{51} pre \\
     \bottomrule
   \end{tabular}
 \end{table}
@@ -334,14 +350,15 @@ campaigns).
 
 \begin{table}[h]
   \centering
-  \small
+  \scriptsize
+  \setlength{\tabcolsep}{2pt}
   \begin{tabular}{@{}l l r r l@{}}
     \toprule
     Selector & Benchmark & pre & post & $\Delta$ \\
     \midrule
-    L2 (paper selector)         & TextVQA                       & 0.598--0.605 & 0.215--0.222 & $\approx +38$ pp \\
-    Global-centroid attention   & TextVQA                       & \textbf{0.553} & 0.200 & \textbf{+35.3 pp} \\
-    Global-centroid attention   & TextVQA/DocVQA (doubled $n$)  & --- & --- & \textbf{+35.5 / +24.4 pp} \\
+    L2       & TextVQA              & 0.598--0.605 & 0.215--0.222 & $\approx +38$ pp \\
+    GC-attn  & TextVQA              & \textbf{0.553} & 0.200 & \textbf{+35.3 pp} \\
+    GC-attn  & TextVQA/DocVQA ($2n$)& --- & --- & \textbf{+35.5 / +24.4 pp} \\
     \bottomrule
   \end{tabular}
 \end{table}
@@ -357,11 +374,12 @@ remains the paper's selector, frozen as plain RBM (\S\,3.2).
 
 \begin{itemize}
   \item \textbf{Qwen3-VL-8B}: first-invoked merger $=$
-    \path{deepstack_merger_list[0]} (\path{deepstack_visual_indexes = [8, 16,
-    24]}), so unit scores are computed on \textbf{ViT block-8 outputs}
+    \path{deepstack_merger_list[0]} (\path{deepstack_visual_indexes}
+    $= [8, 16, 24]$), so unit scores are computed on \textbf{ViT block-8 outputs}
     (intermediate depth); the single resulting mask is shared by all mergers,
     including the main merger that consumes the final-block output. Runner
-    diagnostic \path{mask_computed_at = 'deepstack_0'} on every run. Source:
+    diagnostic \path{mask_computed_at} $=$ \texttt{'deepstack\_0'} on every
+    run. Source:
     \path{experiments/r1_1_swap_jaccard.md} Part~B (three-evidence verification:
     call order in \path{Qwen3VLVisionModel.forward}, model config, run
     diagnostics).
@@ -737,4 +755,9 @@ identifies authors, institutions, or repositories (double-blind).
 \end{figure*}
 \clearpage
 
-\end{document}
+\ifdefined\RBMIntegratedSupplement
+  \let\RBMEndSupplement\relax
+\else
+  \def\RBMEndSupplement{\end{document}}
+\fi
+\RBMEndSupplement

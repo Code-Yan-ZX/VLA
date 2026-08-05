@@ -607,6 +607,13 @@ def parse_args():
     ap.add_argument("--subset", required=False, default=None)
     ap.add_argument("--n", type=int, default=200)
     ap.add_argument("--max-tokens", type=int, default=32)
+    ap.add_argument("--temperature", type=float, default=0.0,
+                    help="Generation temperature. 0.0 preserves the locked "
+                         "greedy protocol; values >0 enable sampling.")
+    ap.add_argument("--top-p", type=float, default=1.0,
+                    help="Nucleus-sampling threshold when temperature >0.")
+    ap.add_argument("--top-k", type=int, default=-1,
+                    help="Top-k sampling cutoff when temperature >0; -1 disables it.")
     ap.add_argument("--selector", default="l2", choices=["l2", "attn"],
                     help="l2 = L2-norm selector (default, original behavior); "
                          "attn = global-centroid-distance saliency proxy -- a "
@@ -2951,7 +2958,11 @@ def main():
         ]}]
 
     msgs_all = [make_msgs(s) for s in samples]
-    sp = SamplingParams(max_tokens=args.max_tokens, temperature=0.0)
+    sampling_kw = {"max_tokens": args.max_tokens,
+                   "temperature": args.temperature}
+    if args.temperature > 0.0:
+        sampling_kw.update(top_p=args.top_p, top_k=args.top_k, seed=args.seed)
+    sp = SamplingParams(**sampling_kw)
     # vLLM 0.19 V1 IGNORES engine-level mm_processor_kwargs (verified: DocVQA
     # ptid identical with/without the engine kwarg) -> pass it per request.
     # internvl3/glm4v: no per-request kwarg either (their image processors
@@ -3057,7 +3068,8 @@ def main():
         "visionzip_style": args.visionzip_style,
         "visionzip_dom_ratio": args.visionzip_dom_ratio,
         "selector": args.selector, "max_pixels": args.max_pixels,
-        "seed": args.seed,
+        "seed": args.seed, "temperature": args.temperature,
+        "top_p": args.top_p, "top_k": args.top_k,
         "wall_s": round(wall, 3), "req_per_s": round(req_s, 4),
         "acc": round(acc, 4), "n_answered": n_ok, "n_skipped": n_skip,
         "mean_ptid_len": round(sum(kept_counts) / len(kept_counts), 1) if kept_counts else 0,
