@@ -134,7 +134,7 @@ non-degenerate per-image answers:
 ## Protocol
 
 9 cells = {none, pre, post} × {textvqa_200, docvqa_200, gqa_200}, `--r 0.75`
-(keep 25%), selector l2, fresh process per cell, `--max-tokens 512`,
+(keep 25%), selector l2, fresh process per cell, `--max-tokens 1024`,
 outputs `runs/glm4v_gate/`. Official offline rescore (same functions as
 `scripts/rescore_official.py`, applied inline as in
 `scripts/internvl3_main_matrix.sh`): TextVQA VQA-acc, DocVQA ANLS, GQA

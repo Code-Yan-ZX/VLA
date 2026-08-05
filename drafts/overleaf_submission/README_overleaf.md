@@ -14,7 +14,7 @@
 | file | role |
 |------|------|
 | `main.tex` | main paper (acmart sigconf, ~10 pp double-column target) |
-| `supp.tex` | supplementary material S1–S10 |
+| `supp.tex` | supplementary material S1–S11 |
 | `references.bib` | 20 verified entries |
 | `figs/fig1.pdf` | FIG 1 — measured method figure (Qwen3-VL-8B merger L2, sample df7282e1) |
 | `figs/fig2.pdf` | FIG 2 — pre−post Δ bar chart, 3 families × 4 benchmarks |

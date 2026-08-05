@@ -115,8 +115,8 @@ under a locked gate): pre-merger selection behaves as a fixed point that no
 downstream selector we tried improves. The method, Rank-Before-Merge (RBM), is
 a query-blind, OCR-preserving robust default for text-dense workloads --- a
 robust default, not uniformly optimal: the query-conditioned strong baseline
-FastV wins its reference-grounded home regime (TextVQA/GQA/DocVQA cells),
-while RBM uniquely retains dense OCR --- and 25\%-retention compression is
+  FastV wins most reference-grounded cells (all three on Qwen3-VL and TextVQA
+  on Qwen2.5-VL), while RBM uniquely retains dense OCR --- and 25\%-retention compression is
 stage-neutral, raising throughput $+68\%$ (Qwen) / $1.8$--$2.5\times$ req/s
 (InternVL3). Code will be released.
 \end{abstract}
@@ -239,7 +239,7 @@ cross-attention layers mix in the question.
     25\%-retention compression is stage-neutral and yields $+68\%$ throughput
     (Qwen) / $1.8$--$2.5\times$ req/s (InternVL3); and the same-scope regime
     map has no universal winner --- the query-conditioned strong baseline
-    FastV wins its reference-grounded home regime, while RBM is the
+    FastV wins most reference-grounded cells, while RBM is the
     query-blind, OCR-preserving robust default for text-dense workloads
     (\S\ref{sec:fastv}).
 \end{enumerate}
@@ -654,9 +654,11 @@ $0.775 \approx$ published $\approx 0.77$ --- the ability is intact; the
 suppression is protocol-level. \textbf{Scope.} This is an $n = 200$ gate,
 not a full split: the full-split generality claim remains the three families
 of Tables~\ref{tab:tab1}--\ref{tab:tab2}, and the gate supports the
-generality of the workload-conditional stage law on a fourth lineage;
+text-dense arm of the stage law on a fourth lineage;
 cross-family absolute values are not comparable (pixel cap and decoding
-protocol differ), only the direction$\times$workload pattern is.
+protocol differ), only the direction$\times$workload pattern is. Supplementary
+Section~S11 reports the full-precision cell scores, prompt-token audit, answer
+convergence counts, and the 4096-token diagnostic.
 
 % FIG 2 --- grouped bars of the pre-post Delta at 25% retention (headline figure;
 % wired from figs/fig2.pdf, measured full-split values).
@@ -1130,8 +1132,8 @@ headroom lives only after cross-attention.
 loses to the post-merger family on text-dense data, and is the only compared
 method that retains dense OCR ($+16.0$~pp over best-$K$ FastV on Qwen3-VL
 OCR-Bench, $+8.5$~pp on Qwen2.5-VL; Table~\ref{tab:tab3}); but the
-query-conditioned strong baseline FastV leads it on TextVQA/GQA/DocVQA
-(Table~\ref{tab:tab3}), and post-stage
+query-conditioned strong baseline FastV leads it on all three Qwen3-VL cells
+and Qwen2.5-VL TextVQA (Table~\ref{tab:tab3}), and post-stage
 selection leads it by a small significant margin on Qwen GQA (\S\ref{sec:qwen}).
 There is no universal winner.
 

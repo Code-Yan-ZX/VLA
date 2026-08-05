@@ -28,7 +28,7 @@
 
 \begin{document}
 
-\title{Supplementary Material --- Rank Before You Merge: A Stage Law for
+\title[Rank Before You Merge: Supplementary Material]{Supplementary Material --- Rank Before You Merge: A Stage Law for
   Training-Free Visual Token Compression in Merger-Equipped Vision-Language
   Models}
 
@@ -44,7 +44,7 @@ supports \S\,3; S9 is the per-cell reproducibility index, with the full
 per-cell listing (cell / $n$ / official / ptid / skip / JSON path) in
 S9.1--S9.4; S10 is a qualitative same-image pre/post selection comparison
 rendered from measured Qwen3-VL-8B merger L2 (four panels each, no paired
-question).
+question); S11 reports the fourth-family GLM-4.1V gate and decoding diagnostic.
 
 % =============================================================================
 \section*{S1. M1 --- merger ranking reshuffle, full table (Qwen3-VL-8B, seed-0, $n = 64$/benchmark)}
@@ -458,9 +458,10 @@ every text-dense benchmark at both budgets --- e.g.\ DocVQA ANLS 0.7284 vs
 
 FastV one-shot attention pruning at LLM layer $K = 3$, iso-budget $r = 0.75$
 ($\kappa = 25\%$); HF-transformers 4.57.6 eager harness, official metrics.
-Source: per-cell \path{runs/r2_same_scope/r2b_*.json} (fields \path{n} /
-\path{acc} / \path{n_skipped} / \path{mean_ptid_len} / \path{engine}). Digest:
-\path{experiments/r2b_fastv_k3.md}.
+Official values are the rescored results in
+\path{experiments/r2b_fastv_k3.md}; $n$, ptid, skip, engine, and JSON paths are
+audited against the per-cell \path{runs/r2_same_scope/r2b_*.json} files. The
+harness's raw \path{acc} field is not used as the official score.
 
 \begin{table*}[h]
   \centering
@@ -469,14 +470,14 @@ Source: per-cell \path{runs/r2_same_scope/r2b_*.json} (fields \path{n} /
     \toprule
     cell & model & bench & $n$ & official & ptid & skip & engine & JSON \\
     \midrule
-    r2b\_qwen3vl\_fastv\_k3\_textvqa\_r0.75\_full5000  & Qwen3-VL   & textvqa  & 5000  & 0.8494 & 213.7 & 5  & hf eager & \path{r2b_qwen3vl_fastv_k3_textvqa_r0.75_full5000.json} \\
-    r2b\_qwen3vl\_fastv\_k3\_gqa\_r0.75\_full12578     & Qwen3-VL   & gqa      & 12578 & 0.5561 & 96.8  & 0  & hf eager & \path{r2b_qwen3vl_fastv_k3_gqa_r0.75_full12578.json} \\
-    r2b\_qwen3vl\_fastv\_k3\_docvqa\_r0.75\_n500       & Qwen3-VL   & docvqa   & 200   & 0.465  & 176.0 & 0  & hf eager & \path{r2b_qwen3vl_fastv_k3_docvqa_r0.75_n500.json} \\
-    r2b\_qwen3vl\_fastv\_k3\_ocrbench\_r0.75\_n500     & Qwen3-VL   & ocrbench & 200   & 0.4586 & 114.8 & 19 & hf eager & \path{r2b_qwen3vl_fastv_k3_ocrbench_r0.75_n500.json} \\
-    r2b\_qwen2vl\_fastv\_k3\_textvqa\_r0.75\_n200      & Qwen2.5-VL & textvqa  & 200   & 0.815  & 282.1 & 0  & hf eager & \path{r2b_qwen2vl_fastv_k3_textvqa_r0.75_n200.json} \\
-    r2b\_qwen2vl\_fastv\_k3\_gqa\_r0.75\_n200          & Qwen2.5-VL & gqa      & 200   & 0.51   & 126.8 & 0  & hf eager & \path{r2b_qwen2vl_fastv_k3_gqa_r0.75_n200.json} \\
-    r2b\_qwen2vl\_fastv\_k3\_docvqa\_r0.75\_n200       & Qwen2.5-VL & docvqa   & 200   & 0.39   & 231.4 & 0  & hf eager & \path{r2b_qwen2vl_fastv_k3_docvqa_r0.75_n200.json} \\
-    r2b\_qwen2vl\_fastv\_k3\_ocrbench\_r0.75\_n200     & Qwen2.5-VL & ocrbench & 200   & 0.3167 & 143.6 & 20 & hf eager & \path{r2b_qwen2vl_fastv_k3_ocrbench_r0.75_n200.json} \\
+    r2b\_qwen3vl\_fastv\_k3\_textvqa\_r0.75\_full5000  & Qwen3-VL   & textvqa  & 5000  & 0.7771 & 213.7 & 5  & hf eager & \path{r2b_qwen3vl_fastv_k3_textvqa_r0.75_full5000.json} \\
+    r2b\_qwen3vl\_fastv\_k3\_gqa\_r0.75\_full12578     & Qwen3-VL   & gqa      & 12578 & 0.5376 & 96.8  & 0  & hf eager & \path{r2b_qwen3vl_fastv_k3_gqa_r0.75_full12578.json} \\
+    r2b\_qwen3vl\_fastv\_k3\_docvqa\_r0.75\_n500       & Qwen3-VL   & docvqa   & 200   & 0.5863 & 176.0 & 0  & hf eager & \path{r2b_qwen3vl_fastv_k3_docvqa_r0.75_n500.json} \\
+    r2b\_qwen3vl\_fastv\_k3\_ocrbench\_r0.75\_n500     & Qwen3-VL   & ocrbench & 200   & 0.415  & 114.8 & 19 & hf eager & \path{r2b_qwen3vl_fastv_k3_ocrbench_r0.75_n500.json} \\
+    r2b\_qwen2vl\_fastv\_k3\_textvqa\_r0.75\_n200      & Qwen2.5-VL & textvqa  & 200   & 0.7467 & 282.1 & 0  & hf eager & \path{r2b_qwen2vl_fastv_k3_textvqa_r0.75_n200.json} \\
+    r2b\_qwen2vl\_fastv\_k3\_gqa\_r0.75\_n200          & Qwen2.5-VL & gqa      & 200   & 0.475  & 126.8 & 0  & hf eager & \path{r2b_qwen2vl_fastv_k3_gqa_r0.75_n200.json} \\
+    r2b\_qwen2vl\_fastv\_k3\_docvqa\_r0.75\_n200       & Qwen2.5-VL & docvqa   & 200   & 0.4852 & 231.4 & 0  & hf eager & \path{r2b_qwen2vl_fastv_k3_docvqa_r0.75_n200.json} \\
+    r2b\_qwen2vl\_fastv\_k3\_ocrbench\_r0.75\_n200     & Qwen2.5-VL & ocrbench & 200   & 0.285  & 143.6 & 20 & hf eager & \path{r2b_qwen2vl_fastv_k3_ocrbench_r0.75_n200.json} \\
     \bottomrule
   \end{tabular}
 \end{table*}
@@ -489,8 +490,9 @@ field; OCR-Bench skips are long-OCR context overruns, scored 0.)
 
 RBM (pre-merger L2) at iso-budget $r = 0.75$, HF-transformers eager,
 \path{--mrope native} (family-agnostic correct positions), matched to the
-FastV-k3 cells above. Source: per-cell \path{runs/r2_same_scope/r2c_*.json}.
-Digest: \path{experiments/r2c_rbm_scope.md}.
+FastV-k3 cells above. Official values are the rescored results in
+\path{experiments/r2c_rbm_scope.md}; ptid, skip, and paths are audited against
+the per-cell \path{runs/r2_same_scope/r2c_*.json} files.
 
 \begin{table*}[h]
   \centering
@@ -499,11 +501,11 @@ Digest: \path{experiments/r2c_rbm_scope.md}.
     \toprule
     cell & model & bench & $n$ & official & ptid & skip & engine & JSON \\
     \midrule
-    r2c\_qwen2vl\_pre\_r0.75\_textvqa\_n200  & Qwen2.5-VL & textvqa  & 200 & 0.725  & 282.1 & 0  & hf eager & \path{r2c_qwen2vl_pre_r0.75_textvqa_n200.json} \\
-    r2c\_qwen2vl\_pre\_r0.75\_gqa\_n200      & Qwen2.5-VL & gqa      & 200 & 0.545  & 126.8 & 0  & hf eager & \path{r2c_qwen2vl_pre_r0.75_gqa_n200.json} \\
-    r2c\_qwen2vl\_pre\_r0.75\_docvqa\_n200   & Qwen2.5-VL & docvqa   & 200 & 0.405  & 231.4 & 0  & hf eager & \path{r2c_qwen2vl_pre_r0.75_docvqa_n200.json} \\
-    r2c\_qwen2vl\_pre\_r0.75\_ocrbench\_n200 & Qwen2.5-VL & ocrbench & 200 & 0.4111 & 143.6 & 20 & hf eager & \path{r2c_qwen2vl_pre_r0.75_ocrbench_n200.json} \\
-    r2c\_qwen3vl\_pre\_r0.75\_ocrbench\_n200 & Qwen3-VL   & ocrbench & 200 & 0.6354 & 114.8 & 19 & hf eager & \path{r2c_qwen3vl_pre_r0.75_ocrbench_n200.json} \\
+    r2c\_qwen2vl\_pre\_r0.75\_textvqa\_n200  & Qwen2.5-VL & textvqa  & 200 & 0.6683 & 282.1 & 0  & hf eager & \path{r2c_qwen2vl_pre_r0.75_textvqa_n200.json} \\
+    r2c\_qwen2vl\_pre\_r0.75\_gqa\_n200      & Qwen2.5-VL & gqa      & 200 & 0.520  & 126.8 & 0  & hf eager & \path{r2c_qwen2vl_pre_r0.75_gqa_n200.json} \\
+    r2c\_qwen2vl\_pre\_r0.75\_docvqa\_n200   & Qwen2.5-VL & docvqa   & 200 & 0.5062 & 231.4 & 0  & hf eager & \path{r2c_qwen2vl_pre_r0.75_docvqa_n200.json} \\
+    r2c\_qwen2vl\_pre\_r0.75\_ocrbench\_n200 & Qwen2.5-VL & ocrbench & 200 & 0.370  & 143.6 & 20 & hf eager & \path{r2c_qwen2vl_pre_r0.75_ocrbench_n200.json} \\
+    r2c\_qwen3vl\_pre\_r0.75\_ocrbench\_n200 & Qwen3-VL   & ocrbench & 200 & 0.575  & 114.8 & 19 & hf eager & \path{r2c_qwen3vl_pre_r0.75_ocrbench_n200.json} \\
     \bottomrule
   \end{tabular}
 \end{table*}
@@ -582,8 +584,8 @@ query-conditioned mask cannot be measured without one) and is recorded as
 
 The consistently low Jaccard ($0.25$--$0.35$) and moderate Spearman
 ($0.30$--$0.48$) across all ten captured inputs (four shown; the remaining six
-ship in the code release) are the image-level signature of the mechanism in
-\S\ref{sec:mechanism}: the learned $2\!\times\!2$ merger \emph{reshuffles} the
+ship in the code release) are the image-level signature of the body paper's
+mechanism result: the learned $2\!\times\!2$ merger \emph{reshuffles} the
 unit ranking, so selecting before versus after it on the same image with the
 same selector and budget keeps largely \emph{different} units. The four-state
 maps show that the disagreement is spatially structured (contiguous RBM-only
@@ -629,10 +631,109 @@ intersection is a sparse minority of the budget.
   \label{fig:cmp_74}
 \end{figure*}
 
-\vspace{6pt}
+%──────────────────────────────────────────────────────────────────────────────
+\begin{figure*}[p]
+\centering
+\begin{minipage}{0.86\textwidth}
+\section*{S11. Fourth-family gate --- full cell and protocol audit
+  (GLM-4.1V-9B-Thinking, $n = 200$)}
+\label{app:s11}
+
+This gate tests whether the stage effect transfers to a lineage independent of
+Qwen and InternVL. The model uses a GLM-4 text backbone, AIMv2-derived vision
+encoder, and a strided $2\!\times\!2$ convolution followed by the
+\texttt{Glm4vVisionPatchMerger} MLP. The pre-registered GLM-4.6V-Flash target
+could not load because its processor requires transformers $\geq 5.0$rc; the
+same-architecture GLM-4.1V fallback was therefore used without a configuration
+hack. All nine cells use the same query-blind L2 selector, 25\% retention,
+model-default image resolution (effective maximum $\approx 4.82$M pixels),
+greedy decoding, and the same thinking-answer parser. Source:
+\path{experiments/glm4v_stage_gate.md}; cell JSONs:
+\path{runs/glm4v_gate/} (released with code).
+
+\noindent\textbf{Table S11a. Full-precision official scores.}
+\begin{center}
+  \centering
+  \scriptsize
+  \begin{tabular}{@{}l l r r r r@{}}
+    \toprule
+    benchmark & metric & none & pre & post & $\Delta$ (pre$-$post) \\
+    \midrule
+    TextVQA & VQA-acc     & 0.2417 & 0.2183 & 0.0500 & \textbf{+16.83 pp} \\
+    DocVQA  & ANLS        & 0.1039 & 0.1297 & 0.0313 & \textbf{+9.84 pp} \\
+    GQA     & exact match & 0.1500 & 0.1600 & 0.1150 & +4.50 pp$^{\dagger}$ \\
+    \bottomrule
+  \end{tabular}
+\end{center}
+
+\noindent\textbf{Table S11b. Token and answer-convergence audit.}
+\begin{center}
+  \scriptsize
+  \begin{tabular}{@{}l r r l@{}}
+    \toprule
+    benchmark & ptid none & ptid pre/post & boxed none/pre/post \\
+    \midrule
+    TextVQA & 996.8  & 269.1  & 56/52/15 \\
+    DocVQA  & 4868.1 & 1238.8 & 33/30/11 \\
+    GQA     & 373.7  & 113.8  & 46/47/39 \\
+    \bottomrule
+  \end{tabular}
+\end{center}
+
+\noindent All cells have $n = 200$ and zero skips. ptid is mean prompt-token
+count; pre and post are also exactly equal per sample, not only in the mean.
+Boxed counts record samples that reach a final boxed answer within 1024
+generated tokens. $^{\dagger}$The GQA direction is protocol-inconclusive and
+is not counted as replication.
+
+The prompt-token audit is exact: every paired pre/post example has identical
+prompt token ids, and the estimated visual-token counts are approximately
+$960\!\to\!233$ (TextVQA), $4830\!\to\!1200$ (DocVQA), and
+$347\!\to\!87$ (GQA), with per-image rounding. Thus the large text-dense gaps
+cannot be attributed to unequal token budgets. They pass the pre-registered
+$5$-pp transfer bar. The other pre-registered half, GQA post$\geq$pre, is not
+met: pre exceeds post by 4.5 pp at full $n$, while the $n = 25$ subset where all
+three arms reach a boxed answer ties at 0.680/0.680 (pre/post). The latter is a
+post-hoc, underpowered diagnostic, not a positive result.
+
+\noindent\textbf{Table S11c. Post-hoc 4096-token diagnostic.}
+Cell JSONs: \path{runs/glm4v_gate_v2/} (released with code).
+\begin{center}
+  \centering
+  \scriptsize
+  \begin{tabular}{@{}l r r r r r@{}}
+    \toprule
+    cell & official & contain. & boxed & cut frac. & mean gen. \\
+    \midrule
+    GQA none     & 0.1650 & 0.290 & 1/200 & 0.740 & 4011 \\
+    GQA pre      & 0.1650 & 0.310 & 0/200 & 0.765 & 3997 \\
+    GQA post     & 0.1150 & 0.245 & 0/200 & 0.810 & 4057 \\
+    TextVQA none & 0.2383 & 0.775 & 2/200 & 0.745 & 3927 \\
+    \bottomrule
+  \end{tabular}
+\end{center}
+
+Increasing max tokens from 1024 to 4096 does not restore greedy convergence:
+mean generation remains near the cap and almost no sample reaches a boxed
+answer.
+
+The 4096-token probe rules out a short output cap as the source of the GQA
+behavior. Its TextVQA containment anchor is $0.775$, close to the published
+$\approx 0.77$, while parsed official accuracy remains 0.2383; the model's
+visual ability is intact, but deterministic greedy thinking loops rarely
+converge to the concise final-answer format. The released model instead
+specifies sampling (temperature 0.8, top-$p$ 0.6, top-$k$ 2). We therefore use
+this fourth family only as an $n = 200$ replication of the text-dense
+pre$\gg$post effect; the full-split claim remains confined to the three model
+families in the body, and the GLM GQA direction remains inconclusive.
+
+\par\medskip
 \noindent\footnotesize\textbf{Packaging note:} this file converts to the ACM MM
 supplementary PDF/archive; run JSONs ship in the code release (anonymous archive
 at submission, repository at de-anonymization). Nothing in this supplement
 identifies authors, institutions, or repositories (double-blind).
+\end{minipage}
+\end{figure*}
+\clearpage
 
 \end{document}
