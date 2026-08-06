@@ -690,6 +690,20 @@ def parse_args():
     ap.add_argument("--seed", type=int, default=0,
                     help="vLLM/torch RNG seed (0 = default). For repeat runs; at "
                          "temp=0 variance comes from GPU-kernel non-determinism.")
+    ap.add_argument("--temperature", type=float, default=0.0,
+                    help="Sampling temperature (0.0 = greedy, DEFAULT). Set >0 to "
+                         "match a model's official sampling protocol (e.g. GLM-4.1V-"
+                         "9B-Thinking do_sample=True temp=0.8). At temp>0 the --seed "
+                         "is applied per-request on SamplingParams so the SAME sample "
+                         "draws the SAME RNG across none/pre/post arms (paired).")
+    ap.add_argument("--top-p", type=float, default=1.0, dest="top_p",
+                    help="Top-p (nucleus) cutoff; 1.0 = disabled (DEFAULT). Ignored at "
+                         "temperature=0. Set with --temperature to match a sampling "
+                         "protocol (e.g. GLM official top_p=0.6).")
+    ap.add_argument("--top-k", type=int, default=-1, dest="top_k",
+                    help="Top-k cutoff; -1 = disabled (DEFAULT, vLLM convention). "
+                         "Ignored at temperature=0. Set with --temperature to match a "
+                         "sampling protocol (e.g. GLM official top_k=2).")
     ap.add_argument("--model-family", default="qwen3vl",
                     choices=["qwen3vl", "qwen2vl", "internvl3", "glm4v"],
                     help="Architecture family. qwen3vl (DEFAULT) hooks "
@@ -2958,11 +2972,13 @@ def main():
         ]}]
 
     msgs_all = [make_msgs(s) for s in samples]
-    sampling_kw = {"max_tokens": args.max_tokens,
-                   "temperature": args.temperature}
-    if args.temperature > 0.0:
-        sampling_kw.update(top_p=args.top_p, top_k=args.top_k, seed=args.seed)
-    sp = SamplingParams(**sampling_kw)
+    # SamplingParams: temperature=0 (greedy) is the DEFAULT and bit-identical to
+    # prior behavior; --temperature/--top-p/--top-k wire a model's official
+    # sampling protocol (e.g. GLM-4.1V-9B-Thinking temp=0.8/top_p=0.6/top_k=2).
+    # seed is set per-request so the same sample gets the same RNG draw across
+    # none/pre/post arms -> paired delta is isolated to the pruning effect.
+    sp = SamplingParams(max_tokens=args.max_tokens, temperature=args.temperature,
+                        top_p=args.top_p, top_k=args.top_k, seed=args.seed)
     # vLLM 0.19 V1 IGNORES engine-level mm_processor_kwargs (verified: DocVQA
     # ptid identical with/without the engine kwarg) -> pass it per request.
     # internvl3/glm4v: no per-request kwarg either (their image processors
@@ -3014,18 +3030,27 @@ def main():
     for s, o in zip(samples, outs):
         if o is None:
             per_sample.append({"id": s.id, "correct": 0, "skipped": True,
-                               "answer": "", "gt": s.gt, "question": s.question})
+                               "answer": "", "gt": s.gt, "question": s.question,
+                               "prompt_token_ids": 0, "gen_len": 0,
+                               "finish_reason": None, "boxed": False})
             continue
-        ans = o.outputs[0].text.strip()
+        out0 = o.outputs[0]
+        ans = out0.text.strip()
         if ans:
             n_ok += 1
         c = scorer(ans, s.gt, s.extra.get("choices"))
         correct += c
         ptid_len = len(o.prompt_token_ids)
         kept_counts.append(ptid_len)
+        # gen_len + finish_reason + boxed: for thinking models (GLM) "boxed"
+        # convergence (\\boxed{...} emitted) vs length-cutoff non-convergence
+        # (finish_reason=="length") is the key sampling-vs-greedy diagnostic.
         per_sample.append({"id": s.id, "correct": int(c), "skipped": False,
                            "answer": ans, "gt": s.gt, "question": s.question,
-                           "prompt_token_ids": ptid_len})
+                           "prompt_token_ids": ptid_len,
+                           "gen_len": len(out0.token_ids),
+                           "finish_reason": out0.finish_reason,
+                           "boxed": "\\boxed{" in ans})
     n_scored = len(samples) - n_skip
     req_s = n_scored / wall if wall > 0 else 0.0
     acc = correct / n_scored if n_scored else 0.0
@@ -3068,8 +3093,9 @@ def main():
         "visionzip_style": args.visionzip_style,
         "visionzip_dom_ratio": args.visionzip_dom_ratio,
         "selector": args.selector, "max_pixels": args.max_pixels,
-        "seed": args.seed, "temperature": args.temperature,
-        "top_p": args.top_p, "top_k": args.top_k,
+        "seed": args.seed,
+        "temperature": args.temperature, "top_p": args.top_p,
+        "top_k": args.top_k, "decoding": "greedy" if args.temperature == 0.0 else "sampling",
         "wall_s": round(wall, 3), "req_per_s": round(req_s, 4),
         "acc": round(acc, 4), "n_answered": n_ok, "n_skipped": n_skip,
         "mean_ptid_len": round(sum(kept_counts) / len(kept_counts), 1) if kept_counts else 0,
