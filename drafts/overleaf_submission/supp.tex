@@ -151,7 +151,7 @@ endpoints only). Source: \path{experiments/j8_ablations.md} via
 \noindent\textbf{Reading:} the two stages are indistinguishable under shallow
 compression (DocVQA post even leads 1--2~pp within noise at 75\%); the
 pre-merger lead emerges and widens monotonically with depth. Same shallow
-regime as the GQA sign and the Qwen2.5-VL 600k-cap reversal (body \S\,5.4
+regime as the Qwen2.5-VL 600k-cap reversal (body \S\,5.4
 boundary; \S\,8 item~3). Data source for Fig.~3.
 
 % =============================================================================
@@ -194,7 +194,11 @@ ground-truth self-test) + \path{experiments/j7_main_table.md}.
   \end{tabular}
 \end{table*}
 
-\noindent\dag\ the only significant post-stage lead. GQA official
+\noindent\dag\ the only significant post-stage lead. These GQA cells use the
+deepstack[0]-input (layer-8) pre ranking; a pure-stage control that ranks at
+the main-merger input (pre-final) gives $0.0$~pp on GQA (body \S\,4.2,
+S7b), so the apparent post$>$pre is a layer-8 ranking artifact, not a true
+stage reversal. GQA official
 word-normalized exact-match rescore gives a concordant McNemar $z = 8.1 / 7.1$
 (Qwen3-VL / Qwen2.5-VL). Smallest text-dense $\Delta_{25}$ $|z| = 14.6$
 (Qwen2.5-VL OCR-Bench); smallest text-dense $\Delta_{12.5}$ $|z| = 15.0$
@@ -295,7 +299,8 @@ only):
 $\Delta_{25}$ is $\geq 15\sigma$ of its own cells' pooled stderr, and the
 full-split GQA post lead ($+2.8 / +2.6$~pp) is $\approx 5\sigma$ of the pooled
 GQA stderr ($\approx 0.0063$) --- significant but an order of magnitude smaller
-than any text-dense $\Delta$. $^{a}$~Qwen3-VL none-DocVQA native-resolution
+than any text-dense $\Delta$, and reframed by the pre-final pure-stage control
+(S7b) as a layer-8 ranking artifact rather than a true stage reversal. $^{a}$~Qwen3-VL none-DocVQA native-resolution
 anchor: full-split run partly skipped on context overrun (re-run at
 max-model-len 49,152 gives ANLS 0.956, 0/5349 skips); $\sigma$ not printed for
 the partial native cell. $^{c}$~GQA evaluated at $\kappa = 0.25$ only on the
@@ -367,6 +372,46 @@ campaigns).
 effect is not an L2 artifact. On Qwen2.5-VL the L2 sign is invariant but the
 attention proxy degrades (proxy-family specificity, not a counter-example); L2
 remains the paper's selector, frozen as plain RBM (\S\,3.2).
+
+\subsection*{S7b. Pure-stage confound control --- pre-final (Qwen3-VL-8B, $n = 200$)}
+
+The body \S\,4.2 pre-final control isolates the \emph{stage} from the
+feature-space confound of the original pre (deepstack[0]-input, layer~8) vs
+post (main-merger output) contrast. pre-final ranks L2 at the main-merger's
+\emph{own input} (final ViT-block features) and selects the top-$\kappa$
+merge-units from the visual output; the deepstack mergers run untouched. The
+only difference from post is then before vs after the lossy $2\!\times\!2$ main
+merger --- a pure stage variable. Iso-token verified (prompt token ids match
+200/200 per benchmark for pre-final vs post). Source:
+\path{experiments/p0-3_prefinal_control.md}; per-sample JSONs in
+\path{runs/qwen3_prefinal_control/}.
+
+\begin{table}[h]
+  \centering
+  \scriptsize
+  \setlength{\tabcolsep}{2pt}
+  \begin{tabular}{@{}l r r r r l@{}}
+    \toprule
+    Benchmark (metric) & none & pre-final & post & $\Delta$ (paired mean $\pm$ SE) & verdict \\
+    \midrule
+    TextVQA (VQA-acc) & 0.858 & \textbf{0.515} & 0.215 & \textbf{$+30.0$ pp} ($+0.300 \pm 0.039$) & stage effect \\
+    DocVQA (ANLS)     & 0.976 & \textbf{0.326} & 0.200 & \textbf{$+12.5$ pp} ($+0.125 \pm 0.032$) & stage effect \\
+    GQA (exact match) & 0.605 & 0.450          & 0.450 & $0.0$ pp ($+0.000 \pm 0.032$)           & no stage effect \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\noindent\textbf{Reading:} on text-dense benchmarks pre-final still leads post
+by a large margin (the text-dense stage effect is a true stage effect, not a
+deepstack[0]-input vs main-merger-output feature-space artifact). On GQA
+pre-final equals post ($0.0$~pp): there is no stage effect on object-QA, and
+the original pre-vs-post apparent post$>$pre ($-2.8$~pp Qwen3-VL,
+$-2.6$~pp Qwen2.5-VL; S4) was an artifact of the deepstack[0]-input layer-8
+ranking being poorly suited to object-QA, not a true stage reversal. Consistent
+with the mechanism: the merger does not preferentially damage object features
+(M2 $\rho = 0.04$ on GQA, S2). pre-final tested on Qwen3-VL only (the
+deepstack confound is Qwen3-specific; Qwen2.5-VL shares the architecture but
+was not re-tested).
 
 % =============================================================================
 \section*{S8. Merger tap points and M-RoPE configuration details (supports \S\,3)}
