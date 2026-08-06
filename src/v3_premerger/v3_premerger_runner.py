@@ -327,20 +327,76 @@ SCORERS = {
 #          attention is deliberately avoided (project history: CLS under-attends
 #          text/OCR). Mean-attention-received semantics are approximated by the
 #          centroid-distance "stands out from the crowd" score.
+#   edge : D2 merger-loss-aware selector. Scores each PRE-merger 2x2 merge-unit
+#          by its Sobel-style SPATIAL GRADIENT energy across the 4 patches -- a
+#          learned-free high-frequency proxy for how much the lossy 2x2 averaging
+#          merger DESTROYS the unit (high spatial gradient = the 4 patches differ
+#          sharply across space = averaging collapses real structure = text/edge
+#          content the merger would flatten). Computed on the feature tensor
+#          (same input L2 uses), NOT raw pixels: features are not a 2D image and
+#          a 2x2 patch block is too small for a 3x3 Sobel kernel, so we measure
+#          the horizontal/vertical feature gradient between the unit's spatial
+#          quadrants (the feature-space analogue of Sobel |grad|). See
+#          _score_units for the exact formula. PRE-merger only (POST falls back
+#          to L2: a merged token has no within-unit structure).
+#   var  : D2 merger-loss-aware selector. Within-unit feature VARIANCE across the
+#          4 constituent patches (omnidirectional spread; high variance = the
+#          merger's averaging loses a lot of information = high loss). The
+#          direction-agnostic complement to "edge". PRE-merger only.
 # --------------------------------------------------------------------------- #
 def _score_tokens(hs, selector: str):
-    """hs: [n_tok, ctx] -> importance score [n_tok].  (post-merger path.)"""
-    if selector == "l2":
+    """hs: [n_tok, ctx] -> importance score [n_tok].  (post-merger path.)
+
+    l2/attn as documented above. edge/var are PRE-merger selectors (they score
+    the 2x2 merge-unit's internal structure); a post-merger token is already a
+    single averaged vector with NO within-unit structure, so edge/var fall back
+    to L2 here (the established baseline). The D2 selector experiment runs
+    --mode pre, which routes through _score_units where edge/var are computed
+    properly on the [num_units, 4, ctx] tensor."""
+    if selector == "l2" or selector in ("edge", "var"):
         return hs.float().norm(dim=-1)
     f = hs.float()                                     # [n_tok, ctx]
     return (f - f.mean(dim=0, keepdim=True)).norm(dim=-1)
 
 
 def _score_units(feats, selector: str):
-    """feats: [num_units, unit, ctx] -> importance score [num_units].  (pre-)"""
+    """feats: [num_units, unit=4, ctx] -> importance score [num_units].  (pre-)
+
+    All selectors are computed on the SAME pre-merger feature tensor L2 uses:
+      l2   : mean L2-norm of the unit's 4 patch vectors (magnitude). Original
+             text-agnostic baseline; behaviour unchanged.
+      attn : global-centroid-distance of the unit's mean feature (saliency).
+      edge : Sobel-style spatial gradient across the 2x2 unit. The 4 patches are
+             block-major in raster order: idx0=(0,0) idx1=(0,1) idx2=(1,0)
+             idx3=(1,1). grad_x = mean(right col) - mean(left col) =
+             ((idx1+idx3)-(idx0+idx2))/2; grad_y = mean(bottom row) -
+             mean(top row) = ((idx2+idx3)-(idx0+idx1))/2; score =
+             ||grad_x||_2 + ||grad_y||_2. High score = the 4 patches differ
+             sharply across space = the lossy 2x2 averaging merger DESTROYS real
+             structure (text/edge content). Computed on features (not pixels):
+             a 2x2 block is too small for a 3x3 Sobel kernel, so this is the
+             feature-space analogue of Sobel |grad| -- rank-correlated with the
+             pixel Sobel edge energy (scripts/mechanism_token_survival.py and
+             _unit_edge_from_pixels) for text-dense units.
+      var  : within-unit feature variance across the 4 patches, averaged over
+             feature dims: var(unit) = mean_d Var_d(4 patches) ==
+             (1/ctx) * trace(4-patch feature covariance). Direction-agnostic
+             complement to "edge"; high variance = averaging loses information."""
+    f = feats.float()
     if selector == "l2":
-        return feats.float().norm(dim=-1).mean(dim=-1)
-    uf = feats.float().mean(dim=1)                     # [num_units, ctx]
+        return f.norm(dim=-1).mean(dim=-1)
+    if selector == "var":
+        # unbiased=False (population var): the ddof is a global scalar that does
+        # NOT affect top-k ranking (rank-preserving); population var is faster
+        # and numerically stable for a 4-sample population.
+        return f.var(dim=1, unbiased=False).mean(dim=-1)
+    if selector == "edge":
+        tl, tr, bl, br = f[:, 0], f[:, 1], f[:, 2], f[:, 3]
+        grad_x = ((tr + br) - (tl + bl)) * 0.5         # [num_units, ctx] right-left
+        grad_y = ((bl + br) - (tl + tr)) * 0.5         # [num_units, ctx] bottom-top
+        return grad_x.norm(dim=-1) + grad_y.norm(dim=-1)
+    # "attn": global-centroid-distance of the unit's mean feature.
+    uf = f.mean(dim=1)                                 # [num_units, ctx]
     return (uf - uf.mean(dim=0, keepdim=True)).norm(dim=-1)
 
 
@@ -607,10 +663,18 @@ def parse_args():
     ap.add_argument("--subset", required=False, default=None)
     ap.add_argument("--n", type=int, default=200)
     ap.add_argument("--max-tokens", type=int, default=32)
-    ap.add_argument("--selector", default="l2", choices=["l2", "attn"],
+    ap.add_argument("--selector", default="l2",
+                    choices=["l2", "attn", "edge", "var"],
                     help="l2 = L2-norm selector (default, original behavior); "
                          "attn = global-centroid-distance saliency proxy -- a "
-                         "DIFFERENT selector for stage-effect robustness.")
+                         "DIFFERENT selector for stage-effect robustness; "
+                         "edge = Sobel-style spatial-gradient energy across the "
+                         "2x2 merge-unit (high-frequency proxy for merger loss; "
+                         "PRE-merger / D2 mechanism-derived selector); "
+                         "var = within-unit feature variance across the 4 "
+                         "patches (omnidirectional merger-loss proxy; PRE-merger "
+                         "/ D2). edge/var fall back to L2 in POST mode (a merged "
+                         "token has no within-unit structure).")
     ap.add_argument("--visionzip-style", action="store_true",
                     help="Dominant + context token paradigm (VisionZip proxy). "
                          "Instead of pruning all non-dominant units, merge them "
@@ -2890,7 +2954,7 @@ def _run_dry_check_glm4v():
     print(f"[dry-check] ALL PASS for family=glm4v")
 
 
-def run_dry_check(family: str):
+def run_dry_check(family: str, selector: str = "l2"):
     import torch.nn as nn
 
     if family == "internvl3":
@@ -2936,8 +3000,10 @@ def run_dry_check(family: str):
     ProcCls._get_prompt_updates = ProcCls._get_prompt_updates._vtc_orig
     print(f"[dry-check]   OK processor patch on {ProcCls.__name__}")
 
-    # (b) pre-merger hook TARGET SET matches family (deepstack included/omitted)
-    pruner, handles = setup_pre_merger(model, 0.75, "l2", family)
+    # (b) pre-merger hook TARGET SET matches family (deepstack included/omitted).
+    #     The pruner is created with the DRY-CHECK selector (not hardcoded "l2")
+    #     so step (c)'s slice_input actually exercises edge/var/attn scoring.
+    pruner, handles = setup_pre_merger(model, 0.75, selector, family)
     n_merger_hooks = len(handles) - 1                 # -1 for the visual.fwd hook
     expected = 4 if family == "qwen3vl" else 1        # merger + 3 deepstack | merger only
     assert n_merger_hooks == expected, \
@@ -2958,11 +3024,13 @@ def run_dry_check(family: str):
     out = pruner.slice_input(hs, model.visual.merger)
     kept = out.shape[0]
     assert kept == sum(pruner.k_units) * unit == 12, kept
+    assert not torch.isnan(out).any(), f"NaN in pre-merger slice (selector={selector})"
     # fire once more -> mask is cached, count stable, no recompute
     _ = pruner.slice_input(hs, model.visual.merger)
     assert pruner.diag["mask_compute_count"] == 1, pruner.diag["mask_compute_count"]
     print(f"[dry-check]   OK mask logic: {seq} pre-merger toks -> {kept} kept "
-          f"(units {full_units}->{pruner.k_units}); mask computed once/cached")
+          f"(units {full_units}->{pruner.k_units}); selector={selector}; "
+          f"mask computed once/cached")
 
     # (d) post-merger prune (family-agnostic): wraps _process_image_input
     model2 = _DummyModel(family)
@@ -3159,9 +3227,10 @@ def main():
             raise SystemExit("pre-final: --qa-lambda>0 is not supported.")
 
     # No-GPU dry check: validate imports + hook setup on dummy modules for the
-    # chosen family. Exits before any vLLM/GPU use.
+    # chosen family. Exits before any vLLM/GPU use. The --selector is threaded
+    # into the mask-logic test so edge/var/attn are exercised (not just l2).
     if args.dry_check:
-        run_dry_check(family)
+        run_dry_check(family, args.selector)
         return
 
     if args.out is None:
