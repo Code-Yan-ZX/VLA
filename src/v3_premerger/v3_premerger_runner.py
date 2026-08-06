@@ -578,7 +578,7 @@ def parse_args():
     # --dry-check (which validates hook setup on dummy modules without a GPU).
     # main() enforces their presence when not dry-checking.
     ap.add_argument("--mode", required=False, default=None,
-                    choices=["none", "post", "pre", "hybrid"])
+                    choices=["none", "post", "pre", "pre-final", "hybrid"])
     ap.add_argument("--r", type=float, default=0.0,
                     help="prune ratio; k_i = round(full_i*(1-r)). "
                          "{0.5,0.75,0.875} -> keep {50,25,12.5}% of merge-units.")
@@ -607,13 +607,6 @@ def parse_args():
     ap.add_argument("--subset", required=False, default=None)
     ap.add_argument("--n", type=int, default=200)
     ap.add_argument("--max-tokens", type=int, default=32)
-    ap.add_argument("--temperature", type=float, default=0.0,
-                    help="Generation temperature. 0.0 preserves the locked "
-                         "greedy protocol; values >0 enable sampling.")
-    ap.add_argument("--top-p", type=float, default=1.0,
-                    help="Nucleus-sampling threshold when temperature >0.")
-    ap.add_argument("--top-k", type=int, default=-1,
-                    help="Top-k sampling cutoff when temperature >0; -1 disables it.")
     ap.add_argument("--selector", default="l2", choices=["l2", "attn"],
                     help="l2 = L2-norm selector (default, original behavior); "
                          "attn = global-centroid-distance saliency proxy -- a "
@@ -2267,7 +2260,110 @@ def setup_pre_merger(model, r: float, selector: str = "l2", family: str = "qwen3
 
 
 # --------------------------------------------------------------------------- #
-# No-GPU dry check: validates the family-aware code paths (imports, argparse,
+# (D) PRE-FINAL-merger (P0-3 pure-stage confound control): rank L2 at
+# visual.merger's OWN input (the final ViT-block features that feed the main
+# 2x2 merger), select top-k merge-units, and prune the visual output to those
+# units. The deepstack_merger_list[*] mergers run UNTOUCHED (full input) --
+# ONLY the main-merger STAGE is varied. This isolates the stage effect (rank
+# BEFORE vs AFTER the lossy 2x2 main merger) from the feature-space confound
+# in "pre" (which ranks at deepstack[0]-input, layer-8, far upstream).
+#
+# ARCHITECTURE NOTE (why we don't literally slice visual.merger's input):
+# qwen3_vl.py visual.forward runs deepstack mergers on INTERMEDIATE ViT taps
+# (during the block loop) BEFORE the main merger on the FINAL hidden_states,
+# then cats [main_out, ds0, ds1, ds2] along dim=1. If we sliced visual.merger's
+# input to k_units, its output would be [k_units, H] while each deepstack
+# output stays [full_units, H] -> torch.cat(dim=1) crashes (dim=0 mismatch).
+# Patching the entire visual.forward to fix the cat is fragile (rope/metadata).
+# Instead, by 2x2 MERGE-UNIT EQUIVALENCE (the merger is a per-unit op: each
+# group of 4 consecutive input tokens produces one output token independently),
+# a kept unit's merged token is IDENTICAL whether the merger runs on the full
+# input or just the survivors. So we: (1) wrap visual.merger.forward to COMPUTE
+# the keep-mask from its input (ranking BEFORE the merger) but run the merger
+# on the FULL input (untouched), and (2) select k_units from the full visual
+# output in _process_image_input using that mask. Result is bit-identical to
+# literal input slicing, deepstack mergers are untouched, and the token count
+# is k_units (iso-token with "post" which also selects k_units from the output,
+# but ranks at the main-merger OUTPUT).
+# --------------------------------------------------------------------------- #
+def setup_pre_final_merger(model, r: float, selector: str = "l2",
+                           family: str = "qwen3vl",
+                           save_kept: bool = False):
+    """Qwen3-VL pure-stage confound control. Rank at main-merger INPUT vs the
+    'post' mode which ranks at main-merger OUTPUT. Deepstack mergers untouched.
+
+    Returns (pruner, handles) where pruner is a PreMergerPruner whose diag
+    carries mask_computed_at='main_merger_input'."""
+    assert family == "qwen3vl", "pre-final is Qwen3-VL only"
+    visual = model.visual
+    sm = visual.spatial_merge_size
+    pruner = PreMergerPruner(r, sm, selector, mask_ranking="stage",
+                             save_kept=save_kept)
+
+    # (1) visual.forward pre_hook: capture grid_thw -> plan k_units.
+    def _visual_prehook(module, args, kwargs):
+        grid_thw = kwargs.get("grid_thw")
+        if grid_thw is None and len(args) >= 2:
+            grid_thw = args[1]
+        if grid_thw is not None:
+            pruner.begin_pass(grid_thw)
+        return None
+    handle_v = visual.register_forward_pre_hook(_visual_prehook, with_kwargs=True)
+    handles = [handle_v]
+
+    # (2) Wrap visual.merger.forward: compute the keep-mask from its OWN input
+    # (the final ViT-block features = main-merger input) but run the merger on
+    # the FULL input (unit equivalence -> identical to slicing). The mask is
+    # cached in pruner._mask and consumed by _patched_pii below.
+    _orig_merger = visual.merger.forward
+    visual.merger._premerger_tag = "main_merger_input"
+
+    def _wrapped_merger(*args, _orig=_orig_merger, _m=visual.merger, **kwargs):
+        hs = args[0]                                   # [seq, 1, ctx]
+        if pruner.r > 0.0 and pruner._mask is None:
+            # Compute + cache the keep-mask from visual.merger's input. The
+            # return value (sliced input) is discarded -- the merger runs on
+            # the FULL input (unit equivalence). slice_input sets
+            # diag["mask_computed_at"] = "main_merger_input".
+            _ = pruner.slice_input(hs, _m)
+        return _orig(*args, **kwargs)
+    visual.merger.forward = _wrapped_merger
+    if hasattr(visual.merger, "do_not_compile"):
+        visual.merger.do_not_compile = True
+
+    # (3) Replace _process_image_input: select k_units from the FULL visual
+    # output using the cached mask. The deepstack mergers ran untouched (full),
+    # so the visual output is [sum(full_units), hidden*(1+ndeepstack)]. We
+    # select the same k_units per image that the mask computed from the
+    # main-merger input. This yields k_units per image -> iso-token with "post".
+    _orig_pii = model._process_image_input
+
+    def _patched_pii(image_input):
+        grid_thw = image_input["image_grid_thw"]
+        assert grid_thw.ndim == 2
+        if image_input["type"] == "image_embeds":
+            image_embeds = image_input["image_embeds"].type(visual.dtype)
+        else:
+            pixel_values = image_input["pixel_values"].type(visual.dtype)
+            image_embeds = visual(pixel_values, grid_thw=grid_thw)
+        if (r == 0.0) or (pruner._mask is None) or (pruner.full_units is None):
+            # No mask (r=0, pre-computed embeds path, or warmup) -> full split.
+            sizes = (grid_thw.prod(-1) // pruner.unit).tolist()
+            return image_embeds.split(sizes)
+        # Select k_units from the full visual output using the cached mask.
+        # unit_mask: [total_units] bool (one per merge-unit, all images).
+        unit_mask = pruner._mask.reshape(-1, pruner.unit).any(dim=-1)
+        out = []
+        off = 0
+        for f, k in zip(pruner.full_units, pruner.k_units):
+            idx = unit_mask[off:off + f].nonzero(as_tuple=True)[0]
+            out.append(image_embeds[off:off + f]
+                       .index_select(0, idx).contiguous())
+            off += f
+        return tuple(out)
+    model._process_image_input = _patched_pii
+
+    return pruner, handles
 # processor class selection, hook TARGET SET, cached-mask logic, post prune)
 # on dummy nn.Module objects + synthetic tensors. Does NOT load vLLM or touch a
 # GPU. GPU-dependent and thus UNTESTED here: real vLLM LLM load, the actual
@@ -2729,6 +2825,64 @@ def run_dry_check(family: str):
     print(f"[dry-check]   OK _hybrid_select: exactly-k masks across shapes/"
           f"text_frac (branch example: {_hybrid_select(torch.randn(40), torch.randn(40), torch.rand(40), 10, 1.0)[1]['branch']})")
 
+    # (i) PRE-FINAL (P0-3 pure-stage confound control, qwen3vl only): mask
+    #     computed from visual.merger's input (main_merger_input), deepstack
+    #     mergers untouched, selection at _process_image_input. Verify the
+    #     wrapped merger runs on FULL input (unit equivalence), the mask is
+    #     cached with the right tag, kept_log populates, and the per-image
+    #     selection yields exactly k_units (iso-token with post).
+    if family == "qwen3vl":
+        model_pf = _DummyModel(family)
+        pruner_pf, handles_pf = setup_pre_final_merger(
+            model_pf, 0.75, "l2", family, save_kept=True)
+        # verify hook installation
+        assert model_pf.visual.merger.forward.__name__ == "_wrapped_merger", \
+            "visual.merger.forward not wrapped for pre-final"
+        assert model_pf._process_image_input.__name__ == "_patched_pii", \
+            "_process_image_input not replaced for pre-final"
+        assert len(handles_pf) == 1, handles_pf  # visual pre_hook only
+        # simulate a visual pass: begin_pass + wrapped merger call
+        grid_pf = torch.tensor([[1, 4, 8], [1, 4, 4]])  # [8, 4] units
+        pruner_pf.begin_pass(grid_pf)
+        assert pruner_pf.full_units == [8, 4], pruner_pf.full_units
+        assert pruner_pf.k_units == [2, 1], pruner_pf.k_units  # round([8,4]*0.25)
+        seq_pf = sum(pruner_pf.full_units) * unit               # 48
+        hs_pf = torch.randn(seq_pf, 1, 768)
+        # wrapped merger: computes mask from its input, runs on FULL input
+        out_pf = model_pf.visual.merger(hs_pf)
+        assert out_pf.shape[0] == seq_pf // unit, out_pf.shape  # FULL (12 units)
+        assert pruner_pf.diag["mask_computed_at"] == "main_merger_input", \
+            pruner_pf.diag["mask_computed_at"]
+        assert pruner_pf.diag["mask_compute_count"] == 1, pruner_pf.diag
+        assert not torch.isnan(out_pf).any(), "NaN in pre-final merger output"
+        # cached: a 2nd call does NOT recompute the mask
+        _ = model_pf.visual.merger(hs_pf)
+        assert pruner_pf.diag["mask_compute_count"] == 1, "mask recomputed"
+        # kept_log: one entry per image per visual pass (save_kept=True)
+        assert len(pruner_pf.kept_log) == 2, pruner_pf.kept_log
+        assert pruner_pf.kept_log[0]["n_units"] == 8  # first image
+        assert pruner_pf.kept_log[0]["k"] == 2
+        # selection: unit_mask -> k_units per image (iso-token with post)
+        unit_mask_pf = pruner_pf._mask.reshape(-1, unit).any(dim=-1)
+        assert unit_mask_pf.sum().item() == sum(pruner_pf.k_units) == 3, \
+            unit_mask_pf.sum()
+        # simulate full visual output [sum(full_units), hidden*4] and select
+        full_vis = torch.randn(sum(pruner_pf.full_units), 128)
+        off_pf = 0
+        sel_counts = []
+        for f_pf, k_pf in zip(pruner_pf.full_units, pruner_pf.k_units):
+            idx_pf = unit_mask_pf[off_pf:off_pf + f_pf].nonzero(as_tuple=True)[0]
+            sel = full_vis[off_pf:off_pf + f_pf].index_select(0, idx_pf)
+            assert sel.shape[0] == k_pf and not torch.isnan(sel).any(), sel.shape
+            sel_counts.append(sel.shape[0])
+            off_pf += f_pf
+        # iso-token with post: post would select round(n*0.25) per image too
+        post_k = [max(1, int(round(f * 0.25))) for f in pruner_pf.full_units]
+        assert sel_counts == post_k, (sel_counts, post_k)
+        print(f"[dry-check]   OK pre-final: mask@main_merger_input, merger FULL "
+              f"({out_pf.shape[0]} units), select {sel_counts} (iso-token post "
+              f"{post_k}); kept_log k={pruner_pf.kept_log[0]['k']}")
+
     print(f"[dry-check] ALL PASS for family={family}")
 
 
@@ -2744,6 +2898,24 @@ def main():
     else:
         family = args.model_family
         model_id = MODELS[family]
+
+    # pre-final (P0-3 pure-stage confound control) guards -- BEFORE the dry
+    # check so --mode pre-final --model-family internvl3 --dry-check errors
+    # cleanly. pre-final ranks at visual.merger's input (final ViT-block
+    # features) and is Qwen3-VL-only (requires visual.merger +
+    # deepstack_merger_list structure). The Qwen-specific swap/visionzip/qa
+    # machinery is NOT ported to pre-final (it is a clean stage control).
+    if args.mode == "pre-final":
+        if family != "qwen3vl":
+            raise SystemExit(f"{family}: --mode pre-final is Qwen3-VL only "
+                             f"(requires visual.merger + deepstack_merger_list).")
+        if args.mask_ranking == "swap":
+            raise SystemExit("pre-final: --mask-ranking swap is not supported "
+                             "(stage ranking only).")
+        if args.visionzip_style:
+            raise SystemExit("pre-final: --visionzip-style is not supported.")
+        if args.qa_lambda > 0.0:
+            raise SystemExit("pre-final: --qa-lambda>0 is not supported.")
 
     # No-GPU dry check: validate imports + hook setup on dummy modules for the
     # chosen family. Exits before any vLLM/GPU use.
@@ -2945,6 +3117,14 @@ def main():
                                                  qa_state=qa_state,
                                                  save_kept=args.save_unit_scores)
             diag = pruner.diag
+    elif args.mode == "pre-final":
+        # P0-3 pure-stage confound control: rank at visual.merger's input
+        # (final ViT-block features) vs "post" which ranks at the output.
+        # Qwen3-VL only (guarded above); deepstack mergers run untouched.
+        pruner, _handles = setup_pre_final_merger(model, r, args.selector,
+                                                   family,
+                                                   save_kept=args.save_unit_scores)
+        diag = pruner.diag
 
     # BLOCK-mrope families: fix the mrope-position overshoot that collapses
     # pruned acc to ~0.004 (see setup_qwen2vl_mrope_fix docstring).  No-op for
@@ -3069,8 +3249,9 @@ def main():
                                       model_id, args.max_pixels, diag)
     if args.save_unit_scores and diag is not None:
         # R1-1: attach per-image kept unit sets for the pre-vs-swap Jaccard
-        # (mode=pre -> pruner.kept_log; mode=post+swap -> swap_state kept_log).
-        if args.mode == "pre":
+        # (mode=pre -> pruner.kept_log; mode=post+swap -> swap_state kept_log;
+        # mode=pre-final -> pruner.kept_log, same FIFO contract).
+        if args.mode in ("pre", "pre-final"):
             attach_kept_indices(pruner.kept_log, samples, per_sample,
                                 model_id, args.max_pixels, diag)
         elif swap_state is not None:
