@@ -1,29 +1,19 @@
-# STATE.md — 当前项目状态（主窗口维护，保持 ≤30 行）
+# STATE.md - 当前项目状态（主窗口维护，保持 ≤30 行）
 
-> 项目：VLM 视觉 token 压缩 · 目标：**Rank-Before-Merge → ACM MM'27**
-> 最近更新：2026-08-05 · **正文+附录单 PDF 完成**：`main.tex` 在参考文献后接入双模式 `supp.tex`，合并版 22 页、独立附录 10 页均编译通过；修复 S1/S2/S6/S7 超宽表。服务器下一证据闸门锁定 GLM 官方 sampling n=200。GPU 已用 5.5 h；新 gate 预计约 3 h。
+> 项目：VLM 视觉 token 压缩 · 目标：Rank-Before-Merge -> ACM MM'27
+> 最近更新：2026-08-06 · **投稿前 NO-GO 修复轮启动**（user 6 任务计划 P0-1->P1-3）。科学主干已成（四族 stage law + 机制因果 M1/M2/M3），投稿前修统计/混杂/基线/效率。GPU 单卡串行。
 
-## ★ 第四族 gate（GLM-4.1V-9B-Thinking · 2026-08-03）
-- 候选审计（ModelScope 20+ 模型筛选、代码级 merger 证据）= experiments/latest_vlm_model_audit.md；TOP-1 GLM-4.6V-Flash processor 类需 transformers≥5.0rc 加载失败 → 按预注册切同架构 4.1V，无 config hack
-- 官方分 n=200/keep25%/L2（none/pre/post）：textvqa 0.242/0.218/0.050；docvqa ANLS 0.104/0.130/0.031；gqa EM 0.150/0.160/0.115
-- Δ(pre−post)：textvqa +16.8pp、docvqa +9.8pp → **text-dense stage law 跨第四独立谱系复制**；iso-token 逐样本精确（pre≡post ptid≈none 25%）
-- GQA +4.5pp 方向反转但 **inconclusive**：greedy 解码 floor-collapse 全臂（containment 锚 0.775≈官方 0.77 证能力完好；模型官方协议=sampling）→ 双向不作方向 claim
-- Runner glm4v 族分支 +340 行纯增量（四族 dry-check 回归全过）；digest = experiments/glm4v_stage_gate.md（含 v2 4096 探针附录）
+## ★ 进行中（2026-08-06）
+- **P0-1 GLM 官方 sampling gate**（GPU 跑中）：runner 加 --temperature/--top-p/--top-k（greedy 默认 bit-identical）+ 逐样本 gen_len/boxed/finish_reason；glm4v_sampling_gate.sh 用官方协议 temp=0.8/top_p=0.6/top_k=2/seed=0 重跑（greedy 违 do_sample 致 GQA floor-collapse none 0.15 vs 官方 0.77）。Stage1=none×3(seed0) 检 anchor 恢复；恢复->seeds1/2 pre+post 出 paired delta mean±std；不恢复->停 GLM 撤 headline。产物 runs/glm4v_gate_sampling/。commit 4c2791f。
+- **P0-2 主统计**（CPU 子agent 跑中）：paired bootstrap/permutation(≥10k,固定seed)/McNemar 重算 Table1/3；InternVL3 全补 CI；GQA CI 跨0 只写 indistinguishable（禁无界 statistical tie）；Table3 小差值不稳->exploratory。产物 experiments/paired_metric_statistics.{md,json} + src/v3_premerger/paired_stats.py。
+- **P0-3 Qwen3 tap-point 混杂**（代码审计子agent）：确认 pre=deepstack blk8 输出、post=main-merger 输出；将加 pre-final 独立模式（merger 真实输入 L2）vs post(merger 输出 L2) 作 pure-stage control，iso-selector/iso-budget/同样本。GPU 待 P0-1 释放。方向消失=claim 级事件停+报告。
+- **P1-2 强基线审计**（web 子agent）：Hi-Lo/QuietPrune/IF-Prun 代码可用性；无代码->不手工复现、出 digest；评估 FastV 扩 full split。
 
-## ★ 论文（投稿权威入口 = drafts/overleaf_submission/main.tex；drafts/latex 仅科学正文同步、仍含图占位）
-- 入口重写：贡献①=因果机制（M1 秩重排/M2 被贬=文本笔画单元/M3 ranking-swap kept-set identity 定果）→ ②=stage law 为其泛化（三族 full splits）→ ③=封闭设计空间+regime map
-- Table 3 → failure-mode/regime map；FastV=query-conditioned strong baseline；RBM=query-blind OCR-preserving robust default（not uniformly optimal）
-- Table 1 = 三族 full-split 主矩阵；Table 2 = GLM 第四族 gate；Table 3 = FastV/RBM regime map；Table 4/5/6 = ranking-swap/cascade/efficiency，正文与补充索引一致
-- `main.tex` 默认输出正文+references+S1--S11；`supp.tex` 仍可独立编译；服务器清单 = experiments/next_server_experiments.md
-- Overleaf S11 补齐 GLM 高精度分数/ptid/boxed/4096 诊断；S9.2/S9.3 已统一为 r2b/r2c official rescore；审计 = experiments/recent_submission_commit_audit.md
-
-## ★ 待办
-1. 服务器 P0：GLM 官方 sampling（temp0.8/top-p0.6/top-k2）9-cell n=200 seed0；none 锚恢复才继续
-2. 条件式 P1/P2：sampling seeds1/2 稳健性；InternVL3 ranking-swap kept-set identity n=200
-3. 投稿 go/no-go + 行政：OpenReview/profile、author list、MM'27 CFP
+## ★ 队列（GPU 串行）
+P0-1(GLM sampling) -> P0-3(Qwen3 pre-final control) -> P1-1(InternVL3 ranking-swap+kept-set Jaccard) -> P1-3(效率重复性 5×)。P1-2 audit CPU 并行；GPU gate 视审计结果。
 
 ## ★ 红线（判据锁定 DECISIONS.md）
-不跨模型宣 SOTA、不写 beats existing methods；Qwen/InternVL GQA 只报微胜/tie·无 crossover；**GLM GQA 臂只报 inconclusive**；claim 标配置边界（像素 cap/预算/n/解码协议）；图只用实测 merger L2。
+不跨模型宣 SOTA、不写 beats existing；Qwen/InternVL GQA 只报微胜/tie·无 crossover；GLM GQA 待 sampling 重判（旧 greedy 只 inconclusive）；claim 标配置边界（像素 cap/预算/n/解码协议）；图只用实测 merger L2；pre-final 方向消失即停不包装。
 
 ## ★ 约束/资产
-env qwen3vl_clean；权重齐（qwen3vl/qwen2vl/internvl3/glm4v，ModelScope 布局）；runner=v3_premerger_runner.py（4 族）；runs/ gitignore、digest 入 experiments/；commit=Code-Yan-ZX 禁 AI 署名；升级=凭据/>6GPU·h/claim 推翻/投稿前。手册 ORCHESTRATION.md。
+env qwen3vl_clean；权重齐（qwen3vl/qwen2vl/internvl3/glm4v ModelScope 布局）；runner=v3_premerger_runner.py（4族+sampling flags）；runs/ gitignore、digest 入 experiments/；commit=Code-Yan-ZX 禁 AI 署名；升级=凭据/>6GPU·h/claim推翻/投稿前。手册 ORCHESTRATION.md。
