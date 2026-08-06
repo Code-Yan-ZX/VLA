@@ -1,7 +1,7 @@
 # STATE.md — 当前项目状态（主窗口维护，保持 ≤30 行）
 
 > 项目：VLM 视觉 token 压缩 · 目标：**Rank-Before-Merge → ACM MM'27**
-> 最近更新：2026-08-05 · **正文+附录单 PDF 完成**：`main.tex` 在参考文献后接入双模式 `supp.tex`，合并版 22 页、独立附录 10 页均编译通过；修复 S1/S2/S6/S7 超宽表。服务器下一证据闸门锁定 GLM 官方 sampling n=200。GPU 已用 5.5 h；新 gate 预计约 3 h。
+> 最近更新：2026-08-06 · **正文优先排版稿完成**：`drafts/overleaf_body_draft/main.tex` 仅保留实测 Fig.1（第2页），撤下 Fig.2/3 与附录接入；正文+参考文献 10 页、无越栏/未定义引用。原 22 页投稿包保持不动；服务器 GLM sampling gate 执行中。
 
 ## ★ 第四族 gate（GLM-4.1V-9B-Thinking · 2026-08-03）
 - 候选审计（ModelScope 20+ 模型筛选、代码级 merger 证据）= experiments/latest_vlm_model_audit.md；TOP-1 GLM-4.6V-Flash processor 类需 transformers≥5.0rc 加载失败 → 按预注册切同架构 4.1V，无 config hack
@@ -14,7 +14,7 @@
 - 入口重写：贡献①=因果机制（M1 秩重排/M2 被贬=文本笔画单元/M3 ranking-swap kept-set identity 定果）→ ②=stage law 为其泛化（三族 full splits）→ ③=封闭设计空间+regime map
 - Table 3 → failure-mode/regime map；FastV=query-conditioned strong baseline；RBM=query-blind OCR-preserving robust default（not uniformly optimal）
 - Table 1 = 三族 full-split 主矩阵；Table 2 = GLM 第四族 gate；Table 3 = FastV/RBM regime map；Table 4/5/6 = ranking-swap/cascade/efficiency，正文与补充索引一致
-- `main.tex` 默认输出正文+references+S1--S11；`supp.tex` 仍可独立编译；服务器清单 = experiments/next_server_experiments.md
+- 正文排版工作入口 = `drafts/overleaf_body_draft/main.tex`（仅 Fig.1、无附录、10页）；科学权威投稿包仍为 `drafts/overleaf_submission/`；服务器清单 = experiments/next_server_experiments.md
 - Overleaf S11 补齐 GLM 高精度分数/ptid/boxed/4096 诊断；S9.2/S9.3 已统一为 r2b/r2c official rescore；审计 = experiments/recent_submission_commit_audit.md
 
 ## ★ 待办
