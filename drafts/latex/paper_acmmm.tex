@@ -97,14 +97,11 @@ selection on text-dense workloads --- $+11.0$ to $+38.4$~pp across two Qwen-VL
 generations (full splits, paired McNemar $|z| \geq 14.6$) and $+37.4 /
 +34.6$~pp with $+432$~pts on a third family, InternVL3-8B (a different merger
 design: pixel-shuffle rather than Qwen's PatchMerger), under iso-selector /
-iso-budget control; a fourth, fully independent lineage
-(GLM-4.1V-9B-Thinking) replicates the text-dense pre$\gg$post effect in an
-$n = 200$ gate (GQA arm inconclusive under the deterministic greedy
-protocol). There is no text-dense crossover at the native-resolution
+iso-budget control. There is no text-dense crossover at the native-resolution
 full splits (one shallow 600k-cap DocVQA configuration reverses; configuration
 boundary in \S\ref{sec:discussion}), the gap widens monotonically under
 compression, and object-centric GQA shows at most a small significant
-post-stage edge (Qwen $+2.6$--$2.8$~pp) or a tie (InternVL3, $-0.4$~pp).
+post-stage edge (Qwen $+2.6$--$2.8$~pp) or indistinguishable (InternVL3, $-0.4$~pp).
 \textbf{(3) A closed design space and a regime map.} Four pre-registered
 extensions --- QA-gate, hybrid mask, image router, two-stage cascade --- all
 fail on the families/configurations tested (measured on Qwen3-VL, the cascade
@@ -177,7 +174,7 @@ whose merger is a different design (pixel-shuffle downsampling rather than
 Qwen's learned PatchMerger). The law is workload-conditional, not uniform: GQA
 is the one benchmark on which the post stage leads --- by a small significant
 margin on Qwen ($+2.6$--$2.8$~pp, an order of magnitude below any text-dense
-$\Delta$) and by a statistical tie on InternVL3 ($-0.4$~pp) --- and no
+$\Delta$) and an indistinguishable difference on InternVL3 ($-0.4$~pp; paired 95\% CI crosses 0) --- and no
 text-dense benchmark shows any crossover at the native-resolution full splits.
 The gap widens monotonically with compression depth: the two stages are
 indistinguishable at 75\% retention and far apart at 25\%.
@@ -220,13 +217,11 @@ cross-attention layers mix in the question.
     text-dense workloads: $+11.0$ to $+38.4$~pp across two Qwen-VL generations
     (full splits; paired McNemar $|z| = 14.6$--$43.0$) and $+37.4 / +34.6$~pp
     with $+432$~pts on a third family, InternVL3-8B, under iso-selector /
-    iso-budget control, across two merger designs --- a fourth, fully
-    independent lineage (GLM-4.1V-9B-Thinking) replicates the text-dense
-    pre$\gg$post effect in an $n = 200$ gate (GQA arm protocol-inconclusive)
-    --- with no text-dense crossover at the native-resolution full splits and
+    iso-budget control, across two merger designs --- with no text-dense
+    crossover at the native-resolution full splits and
     a gap that widens monotonically under compression --- while
     object-centric GQA shows at most
-    a small significant post-stage edge (Qwen) or a tie (InternVL3)
+    a small significant post-stage edge (Qwen) or an indistinguishable difference (InternVL3)
     (\S\ref{sec:qwen}, \S\ref{sec:internvl}).
   \item \textbf{A closed design space, a regime map, and a robust default.}
     Four pre-registered extensions (QA-gate, hybrid mask, image router,
@@ -570,7 +565,7 @@ reported in Table~\ref{tab:tab3}.
     TextVQA (VQA-acc) & 0.8338 & \textbf{0.7890} & 0.4148 & \textbf{+37.4 pp} & $-4.5$ pp  & 690 \\
     DocVQA (ANLS)     & 0.9221 & \textbf{0.7284} & 0.3820 & \textbf{+34.6 pp} & $-19.4$ pp & 860 \\
     OCR-Bench (/1000) & 852    & \textbf{753}    & 321    & \textbf{+432 pts} & $-99$      & 555 \\
-    GQA (exact match) & 0.6293 & 0.5993          & 0.6031 & $-0.4$ pp (tie)   & $-3.0$ pp  & 690 \\
+    GQA (exact match) & 0.6293 & 0.5993          & 0.6031 & $-0.4$ pp (n.s.)   & $-3.0$ pp  & 690 \\
     \bottomrule
   \end{tabular}
 
@@ -587,9 +582,11 @@ reported in Table~\ref{tab:tab3}.
   and $-99$ /1000 on OCR-Bench, while TextVQA costs only $-4.5$~pp and GQA
   $-3.0$~pp; a near-lossless reading is \textbf{TextVQA/GQA-scoped only}. On the
   text-dense benchmarks the claim is the large pre$>$post margin, not pre =
-  none. (iii)~The GQA ``tie'' is at full $n = 12578$ ($-0.4$~pp; no meaningful
-  difference), contrasted with Qwen's small significant post edge ---
-  family-dependent, both small.
+  none. (iii)~The GQA difference is indistinguishable at full $n = 12578$
+  ($-0.4$~pp; paired 95\% CI $[-0.93, +0.17]$ crosses 0, permutation $p =
+  0.18$), contrasted with Qwen's small significant post edge --- we claim no
+  GQA stage lead on InternVL3, and no preregistered equivalence bound exists,
+  so we do not call it a statistical tie.
 \end{table}
 
 Deep budget, 12.5\% retention ($r = 0.875$, text-dense only): TextVQA pre 0.7230
@@ -600,7 +597,7 @@ Qwen.
 \textbf{Cross-family isomorphism.} InternVL3's pre$-$post text-dense gaps
 ($+37.4 / +34.6$~pp / $+432$~pts) are the same order and direction as
 Qwen3-VL's ($+38.4 / +24.3 / +363$~pts) on all three text-dense benchmarks, and
-GQA stays within the red line --- a tie here ($-0.4$~pp) versus Qwen3-VL's small
+GQA stays within the red line --- indistinguishable here ($-0.4$~pp) versus Qwen3-VL's small
 post edge ($+2.8$~pp), both small, with no text-dense crossover at either
 family's native imaging configuration. The stage law --- the same query-blind L2
 selector leads when applied before the merger because selection deferred past it
@@ -608,43 +605,6 @@ loses raw-patch text information to the merger's ranking rewrite
 (\S\ref{sec:mechanism}), at identical selector and budget --- is therefore
 established on a \textbf{third model family with a different merger}, supporting
 the ``merger-equipped VLMs'' generalization rather than a family-specific claim.
-
-\textbf{Fourth-family gate --- a fully independent lineage
-(Table~\ref{tab:glm}).} To probe the stage effect beyond the families above,
-we run the same gate on \textbf{GLM-4.1V-9B-Thinking} (Zhipu,
-2025)~\cite{hong2025glm41v} --- a fully Qwen/InternVL-independent lineage (GLM-4
-text backbone, AIMv2-derived vision encoder) whose merger, a strided
-$2\!\times\!2$ convolution followed by the \texttt{Glm4vVisionPatchMerger}
-MLP, is a deterministic $4\times$ positional compression and a different
-merger implementation from Qwen's PatchMerger and InternVL3's pixel-shuffle.
-(The originally planned GLM-4.6V-Flash gate requires transformers $\geq
-5.0$rc processor classes; per the pre-registered fallback, the
-same-architecture 4.1V was used.) \textbf{Protocol (configuration
-boundary):} $n = 200$, 25\% retention ($r = 0.75$), the same query-blind L2
-selector at none / pre / post, greedy decoding (the project-standard
-deterministic protocol; the model's released protocol is sampling at temp
-$0.8$ / top-$p$ $0.6$ / top-$k$ $2$), model-default resolution (effective
-max $\approx 4.82$M px), unified thinking-answer extraction identical across
-arms, and iso-token exact per sample (pre $\equiv$ post prompt token ids;
-$\approx 25\%$ of the none arm's visual tokens). \textbf{Result.} The
-text-dense stage effect replicates on this fourth lineage: pre $\gg$ post by
-$+16.8$~pp on TextVQA and $+9.8$~pp on DocVQA --- the same
-direction$\times$workload pattern as the three families above --- under
-iso-selector / iso-token control. The \textbf{GQA arm is
-protocol-inconclusive, not counter-evidence}: under the deterministic greedy
-protocol all arms floor-collapse on this thinking model (none EM $0.150$ vs
-published $\approx 0.77$; greedy think-loops do not converge even at
-$4\times$ budget, max\_tokens $= 4096$), so the direction test is
-uninformative for this family; on the $n = 25$ subset where both arms'
-answers converged the arms tie ($0.68 / 0.68$; underpowered). A containment
-anchor (answer-containment extraction, same model) recovers TextVQA none
-$0.775 \approx$ published $\approx 0.77$ --- the ability is intact; the
-suppression is protocol-level. \textbf{Scope.} This is an $n = 200$ gate,
-not a full split: the full-split generality claim remains the three families
-of Tables~\ref{tab:tab1}--\ref{tab:tab2}, and the gate supports the
-generality of the workload-conditional stage law on a fourth lineage;
-cross-family absolute values are not comparable (pixel cap and decoding
-protocol differ), only the direction$\times$workload pattern is.
 
 % FIG 2 --- grouped bars of the pre-post Delta at 25% retention (headline figure).
 % To embed the finished figure, replace the \fbox{...} block below with:
@@ -705,8 +665,8 @@ whereas RBM holds (0.60 / 0.42 / 0.58). There is therefore no universal winner.
     \midrule
     \multirow{4}{*}{Qwen2.5-VL-7B}
       & TextVQA (dev; default)       & 200   & \textbf{0.7467} & 0.6683 & \textbf{+7.8 pp (FastV)} \\
-      & GQA (dev; default)           & 200   & 0.475           & \textbf{0.520} & \textbf{+4.5 pp (RBM)} \\
-      & DocVQA (dev; 600k cap)       & 200   & 0.4852          & \textbf{0.5062} & \textbf{+2.1 pp (RBM)} \\
+      & GQA (dev; default)           & 200   & 0.475           & 0.520 & $+4.5$ pp (RBM)$^{\ddagger}$ \\
+      & DocVQA (dev; 600k cap)       & 200   & 0.4852          & 0.5062 & $+2.1$ pp (RBM)$^{\ddagger}$ \\
       & OCR-Bench (dev; native res.) & 200   & 0.285           & \textbf{0.370} & \textbf{+8.5 pp (RBM)} \\
     \bottomrule
   \end{tabular}
@@ -735,7 +695,9 @@ whereas RBM holds (0.60 / 0.42 / 0.58). There is therefore no universal winner.
   $\approx 213$ mean visual tokens/request (Qwen3-VL TextVQA, 25\% retention;
   the $n = 200$ probe measured 208) --- approximately matched, stated per cell;
   this is ``each method at its strong configuration,'' not a byte-iso-budget
-  cell.
+  cell. (v)~$^{\ddagger}$The paired 95\% CI crosses 0 at $n = 200$ (GQA
+  $[-10.5, +1.5]$, DocVQA $[-10.1, +5.8]$); these two cells are
+  exploratory/inconclusive, not statistically robust RBM edges.
 \end{table}
 
 % [COMPRESS-OPTIONAL] Table 3 notes (i)--(iv) are long; if the body overflows,
@@ -752,8 +714,10 @@ becomes visible only once cross-attention has seen the question, exactly where
 FastV operates and exactly where the pre-registered query-level gate of
 \S\ref{sec:negative} could not reach before the merger. \textbf{FastV fails the
 OCR regime.} RBM in turn wins OCR-Bench on \textbf{both} families ($+16.0$~pp
-Qwen3-VL, $+8.5$~pp Qwen2.5-VL) and edges the Qwen2.5-VL $n = 200$ GQA/DocVQA
-cells ($+4.5 / +2.1$~pp). The OCR split is structural, not a tuning artifact:
+Qwen3-VL, $+8.5$~pp Qwen2.5-VL); the Qwen2.5-VL $n = 200$ GQA/DocVQA cells
+favor RBM by $+4.5 / +2.1$~pp but their paired 95\% CIs cross 0
+($[-10.5, +1.5]$ / $[-10.1, +5.8]$), so they are exploratory/inconclusive at
+$n = 200$, not statistically robust RBM edges. The OCR split is structural, not a tuning artifact:
 FastV's collapse survives its own best $K$ --- dense OCR information is
 destroyed once text patches are discarded inside the LLM, and no query
 conditioning recovers information already thrown away; only pre-merger
@@ -1079,36 +1043,6 @@ token counts --- the compression speedup is real on a third family, and remains
 stage-neutral. Serving-side (continuous-batching) efficiency and Qwen2.5-VL
 efficiency are future work.
 
-% --- GLM fourth-family gate table. Defined here (after the efficiency table)
-% so that the compiled numbers of the existing tables --- referenced by the
-% hardcoded subsection title "(Table 3)" and by supp.tex's "Table 1--5"
-% naming --- stay unchanged; this table becomes the last-numbered table.
-% First references: \S\ref{sec:internvl} (fourth-family gate) and the
-% Discussion limitations.
-\begin{table}[t]
-  \centering
-  \small
-  \caption{Fourth-family gate --- GLM-4.1V-9B-Thinking (Zhipu, 2025),
-    $n = 200$, 25\% retention ($r = 0.75$), none / pre (RBM) / post under the
-    same query-blind L2 selector (iso-selector), greedy deterministic
-    decoding, model-default resolution (effective max $\approx 4.82$M px),
-    unified thinking-answer extraction identical across arms, iso-token exact
-    per sample (pre $\equiv$ post prompt token ids). $\Delta =$ pre $-$ post.
-    The GQA arm is protocol-inconclusive (floor collapse under greedy
-    decoding; \S\ref{sec:discussion}, item~6); cross-family absolute values
-    are not comparable (pixel cap and decoding protocol differ).}
-  \label{tab:glm}
-  \begin{tabular}{@{}l r r r l@{}}
-    \toprule
-    Benchmark (metric) & none & pre & post & $\Delta$ (pre $-$ post) \\
-    \midrule
-    TextVQA (VQA-acc) & 0.242 & \textbf{0.218} & 0.050 & \textbf{+16.8 pp} \\
-    DocVQA (ANLS)     & 0.104 & \textbf{0.130} & 0.031 & \textbf{+9.8 pp} \\
-    GQA (exact match) & 0.150 & 0.160 & 0.115 & $+4.5$ pp (inconclusive) \\
-    \bottomrule
-  \end{tabular}
-\end{table}
-
 % =============================================================================
 \section{Discussion and Limitations}\label{sec:discussion}
 % =============================================================================
@@ -1139,12 +1073,8 @@ There is no universal winner.
     mechanism (M1--M3) is established on Qwen3-VL; Qwen2.5-VL and InternVL3
     corroborate the stage \emph{law} at the accuracy level, with the causal swap
     selection-level on Qwen2.5-VL and the InternVL3 evidence accuracy-level (a
-    kept-set identity on InternVL3 is future work). A fourth, fully
-    independent lineage (GLM-4.1V-9B-Thinking, a third merger implementation)
-    replicates the text-dense pre$\gg$post effect at the $n = 200$ gate level
-    (Table~\ref{tab:glm}); no full split or mechanism measurement was run on
-    it. LLaVA-family models without a native merger are out of scope by
-    construction.
+    kept-set identity on InternVL3 is future work). LLaVA-family models without
+    a native merger are out of scope by construction.
   \item \textbf{Cross-engine baselines (accuracy comparable, throughput not).}
     FastV runs in an HF eager harness while RBM/post/none run in vLLM; accuracy
     is validated comparable ($r = 0$ anchor 8/8; none cells 16/16), but
@@ -1174,13 +1104,7 @@ There is no universal winner.
     helps). OCR-Bench skip-scoring is conservative.
   \item \textbf{Greedy decoding / single device.} Decoding is deterministic, so
     error bars are binomial only, with no temperature variance; all runs are on
-    a single A40. On the GLM-4.1V-9B-Thinking gate the protocol is itself a
-    configuration boundary: under greedy decoding all arms floor-collapse on
-    GQA for this thinking model (none EM $0.150$ vs published $\approx 0.77$;
-    think-loops do not converge even at $4\times$ budget, max\_tokens $=
-    4096$), so that arm is protocol-inconclusive (Table~\ref{tab:glm}); the
-    model's released sampling protocol (temp $0.8$ / top-$p$ $0.6$ / top-$k$
-    $2$) was not used, keeping all arms deterministic and paired.
+    a single A40.
 \end{enumerate}
 
 % =============================================================================
