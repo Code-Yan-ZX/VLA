@@ -644,7 +644,10 @@ def parse_args():
                          "stage (2x2 merge-unit equivalence), post+swap must "
                          "reproduce pre-standard accuracy and pre+swap must "
                          "reproduce post-standard -- isolating RANKING as the only "
-                         "source of the pre/post gap.")
+                         "source of the pre/post gap. Families: qwen3vl/qwen2vl "
+                         "support post+swap and pre+swap; internvl3 supports "
+                         "post+swap only (PRE ranking = pixel-shuffle unit L2 scores "
+                         "captured via an mlp1 forward pre_hook; pre+swap guarded out).")
     ap.add_argument("--hybrid-text-frac", type=float, default=0.5,
                     help="--mode hybrid ONLY (merger-aware selection, design §4c): "
                          "fraction t in [0,1] of the CONTESTED budget (k - |agreement|) "
@@ -1053,18 +1056,31 @@ def _prepare_internvl3_config(model_id: str):
     return cfg
 
 
-def setup_pre_merger_internvl(model, r: float, selector: str = "l2"):
+def setup_pre_merger_internvl(model, r: float, selector: str = "l2",
+                              save_kept: bool = False):
     """True rank-before-merge: score each 2x2 pixel-shuffle unit (L2 of its 4c
     merged vector == aggregate L2 of the 4 patches), keep the top-k_tile units
     PER TILE, and run the NATIVE mlp1 only on survivors. Faithful to the native
     pipeline: pixel_shuffle is reused verbatim, so a kept unit's 4c vector is
     bitwise what mlp1 would have seen, and mlp1(kept) reproduces the native
-    output for exactly those units (fewer tokens computed -> real saving)."""
+    output for exactly those units (fewer tokens computed -> real saving).
+
+    R1-1 (save_kept=True): record the per-image KEPT unit-index set in the SAME
+    per-image GLOBAL space [0, n_tiles*U) the swap arm records, so Jaccard(pre,
+    swap) is well-defined. extract_feature selects PER TILE (it has no per-image
+    grouping), so it queues (per_tile_token_count, kept_local_indices) tuples;
+    a bit-identical _process_vision_input OBSERVER (installed only when
+    save_kept) pops those tuples and folds them into one per-image entry
+    (global index = tile_t*U + local). Output unchanged -> pre behavior is
+    bit-identical with or without save_kept."""
     U = int(model.num_image_token)                 # 256
     scale = float(model.downsample_ratio)          # 0.5
     diag = {"fires": 0, "nk": [], "selector": selector, "family": "internvl3",
             "num_image_token": U, "downsample_ratio": scale,
             "degraded": 0, "mode": "pre"}
+    kept_log = []                                   # R1-1 per-image entries
+    diag["kept_log"] = kept_log
+    tile_queue = []                                 # (per_tile_count, kept_local|None)
     _orig = model.extract_feature
 
     def _patched(pixel_values):
@@ -1079,6 +1095,9 @@ def setup_pre_merger_internvl(model, r: float, selector: str = "l2"):
         # -> hand off to the fully native path (mode-none behavior for this call).
         if (h * w != n_patch) or (h % 2) or (w % 2):
             diag["degraded"] += 1
+            if save_kept:                          # native returns U tokens/tile
+                for _ in range(B):
+                    tile_queue.append((U, None))
             return _orig(pixel_values)
         c = vit_embeds.shape[-1]
         grid = vit_embeds.reshape(B, h, w, c)
@@ -1086,6 +1105,9 @@ def setup_pre_merger_internvl(model, r: float, selector: str = "l2"):
         units = ps.reshape(B, U, -1)               # [B, U, 4c] (row-major units)
         if units.shape[1] != U:
             diag["degraded"] += 1
+            if save_kept:
+                for _ in range(B):
+                    tile_queue.append((U, None))
             return _orig(pixel_values)
         k = max(1, int(round(U * (1.0 - r))))
         scores = _score_tokens(units.reshape(B * U, -1), selector).reshape(B, U)
@@ -1096,8 +1118,42 @@ def setup_pre_merger_internvl(model, r: float, selector: str = "l2"):
         diag["fires"] += 1
         if len(diag["nk"]) < 8:
             diag["nk"].append((U, k))
+        if save_kept:
+            for t in range(B):
+                tile_queue.append((k, idx[t].tolist()))  # per-tile kept LOCAL idx
         return out
     model.extract_feature = _patched
+
+    # R1-1 observer (bit-identical; only records). Native _process_vision_input
+    # calls self.extract_feature (the _patched above) -> tile_queue fills -> it
+    # splits by feature_size (= k non-degraded, = U degraded). The observer pops
+    # tuples until the running token count covers each per-image split, folding
+    # per-tile local indices into per-image global [0, n_tiles*U) indices.
+    if save_kept:
+        _orig_pvi = model._process_vision_input
+
+        def _obs_pvi(image_input):
+            splits = _orig_pvi(image_input)
+            for s in splits:
+                n = int(s.shape[0])
+                gidx = []
+                t = 0
+                running = 0
+                ok = True
+                while running < n and tile_queue:
+                    per_cnt, kept_local = tile_queue.pop(0)
+                    if kept_local is None:
+                        ok = False
+                    else:
+                        gidx.extend(t * U + j for j in kept_local)
+                    running += per_cnt
+                    t += 1
+                if running != n:
+                    ok = False                       # queue exhausted early
+                kept_log.append({"n_units": t * U, "k": len(gidx),
+                                 "kept": sorted(gidx), "fallback": not ok})
+            return splits
+        model._process_vision_input = _obs_pvi
     return diag
 
 
@@ -1134,6 +1190,114 @@ def setup_post_merger_internvl(model, r: float, selector: str = "l2"):
         return tuple(out)
     model._process_vision_input = _patched
     return diag
+
+
+# --------------------------------------------------------------------------- #
+# (B-swap internvl3) POST forward path + PRE ranking selection (M3 causal
+#   control, ported from the Qwen setup_post_merger_swap). The full post-merger
+#   forward runs UNCHANGED: native _process_vision_input -> native extract_feature
+#   -> pixel_shuffle (parameter-free 2x2->1) -> mlp1 on ALL units. We only
+#   OBSERVE mlp1's INPUT (== pixel_shuffle output reshaped [B_tiles, U, 4c] --
+#   bitwise the SAME pre-merger unit representation pre mode scores) via a
+#   forward pre_hook, compute per-tile unit scores EXACTLY as pre mode
+#   (_score_tokens on the flattened 4c unit vectors), and cache them per tile.
+#   The _process_vision_input wrapper then selects, per image, the kept merged
+#   tokens by those PRE unit scores. To make the control CLEAN (Jaccard(pre,
+#   swap)=1 by construction), selection is PER-TILE top-k_tile (identical rule to
+#   pre mode), NOT per-image top-k: merged token (tile t, unit j) lives at global
+#   index t*U + j, and mlp1(unit_j) == merged_token_j (mlp1 + pixel_shuffle have
+#   NO cross-unit receptive field), so the selected merged tokens are bitwise
+#   what pre mode's mlp1(kept) produced => swap must reproduce pre-standard
+#   accuracy, isolating RANKING as the only source of the pre>post gap.
+# --------------------------------------------------------------------------- #
+def setup_post_merger_swap_internvl(model, r: float, selector: str = "l2",
+                                    save_kept: bool = False):
+    """M3 ranking-swap control for InternVL3: POST forward path (native
+    extract_feature, all units merged) + PRE-ranking selection (per-tile top-k
+    on the pixel-shuffle unit L2 scores). Returns (diag, state) where state
+    exposes ``queue`` (per-tile PRE score vectors) and ``kept_log`` (R1-1
+    per-image kept merged-token indices in the same [0, n_tiles*U) space as pre
+    mode -> Jaccard(pre, swap) is well-defined)."""
+    U = int(model.num_image_token)                 # 256
+    state = {"queue": [], "kept_log": []}          # queue: per-tile PRE scores [U]
+    diag = {"fires": 0, "nk": [], "selector": selector, "family": "internvl3",
+            "num_image_token": U, "mode": "post",
+            "mask_ranking": "swap:post-path+pre-ranking",
+            "score_passes": 0, "consumed": 0, "fallback_stage": 0,
+            "first_merger": "mlp1"}
+
+    # (1) forward pre_hook on mlp1: capture the pre-merger unit representation
+    #     (mlp1's INPUT == pixel_shuffle output reshaped [B_tiles, U, 4c]) and
+    #     score per-tile EXACTLY as pre mode. mlp1 then runs UNCHANGED on ALL
+    #     units (post path intact). Non-modifying (returns None).
+    def _mlp1_prehook(module, args, kwargs):
+        hs = args[0] if args else kwargs.get("hidden_states")
+        if r != 0.0 and hs is not None and hs.dim() == 3 and hs.shape[1] == U:
+            B_tiles = hs.shape[0]
+            scores = _score_tokens(hs.reshape(B_tiles * U, -1),
+                                   selector).reshape(B_tiles, U)
+            for t in range(B_tiles):
+                state["queue"].append(scores[t].detach().cpu())
+            diag["score_passes"] += 1
+        elif r != 0.0:
+            diag["fallback_stage"] += 1              # grid mismatch (defensive)
+        return None
+    handle = model.mlp1.register_forward_pre_hook(_mlp1_prehook, with_kwargs=True)
+
+    # (2) wrap _process_vision_input: native post path (extract_feature fires the
+    #     mlp1 pre_hook -> queue fills) then per-image select by the PRE ranking.
+    _orig = model._process_vision_input
+
+    def _patched(image_input):
+        splits = _orig(image_input)              # native: extract_feature + split
+        diag["fires"] += 1
+        if r == 0.0:
+            return splits
+        k_tile = max(1, int(round(U * (1.0 - r))))
+        out = []
+        for s in splits:
+            n = int(s.shape[0])
+            n_tiles = n // U if U > 0 else 0
+            need = max(1, n_tiles)
+            tile_scores = []
+            fb = False
+            for _ in range(need):
+                if state["queue"]:
+                    v = state["queue"].pop(0)
+                    if int(v.shape[0]) == U:
+                        tile_scores.append(v)
+                    else:
+                        fb = True
+                else:
+                    fb = True                      # encoder-cache replay / mismatch
+            if (not fb) and n_tiles > 0 and len(tile_scores) == n_tiles:
+                diag["consumed"] += 1
+                gidx = []
+                for t, sc in enumerate(tile_scores):
+                    it = torch.topk(sc.to(device=s.device), k_tile
+                                    ).indices.sort().values
+                    gidx.extend((t * U + it).tolist())
+                idx = torch.tensor(sorted(gidx), device=s.device, dtype=torch.long)
+            else:
+                diag["fallback_stage"] += 1
+                k = (n_tiles * k_tile) if n_tiles > 0 \
+                    else max(1, int(round(n * (1.0 - r))))
+                k = min(k, n)
+                idx = torch.topk(_score_tokens(s, selector), k
+                                 ).indices.sort().values
+                fb = True
+            if save_kept:
+                state["kept_log"].append(
+                    {"n_units": (n_tiles * U) if n_tiles > 0 else n,
+                     "k": int(idx.shape[0]),
+                     "kept": sorted(idx.tolist()), "fallback": fb})
+            out.append(s.index_select(0, idx).contiguous())
+        if len(diag["nk"]) < 8:
+            diag["nk"].append((int(splits[0].shape[0]), int(out[0].shape[0])))
+        return tuple(out)
+    model._process_vision_input = _patched
+    state["_hook_handle"] = handle                 # keep ref so it isn't GC'd
+    return diag, state
 
 
 # --------------------------------------------------------------------------- #
@@ -1717,24 +1881,51 @@ def attach_kept_indices(kept_log, samples, per_sample, model_id: str,
     """R1-1 diagnostic: FIFO-attach per-image kept unit-index lists to
     per_sample[i]["kept_indices"] (+ kept_n_units/kept_k, kept_fallback when a
     swap fallback entry was used). Source queues: PreMergerPruner.kept_log
-    (mode=pre) or setup_post_merger_swap state["kept_log"] (mode=post +
+    (mode=pre, Qwen/glm4v), diag["kept_log"] (mode=pre, internvl3), or
+    setup_post_merger_swap[_internvl] state["kept_log"] (mode=post +
     mask_ranking=swap). Same alignment contract as attach_hybrid_unit_scores:
-    entry 0 = warmup (dropped); per-image unit counts recomputed offline with
-    the SAME HF processor vLLM uses guard against encoder-cache replays.
+    entry 0 = warmup (dropped); per-image unit counts recomputed offline with the
+    SAME processor vLLM uses to guard against encoder-cache replays.
     Best-effort: unmatched samples simply get no kept_indices key."""
     log = kept_log[1:]                        # drop warmup entry
-    from transformers import AutoProcessor
+    family = detect_family(model_id)
     full_units = [None] * len(samples)
     try:
         from PIL import Image
-        proc = AutoProcessor.from_pretrained(model_id)
-        for i, smp in enumerate(samples):
-            kw = {}
-            if max_pixels and max_pixels > 0:
-                kw["max_pixels"] = max_pixels
-            g = proc.image_processor(Image.open(smp.image),
-                                     return_tensors="pt", **kw)["image_grid_thw"]
-            full_units[i] = int(g[0].prod()) // 4
+        if family == "internvl3":
+            # InternVL3 has no Qwen-style image_grid_thw; vLLM's
+            # InternVLImageProcessor returns image_num_patches (tiles/image).
+            # n_units = n_tiles * U (U = num_image_token = 256). The PIL
+            # pre-resize cap is already baked into smp.image (runner pre-resizes
+            # internvl3 samples), so this recompute sees exactly what the model
+            # saw. trust_remote_code for the legacy internvl_chat config.
+            from transformers import AutoConfig
+            from vllm.transformers_utils.processors.internvl import \
+                InternVLImageProcessor
+            cfg = AutoConfig.from_pretrained(model_id, trust_remote_code=True)
+            vc = cfg.vision_config
+            ip = InternVLImageProcessor(
+                image_size=vc.image_size,
+                min_dynamic_patch=cfg.min_dynamic_patch,
+                max_dynamic_patch=cfg.max_dynamic_patch,
+                dynamic_image_size=cfg.dynamic_image_size,
+                use_thumbnail=cfg.use_thumbnail)
+            ps = getattr(vc, "patch_size", 14)
+            U = int((vc.image_size // ps) ** 2 * (cfg.downsample_ratio ** 2))
+            for i, smp in enumerate(samples):
+                out = ip(Image.open(smp.image), return_tensors="pt")
+                n_tiles = int(out["image_num_patches"][0])
+                full_units[i] = n_tiles * U
+        else:
+            from transformers import AutoProcessor
+            proc = AutoProcessor.from_pretrained(model_id)
+            for i, smp in enumerate(samples):
+                kw = {}
+                if max_pixels and max_pixels > 0:
+                    kw["max_pixels"] = max_pixels
+                g = proc.image_processor(Image.open(smp.image),
+                                         return_tensors="pt", **kw)["image_grid_thw"]
+                full_units[i] = int(g[0].prod()) // 4
     except Exception as e:
         print(f"[kept] offline grid recompute failed "
               f"({type(e).__name__}: {str(e)[:160]}); kept_indices NOT attached",
@@ -2489,9 +2680,59 @@ def _run_dry_check_internvl3():
     print(f"[dry-check]   OK post split prune: [{2*U},{hidden}] -> "
           f"[{k_post},{hidden}] (1 _process_vision_input wrap)")
 
-    # (e) expected hook/wrap counts for internvl3 = 1 (pre) + 1 (post)
+    # (e) M3 post+swap (internvl3): POST forward path (native extract_feature ->
+    #     mlp1 on ALL units) + PRE-ranking selection (per-tile top-k on the
+    #     pixel-shuffle unit L2 scores, captured via an mlp1 forward pre_hook).
+    #     Uses a dummy whose _process_vision_input calls extract_feature (so the
+    #     mlp1 hook fires), mimicking vLLM's native data flow. 1 image, 2 tiles.
+    class _DummyInternVLSwap(_DummyInternVL):
+        def _process_vision_input(self, image_input):
+            pv = torch.randn(2, 3, 32, 32)          # 2 tiles
+            embeds = self.extract_feature(pv)        # native -> fires mlp1 hook
+            return (embeds.reshape(-1, embeds.shape[-1]),)  # [2*U, hidden]
+
+    m_swap = _DummyInternVLSwap()
+    diag_sw, state_sw = setup_post_merger_swap_internvl(
+        m_swap, 0.75, "l2", save_kept=True)
+    torch.manual_seed(123)
+    out_sw = m_swap._process_vision_input(None)
+    k_tile_sw = max(1, round(U * 0.25))               # =4
+    assert [s.shape[0] for s in out_sw] == [2 * k_tile_sw], \
+        [s.shape[0] for s in out_sw]                  # 2 tiles * 4 = 8
+    assert diag_sw["fires"] == 1, diag_sw
+    assert diag_sw["score_passes"] == 1, diag_sw       # mlp1 hook fired once
+    assert diag_sw["consumed"] == 1 and diag_sw["fallback_stage"] == 0, diag_sw
+    assert len(state_sw["queue"]) == 0, state_sw["queue"]   # queue drained
+    assert len(state_sw["kept_log"]) == 1, state_sw["kept_log"]
+    assert state_sw["kept_log"][0]["n_units"] == 2 * U, state_sw["kept_log"][0]
+    assert state_sw["kept_log"][0]["k"] == 2 * k_tile_sw, state_sw["kept_log"][0]
+    assert not state_sw["kept_log"][0]["fallback"], state_sw["kept_log"][0]
+    print(f"[dry-check]   OK post+swap control: native extract_feature (mlp1 "
+          f"untouched, {2*U} units) -> split {2*U} -> {[s.shape[0] for s in out_sw]} "
+          f"by PRE ranking (consumed={diag_sw['consumed']}, leftover="
+          f"{len(state_sw['queue'])}, fallback={diag_sw['fallback_stage']})")
+
+    # (f) CLEAN-CONTROL guarantee: Jaccard(pre, swap) == 1 by construction.
+    #     Same seed -> same ViT/pixel_shuffle output -> same unit scores -> same
+    #     per-tile top-k. Pre records per-image global kept indices (observer);
+    #     swap records the same space. They must be identical.
+    m_pre_k = _DummyInternVLSwap()
+    diag_pre_k = setup_pre_merger_internvl(m_pre_k, 0.75, "l2", save_kept=True)
+    torch.manual_seed(123)
+    _ = m_pre_k._process_vision_input(None)
+    pre_kept = set(diag_pre_k["kept_log"][0]["kept"])
+    swap_kept = set(state_sw["kept_log"][0]["kept"])
+    jac = len(pre_kept & swap_kept) / len(pre_kept | swap_kept) \
+        if (pre_kept | swap_kept) else 1.0
+    assert pre_kept == swap_kept, \
+        (sorted(pre_kept), sorted(swap_kept), jac)
+    assert jac == 1.0, jac
+    print(f"[dry-check]   OK Jaccard(pre,swap)={jac:.3f} (clean control: pre "
+          f"and swap keep the SAME units; n_units={2*U}, k={2*k_tile_sw})")
+
+    # (g) expected hook/wrap counts for internvl3 = 1 (pre) + 1 (post) + swap
     print(f"[dry-check]   OK expected internvl3 wraps: pre=1 (extract_feature), "
-          f"post=1 (_process_vision_input); NO deepstack/mrope")
+          f"post=1 (_process_vision_input); swap adds mlp1 pre_hook; NO deepstack/mrope")
     print(f"[dry-check] ALL PASS for family=internvl3")
 
 
@@ -2962,15 +3203,20 @@ def main():
         if args.visionzip_style:
             raise SystemExit("--qa-lambda>0 is not supported with "
                              "--visionzip-style (dominant-only standard path)")
-    # InternVL3 third-family onboarding supports the two clean mechanisms only
-    # (stage-ranking pre + post). The Qwen-specific machinery -- M3 swap control,
+    # InternVL3 third-family onboarding supports the two clean mechanisms
+    # (stage-ranking pre + post) AND the M3 ranking-swap control (post+swap:
+    # POST forward path + PRE-ranking selection, ported from Qwen's
+    # setup_post_merger_swap). pre+swap (PRE path + POST ranking) is NOT ported
+    # (it would need the post ranking computed inside the sliced pre path; the
+    # M3 claim only needs post+swap). The remaining Qwen-specific machinery --
     # VisionZip-style dom/ctx split, hybrid routing, and QA-pre saliency -- is
     # tied to the Qwen merger/deepstack/mrope internals and is NOT ported. Guard
     # them out explicitly so they can never silently touch internvl3 behavior.
     if family == "internvl3":
-        if args.mask_ranking == "swap":
-            raise SystemExit("internvl3: --mask-ranking swap is not supported "
-                             "(Qwen M3 control; stage ranking only).")
+        if args.mask_ranking == "swap" and args.mode != "post":
+            raise SystemExit("internvl3: --mask-ranking swap requires --mode post "
+                             "(post+swap = POST forward path + PRE ranking selection; "
+                             "pre+swap is not ported).")
         if args.visionzip_style:
             raise SystemExit("internvl3: --visionzip-style is not supported.")
         if args.mode == "hybrid":
@@ -3072,7 +3318,11 @@ def main():
     hybrid_state = None
     qa_state = None
     if args.mode == "post":
-        if family == "internvl3":
+        if family == "internvl3" and args.mask_ranking == "swap":
+            # M3 (internvl3): post forward path + PRE ranking selection.
+            diag, swap_state = setup_post_merger_swap_internvl(
+                model, r, args.selector, save_kept=args.save_unit_scores)
+        elif family == "internvl3":
             diag = setup_post_merger_internvl(model, r, args.selector)
         elif args.mask_ranking == "swap":
             # M3: post forward path + PRE ranking selection.
@@ -3090,7 +3340,9 @@ def main():
         if family == "internvl3":
             # True rank-before-merge on the pixel-shuffle units (no QA/swap/
             # visionzip/deepstack/mrope machinery -- all Qwen-only, guarded out).
-            diag = setup_pre_merger_internvl(model, r, args.selector)
+            # save_kept records the per-image kept-set (R1-1) for Jaccard(pre,swap).
+            diag = setup_pre_merger_internvl(model, r, args.selector,
+                                             save_kept=args.save_unit_scores)
         elif family == "glm4v":
             # True rank-before-merge on the glm4v merge-units: L2 selection on
             # the post_layernorm ViT stream BEFORE the downsample conv + merger
@@ -3248,10 +3500,16 @@ def main():
             attach_hybrid_unit_scores(hybrid_state, samples, per_sample,
                                       model_id, args.max_pixels, diag)
     if args.save_unit_scores and diag is not None:
-        # R1-1: attach per-image kept unit sets for the pre-vs-swap Jaccard
-        # (mode=pre -> pruner.kept_log; mode=post+swap -> swap_state kept_log;
-        # mode=pre-final -> pruner.kept_log, same FIFO contract).
-        if args.mode in ("pre", "pre-final"):
+        # R1-1: attach per-image kept unit sets for the pre-vs-swap Jaccard.
+        # Sources: mode=pre/pre-final (qwen/glm4v) -> pruner.kept_log; mode=pre
+        # internvl3 -> diag["kept_log"] (setup_pre_merger_internvl observer);
+        # mode=post+swap (qwen or internvl3) -> swap_state["kept_log"]. Same FIFO
+        # contract (entry 0 = warmup, dropped); attach_kept_indices is
+        # family-aware (internvl3 recomputes n_tiles*U via InternVLImageProcessor).
+        if args.mode == "pre" and family == "internvl3":
+            attach_kept_indices(diag.get("kept_log", []), samples, per_sample,
+                                model_id, args.max_pixels, diag)
+        elif args.mode in ("pre", "pre-final"):
             attach_kept_indices(pruner.kept_log, samples, per_sample,
                                 model_id, args.max_pixels, diag)
         elif swap_state is not None:
