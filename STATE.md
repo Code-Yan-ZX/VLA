@@ -1,7 +1,7 @@
 # STATE.md - 当前项目状态（主窗口维护，保持 ≤30 行）
 
 > 项目：VLM 视觉 token 压缩 · 目标：Rank-Before-Merge -> ACM MM'27
-> 最近更新：2026-08-06 · **P0-1 GLM BLOCKER：sampling 不恢复 anchor -> 停 GLM、撤 headline（已升级 user）**。P0-2 统计完成（0 mismatch，stage law 全显著）。GPU 串行续 P0-3/P1-1/P1-3。
+> 最近更新：2026-08-06 · **P0-3 pre-final control 完成：text-dense stage effect 确认（+30/+12.5pp，非 artifact）；GQA "反转" 是 layer-8 ranking artifact（已 flag 待 user 定）**。P0-1 GLM 已撤（user 选 A）；P0-2/2b 完成。GPU 串行续 P1-1/P1-3。
 
 ## ★ P0-1 GLM 判决（BLOCKER，已升级）
 - 官方 sampling（temp0.8/top_p0.6/top_k2/seed0/maxtok1024）n=200 none×3：textvqa 0.287 / docvqa 0.155 / gqa 0.165（greedy 0.242/0.104/0.150；官方 ~0.8/0.8/0.77）-> **anchor 不恢复**。
@@ -13,15 +13,19 @@
 - paired bootstrap/permutation(20k)/McNemar 重算 Table1/3，0 mismatch。stage law 全 text-dense pre≫post 显著（p≈5e-5）；InternVL3 GQA -0.4pp CI跨0 -> indistinguishable（非 tie）；Table3 Qwen2.5VL RBM GQA/DocVQA 小边 CI跨0 -> exploratory。产物 experiments/paired_metric_statistics.{md,json}+src/v3_premerger/paired_stats.py。
 - P0-2b 完成（commit e772a18，已 push）：InternVL3 GQA 'indistinguishable'（非 tie，CI[-0.93,+0.17]）、Table3 Qwen2.5VL RBM GQA/DocVQA 小边 exploratory（CI 跨0）、GLM 全删；paper 双份同步（main.tex≡paper_acmmm.tex）；修了旧表注 factual error。待 Overleaf 编译。
 
-## ★ 进行中（CPU 子agent）
-- P0-3 Qwen3 tap-point 审计（pre=deepstack blk8 输出？post=main-merger 输出？+ pre-final control 设计）。
-- P1-2 强基线审计（Hi-Lo/QuietPrune/IF-Prun 代码可用性）。
+## ★ P0-3 完成（commit 待 push：digest experiments/p0-3_prefinal_control.md）
+- pre-final pure-stage control（rank at main-merger 输入 vs post=main-merger 输出）n=200 Qwen3-VL greedy iso-config。iso-token PASS（200/200）。**text-dense stage effect 确认**：TextVQA pre-final 0.515 vs post 0.215 = +30.0pp、DocVQA +12.5pp（pre-final 仍≫post）-> 主 claim 是真 stage effect、非 deepstack 特征空间 artifact，pure-stage control 有效、写入论文。
+- **GQA nuance（已 flag 不自行包装）**：pre-final 0.45 == post 0.45（0.0pp），但原 pre-vs-post Qwen3 GQA -2.8pp（post>pre）-> GQA "反转" 全是 deepstack[0]-input(layer-8) ranking artifact、非真 stage reversal。refine 非 overturn：stage effect 为 text-dense 专属且 robust；GQA 无真 stage effect。待 user 定 GQA 措辞。
+- runner --mode pre-final（commit 3df3df2）；runs/qwen3_prefinal_control/。
 
-## ★ 队列（GPU 串行，GLM 已移除）
-P0-3(Qwen3 pre-final control) -> P1-1(InternVL3 ranking-swap+Jaccard) -> P1-3(效率重复性)。P1-2 audit CPU 并行。
+## ★ 进行中
+- P1-2 强基线审计（Hi-Lo/QuietPrune/IF-Prun 代码可用性，web 子agent 仍跑）。
+
+## ★ 队列（GPU 串行）
+P1-1(InternVL3 ranking-swap+Jaccard) -> P1-3(效率重复性)。P1-2 audit CPU 并行。P0-3 paper 写入+GQA 重框 待 user 定后一并改。
 
 ## ★ 红线（DECISIONS.md）
-不跨模型宣 SOTA；Qwen/InternVL GQA 只报微胜/tie；GLM 待 user 定（建议撤）；claim 标配置边界；图只用实测 merger L2。
+不跨模型宣 SOTA；GLM 已撤；GQA "反转" 是 layer-8 artifact 待 user 定措辞（不得写成真 stage reversal）；claim 标配置边界；图只用实测 merger L2。
 
 ## ★ 约束/资产
-env qwen3vl_clean；权重齐；runner=v3_premerger_runner.py（4族+sampling flags，commit a029c89）；runs/ gitignore；commit=Code-Yan-ZX 禁 AI 署名；升级=凭据/>6GPU·h/claim推翻/投稿前。手册 ORCHESTRATION.md。user paper WIP（DECISIONS/overleaf×3/glm4v_stage_gate）在 stash@{0} 待 user 合。
+env qwen3vl_clean；权重齐；runner=v3_premerger_runner.py（4族+sampling flags+pre-final mode）；runs/ gitignore；commit=Code-Yan-ZX 禁 AI 署名；升级=凭据/>6GPU·h/claim推翻/投稿前。手册 ORCHESTRATION.md。paper 双份同步（main.tex≡paper_acmmm.tex）；101 个 notes/scripts WIP 为 user 未提交、不触碰。
