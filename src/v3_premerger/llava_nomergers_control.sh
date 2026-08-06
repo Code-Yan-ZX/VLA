@@ -22,18 +22,18 @@ SUBSET_GQA=eval/subsets/gqa_200.jsonl
 N=200
 MAX_TOKENS=32
 KEEP_FRAC=0.25
-GPU_FREE_MB=1000            # wait until < this much VRAM is in use
 
 mkdir -p "$OUT_DIR"
 
-# ---- wait for a free GPU ----
-used=$(nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits 2>/dev/null | head -1 | tr -d ' ')
-echo "[nomergers] waiting for free GPU (<${GPU_FREE_MB}MB used; now ${used}MB)..."
-while [ "${used:-0}" -gt "$GPU_FREE_MB" ]; do
-  sleep 60
-  used=$(nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits 2>/dev/null | head -1 | tr -d ' ')
+# ---- wait for a free GPU (>= 40000 MiB free; baseline VRAM ~1.3GB so used-only
+#      threshold would never trigger) ----
+free=$(nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits 2>/dev/null | head -1 | tr -d ' ')
+echo "[nomergers] waiting for free GPU (>=40000MB free; now ${free}MB)..."
+while [ "${free:-0}" -le 40000 ]; do
+  sleep 30
+  free=$(nvidia-smi --query-gpu=memory.free --format=csv,noheader,nounits 2>/dev/null | head -1 | tr -d ' ')
 done
-echo "[nomergers] GPU free (${used}MB used). starting cells."
+echo "[nomergers] GPU free (${free}MB free). starting cells."
 
 # ---- 6 cells: none/pre/post x textvqa/gqa ----
 for BENCH in textvqa gqa; do

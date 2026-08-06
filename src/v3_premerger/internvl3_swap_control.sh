@@ -65,8 +65,10 @@ declare -A JSONL=( [textvqa]=eval/subsets/textvqa_200.jsonl
                    [gqa]=eval/subsets/gqa_200.jsonl )
 
 run_cell(){ # bench mode r "flags" tag
+  local RMODE=$2
+  [ "$RMODE" = "swap" ] && RMODE="post"   # swap arm = POST path + --mask-ranking swap (flag added in cell())
   timeout 5400 $PY src/v3_premerger/v3_premerger_runner.py --model-family $FAM --benchmark $1 \
-    --subset ${JSONL[$1]} --n $N --r $3 --mode $2 --selector l2 --max-tokens $MAXTOK \
+    --subset ${JSONL[$1]} --n $N --r $3 --mode $RMODE --selector l2 --max-tokens $MAXTOK \
     $4 --out $OUT/$5.json > $OUT/$5.log 2>&1
   tail -2 $OUT/$5.log
 }
