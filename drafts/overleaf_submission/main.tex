@@ -687,6 +687,16 @@ loses raw-patch text information to the merger's ranking rewrite
 established on a \textbf{third model family with a different merger}, supporting
 the ``merger-equipped VLMs'' generalization rather than a family-specific claim.
 
+\textbf{The ranking-swap identity generalizes to InternVL3.} The M3 control
+(\S\ref{sec:mechanism}) --- run the post-merger forward path but select units
+with the pre-merger ranking --- recovers pre-merger accuracy exactly on
+InternVL3 too: swap vs pre is $+0.00$~pp (TextVQA), $+0.11$~pp (DocVQA),
+$-0.50$~pp (GQA), with kept-set Jaccard(pre,swap)$= 1.0$ and per-sample
+answer-identity $0.98$--$1.0$ ($n=200$, iso-token, no swap fallback). The
+pre$>$post gap is therefore a pure ranking effect --- which units are kept, not
+the forward path --- on a \emph{second} merger architecture (pixel-shuffle, not
+just Qwen's PatchMerger), confirming the M3 mechanism is architecture-general.
+
 % FIG 2 --- grouped bars of the pre-post Delta at 25% retention (headline figure;
 % wired from figs/fig2.pdf, measured full-split values).
 \begin{figure*}[t]

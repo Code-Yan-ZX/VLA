@@ -21,7 +21,8 @@
 - **cross-arch M1 预测律 = DEAD**（experiments/cross_arch_predictive_law.md，commit 8de4505）：pre/post ranking divergence 不预测 stage-effect magnitude（per-image r≈0）。诚实 negative，不写入为预测律。
 - **LLaVA-NeXT no-merger 对照 = CONFIRMED**（experiments/llava_nomergers_control.md，commit c9eb5cb）：LLaVA-1.5（per-token MLP，无空间 merger）pre/post-MLP L2 @25% n=200 -> TextVQA -2.17pp（McNemar p=0.125 n.s.）、GQA -0.5pp（p=1.0 n.s.）-> **无空间 merger 则无显著 stage effect**；对比 Qwen3 +38.4pp（p≈5e-5）。**空间 merger 是 pre>post stage effect 的必要条件**（非仅 amplifier，方向反转）。理论框为 characterization（stage effect ⟺ lossy spatial merger + text-dense），非预测律。
 - **D2 merger-loss-aware selector = MIXED**（runs/qwen3_d2_selector/，commit c68d637）：--selector {edge,var}。**实际 paired delta（脚本 verdict 有 n_paired=0 bug，以 summary JSON 为准）**：textvqa edge -1.17pp/var -5.50pp（L2 胜）、docvqa edge +2.33pp/var +1.53pp（edge 胜）、gqa edge +2.50pp/var +1.00pp（edge 胜）。-> 机制导出 selector benchmark-conditional（docvqa/gqa 胜，textvqa 输），非 uniform 方法，不写入为 method。诚实 negative-ish。
-- **GPU chain 自主跑中**（run_gpu_chain.sh，commit 2156b31）：D2 rerun -> P1-1 -> P1-3 -> GLM。各 gate 有 GPU-wait+retry，不需 API。chain.log = runs/gpu_chain/chain.log。
+- **P1-1 InternVL3 swap = GENERALIZES**（experiments/p1-1_internvl3_swap.md）：M3 ranking-swap identity 在 InternVL3 成立——swap≡pre（textvqa +0.00pp、docvqa +0.11pp、gqa -0.50pp）、Jaccard(pre,swap)=1.0、ans-id 0.98-1.0。stage law 亦在 InternVL3 成立（textvqa +39.3pp、docvqa +31.9pp、gqa +1.0pp）。机制 claim 现 architecture-general（3 族，2 种 merger 设计）。已写入论文（commit 见下）。
+- **GPU chain 自主跑中**（run_gpu_chain.sh，commit 2156b31）：D2 rerun ✅(mixed) -> P1-1 ✅(GENERALIZES) -> P1-3(跑中) -> GLM。各 gate 有 GPU-wait+retry，不需 API。chain.log = runs/gpu_chain/chain.log。
 - brainstorm：RBM 非 SOTA（FastV 胜 TextVQA/GQA）；贡献须 law/mechanism。routing/hybrid 已死；selective bypass 训练-free 不可行。
 - **配额**：5h quota 超，reset ~2026-08-07 03:05。子agent 429 fail；主窗口直做 paper 集成。
 
