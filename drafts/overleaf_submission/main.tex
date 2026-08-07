@@ -111,6 +111,14 @@ compression, and object-centric GQA shows \emph{no} stage effect --- the
 apparent small post-stage edge on Qwen ($+2.6$--$2.8$~pp, measured with the
 deepstack[0]-input layer-8 ranking) is a ranking artifact dissolved by the
 pure-stage control ($0.0$~pp), and InternVL3 is indistinguishable ($-0.4$~pp).
+A no-merger negative control --- LLaVA-1.5-7B, whose per-token MLP projector has
+no spatial 2x2 merger --- shows \emph{no} significant stage effect (TextVQA
+$-2.17$~pp, McNemar $p{=}0.125$; GQA $-0.5$~pp, $p{=}1.0$; vs the merger-equipped
+Qwen3-VL's $+38.4$~pp, $p{\approx}5{\times}10^{-5}$), confirming the lossy spatial
+merger is \emph{necessary} for the pre$>$post effect --- without it the trend
+reverses (post$\gtrsim$pre, n.s.). This turns the stage law into a causal
+characterization: the pre$>$post effect arises iff the model has a lossy spatial
+merger \emph{and} the input is text-dense.
 \textbf{(3) A closed design space and a regime map.} Four pre-registered
 extensions --- QA-gate, hybrid mask, image router, two-stage cascade --- all
 fail on the families/configurations tested (measured on Qwen3-VL, the cascade
@@ -626,6 +634,21 @@ text-dense $\Delta$ (1/10--1/14 of them), and \textbf{no text-dense benchmark
 shows any crossover at the native-resolution full splits}. We therefore claim
 \textbf{no} stage effect on object-centric data --- neither pre nor post
 superiority; all other sections refer here for the GQA statistics.
+
+\textbf{A no-merger negative control (LLaVA-1.5).} The stage effect requires a
+lossy \emph{spatial} merger. LLaVA-1.5-7B has a per-token MLP projector
+(Linear--GELU--Linear, no 2x2 spatial averaging). Running the same pre-vs-post
+L2 protocol (pre-MLP vs post-MLP ranking, keep 25\%, $n{=}200$, greedy) yields
+\emph{no} significant stage effect: TextVQA $\Delta = -2.17$~pp (McNemar
+$p{=}0.125$; none $0.452$, pre $0.087$, post $0.108$), GQA $\Delta = -0.5$~pp
+($p{=}1.0$; none $0.575$, pre $0.375$, post $0.380$) --- versus the
+merger-equipped Qwen3-VL's $+38.4$~pp ($p{\approx}5{\times}10^{-5}$) on TextVQA.
+Without a spatial merger the trend reverses (post$\gtrsim$pre, n.s.): ranking in
+the LLM space is at least as good as in the ViT space when no merger destroys
+text. The lossy spatial merger is therefore \emph{necessary} for the pre$>$post
+stage effect --- a causal characterization (the effect arises iff the model has a
+lossy spatial merger \emph{and} the input is text-dense), not merely an
+amplifier.
 
 \subsection{Generalization to a third family --- InternVL3-8B (Table 1)}\label{sec:internvl}
 
