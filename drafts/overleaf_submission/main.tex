@@ -1111,7 +1111,10 @@ engines with the HF baselines (\S\ref{sec:setup}).
 \textbf{Stage-neutral.} Pre and post differ by $\leq 3\%$ in req/s at every
 budget (4.61/4.52, 5.39/5.54, 6.91/6.89; no consistent direction): the
 \emph{stage} of selection carries no efficiency cost, so the pre-merger
-advantage is purely an accuracy/robustness effect. \textbf{Compression scaling.}
+advantage is purely an accuracy/robustness effect. A 5-repeat repeatability
+measurement (mean$\pm$std) confirms this: pre vs post req/s within $3\%$ at every
+budget ($+0.04\%$ at 75\%-keep, $+2.64\%$ at 50\%-keep above the repeat-noise
+floor, $-1.41\%$ at 25\%-keep), no consistent direction. \textbf{Compression scaling.}
 Throughput rises $+12\% / +31\% / \mathbf{+68\%}$ over the uncompressed baseline
 at 75\% / 50\% / 25\% retention, and single-request latency falls
 $0.36 \to 0.23$~s ($-36\%$) at 25\%. \textbf{Memory disclosure.} Peak GPU memory
