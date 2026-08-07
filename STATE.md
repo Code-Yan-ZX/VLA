@@ -18,10 +18,12 @@
 - **user 选 A：GQA 重框为"text-dense 专属、GQA 无 stage effect"**（paper c8f7480 已写入：pre-final control 段 + GQA 重框，0 stray GLM）。digest=experiments/p0-3_prefinal_control.md。
 
 ## ★ 创新突破轮（user 指令：12h 自主 + 创新）
-- **cross-arch M1 预测律 = DEAD**（experiments/cross_arch_predictive_law.md，commit 8de4505）：pre/post ranking divergence（Jaccard/Spearman/edge-rankshift）不预测 stage-effect magnitude（per-image r≈0, p>0.7；仅 Qwen3-VL 有 M1 数据，余族无 kept_indices）。诚实 negative，不写入为预测律。
-- **LLaVA-NeXT no-merger 对照**（跑中，monitor bl08mlhok）：LLaVA-1.5-7B（per-token MLP，无空间 merger）pre/post-MLP L2 @25% n=200 TextVQA/GQA。预测：无 merger -> ~0 stage effect -> 证 merger 必要（negative control）。脚本 src/v3_premerger/llava_nomergers_control.{py,sh}（commit 3b673cb + fix dd5ba62）。
-- **D2 merger-loss-aware selector**（实现中）：--selector {edge,var}（within-unit variance/Sobel edge energy，机制导出）。若胜 L2 ≥2pp = 方法；若 tie = 机制预测的原理化实例。脚本待写。
-- brainstorm 全文：RBM 非 SOTA（FastV 胜 TextVQA/GQA）；贡献须为 law/mechanism。routing/hybrid 已死（不重复）；selective merger bypass 训练-free 不可行（Linear 4c->4c 需全 concat）。
+- **cross-arch M1 预测律 = DEAD**（experiments/cross_arch_predictive_law.md，commit 8de4505）：pre/post ranking divergence 不预测 stage-effect magnitude（per-image r≈0）。诚实 negative，不写入为预测律。
+- **LLaVA-NeXT no-merger 对照 = CONFIRMED**（experiments/llava_nomergers_control.md，commit c9eb5cb）：LLaVA-1.5（per-token MLP，无空间 merger）pre/post-MLP L2 @25% n=200 -> TextVQA -2.17pp（McNemar p=0.125 n.s.）、GQA -0.5pp（p=1.0 n.s.）-> **无空间 merger 则无显著 stage effect**；对比 Qwen3 +38.4pp（p≈5e-5）。**空间 merger 是 pre>post stage effect 的必要条件**（非仅 amplifier，方向反转）。理论框为 characterization（stage effect ⟺ lossy spatial merger + text-dense），非预测律。
+- **D2 merger-loss-aware selector = 部分**（runs/qwen3_d2_selector/，commit c68d637）：--selector {edge,var}。docvqa edge 胜 l2 **+2.33pp**（n=200）、var +1.53pp -> 机制导出 selector 在 docvqa 有效。textvqa/gqa cells 缺失（ollama OOM），GPU chain 重跑中。AGGREGATE=MECHANISM-DERIVED（待 textvqa 确认）。
+- **GPU chain 自主跑中**（run_gpu_chain.sh，commit 2156b31）：D2 rerun -> P1-1 -> P1-3 -> GLM。各 gate 有 GPU-wait+retry，不需 API。chain.log = runs/gpu_chain/chain.log。
+- brainstorm：RBM 非 SOTA（FastV 胜 TextVQA/GQA）；贡献须 law/mechanism。routing/hybrid 已死；selective bypass 训练-free 不可行。
+- **配额**：5h quota 超，reset ~2026-08-07 03:05。子agent 429 fail；主窗口直做 paper 集成。
 
 ## ★ 队列（GPU 串行，ollama 并发 OOM 风险）
 LLaVA对照(跑中) -> P1-1 InternVL3 swap(已修 swap bug) -> P1-3 效率 -> GLM pre/post(seed0) -> D2 selector test。ollama(qwen3:32b 29GB) 并发会 OOM，各 gate 有 GPU-wait(>=40GB free)+retry。
