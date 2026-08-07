@@ -102,11 +102,37 @@ gate (DECISIONS 2026-07-28):
     The output "r" field stores the TOTAL drop 1-X*(1-Y) (runner convention);
     "r_pre"/"r_fastv"/"total_keep" carry the stage-wise definition.
 
+RankBridge (cross-stage rank FUSION, single budget) -- the user-directed
+2026-08-07 gate; structurally distinct from cascade (fusion over the FULL
+candidate set instead of serial pruning):
+  --mode rankbridge --r 0.75 --fastv-k 3 [--rb-fuse quota|rrf]
+    ALL visual tokens stay in the sequence through LLM layer K (no prior
+    pruning).  Per native merger UNIT we cache the pre-merger L2 RANK
+    (1 = highest mean-patch L2 within its image; same score as --mode pre,
+    first merger called = mask source).  At layer K we read the FastV
+    query-conditioned attention score (mean over heads, last query row, image
+    columns) -> per-image query rank, and FUSE the two ranks into the final
+    keep set with the per-image RBM budget k_i = max(1, round(f_i*(1-r))):
+      quota (A): rho*k_i seats reserved for the best pre-ranks, the remaining
+        k_i - rho*k_i filled by attention rank among the non-protected units
+        (rho=0 -> bit-identical to FastV; rho=1 -> pure pre-rank top-k).
+      rrf   (B): reciprocal-rank fusion score
+        s_i = 1/(c + r_pre_i) + lambda/(c + r_query_i), keep top k_i.
+    Rationale: cascade starves FastV of candidates (query-blind stage-1
+    discards degrade stage-2's token set; NO-GO 2026-07-29); RankBridge lets
+    FastV rank the FULL set while the protected quota shields dense/OCR units
+    whose raw-patch information the merger-distorted attention rank misses.
+    Survivors keep their NATIVE mrope coordinates (pruning happens inside the
+    LLM, exactly like FastV -- no vllm-mimic needed).  Final post-vision token
+    budget == RBM's per-image budget formula, so mean_ptid matches --mode pre
+    cells sample-for-sample.
+
 NO GPU is touched at import; the model is loaded only in main().  --dry-check
 builds a TINY random-init Qwen2.5-VL on CPU (no weights download, no GPU) and
 verifies the manual layer loop reproduces the native forward exactly at r=0,
 runs FastV/Pyramid end-to-end with correct keep counts, and validates the
-pre-merger mask + cascade degeneracies (X=1 == FastV, Y=0 == pre).
+pre-merger mask + cascade degeneracies (X=1 == FastV, Y=0 == pre) + RankBridge
+degeneracies (rho=0 == FastV keep set AND hidden, rho=1 == pre-rank top-k).
 """
 from __future__ import annotations
 
@@ -337,11 +363,16 @@ def build_prune_plan(mode: str, n_layers: int, n_image: int, r: float,
                      fastv_k: int, ratios: list[float]) -> dict[int, int]:
     """layer_idx -> number of IMAGE tokens to KEEP after that layer.
     FastV    : single entry at layer K (keep round(n_image*(1-r))).
+    RankBridge: single entry at layer K; the value is the GLOBAL keep count
+               (used only to fire the layer and as a diag reference) -- the
+               actual keep set is the per-image fused budget
+               sum_i max(1, round(f_i*(1-r))) computed in
+               rankbridge_keep_indices.
     Pyramid  : entries at the last layer of bands 0,1,2 (keep round(n_image*
                ratios[1/2/3])); band boundaries = round({.25,.5,.75}*n_layers),
                matching the official layer_list=[L/4, L/2, 3L/4]."""
     plan: dict[int, int] = {}
-    if mode == "fastv":
+    if mode in ("fastv", "rankbridge"):
         k = min(max(0, fastv_k), n_layers - 1)
         plan[k] = max(1, int(round(n_image * (1.0 - r))))
     elif mode == "pyramid":
@@ -471,6 +502,114 @@ def apply_premerger(inputs_embeds: torch.Tensor, position_ids: torch.Tensor,
     ds = (None if deepstack is None
           else [e.index_select(0, kept_units.to(e.device)) for e in deepstack])
     return ie, pos, ds, image_mask_1d.index_select(0, keep)
+
+
+# --------------------------------------------------------------------------- #
+# RankBridge (2026-08-07 gate): cross-stage rank FUSION at FastV layer K over
+# the FULL candidate set (no prior pruning).  Pre-merger L2 RANKS (query-blind,
+# protect dense/OCR detail) are fused with FastV's query-conditioned attention
+# RANK (true query relevance) per image; final budget = RBM's per-image formula.
+# --------------------------------------------------------------------------- #
+def premerger_unit_ranks(hs: torch.Tensor, grid_thw: torch.Tensor, unit: int):
+    """Per-unit WITHIN-IMAGE pre-merger L2 rank (1 = highest score).  Same
+    score formula as premerger_keep_units (runner _score_units l2: mean
+    per-patch L2 of the unit), but returns RANKS instead of a thresholded mask
+    so the fusion can use them.  hs: [seq, ctx] first-called merger input;
+    grid_thw: [n_img, 3].  Returns (ranks [num_units] long, diag)."""
+    seq = hs.shape[0]
+    ctx = hs.shape[-1]
+    num_units = seq // unit
+    full = (grid_thw.prod(-1) // unit).tolist()
+    assert sum(full) == num_units, \
+        f"unit count mismatch: grid_thw->{sum(full)} vs hs->{num_units}"
+    if num_units == 0:
+        return (torch.zeros(0, dtype=torch.long, device=hs.device),
+                {"full_per_image": []})
+    feats = hs.reshape(num_units, unit, ctx)
+    scores = feats.float().norm(dim=-1).mean(dim=-1)           # runner _score_units l2
+    ranks = torch.empty(num_units, dtype=torch.long, device=hs.device)
+    off = 0
+    for f in full:
+        f = int(f)
+        # rank 1 = largest score; deterministic tie-break = lower index first
+        order = scores[off:off + f].argsort(descending=True)
+        ranks[off:off + f][order] = torch.arange(1, f + 1, device=hs.device)
+        off += f
+    return ranks, {"full_per_image": full}
+
+
+def rankbridge_keep_indices(attn_w: torch.Tensor, image_mask: torch.Tensor,
+                            pre_ranks: torch.Tensor, units_per_image: list,
+                            keep_frac: float, fuse: str = "quota",
+                            rho: float = 0.2, rrf_lambda: float = 1.0,
+                            rrf_c: float = 60.0):
+    """RankBridge final keep mask, computed at FastV layer K over the FULL
+    candidate set.  Attention score semantics are FastV's exactly (mean over
+    heads, LAST query row, image columns); per-image budget
+    k_i = max(1, round(f_i*keep_frac)) (the RBM convention, so the final
+    token budget matches --mode pre cells sample-for-sample).
+      quota: q_i = min(k_i, round(rho*k_i)) seats reserved for the LOWEST
+        pre-ranks (best pre-merger L2), remaining seats filled by attention
+        rank among the non-protected.  rho=0 -> identical keep set to FastV
+        (self-tested); rho=1 -> pure pre-rank top-k.
+      rrf:   score_i = 1/(c + r_pre_i) + lambda/(c + r_query_i); top k_i.
+    pre_ranks: [n_image_tokens] within-image pre-ranks aligned with the
+    image-token order (identity here: unit j == image token j, no prior
+    pruning).  Returns (sorted full-sequence keep indices, diag dict)."""
+    L = attn_w.shape[-1]
+    dev = attn_w.device
+    img_pos = image_mask.nonzero(as_tuple=False).squeeze(-1)     # [n_img]
+    n_img = int(img_pos.numel())
+    assert pre_ranks.numel() == n_img, \
+        f"pre_ranks {pre_ranks.numel()} != image tokens {n_img}"
+    assert sum(int(f) for f in units_per_image) == n_img, \
+        f"units_per_image {units_per_image} != image tokens {n_img}"
+    if n_img == 0:
+        return torch.arange(L, device=dev), \
+            {"k_per_image": [], "n_protected": 0, "keep_total": 0}
+    a = attn_w[0].mean(dim=0)                                    # [L, L] over heads
+    qrow = a[-1]                                                 # last query row [L]
+    qscores = qrow.index_select(0, img_pos)                      # [n_img]
+    keep_img = []
+    k_per_image = []
+    n_protected = 0
+    off = 0
+    for f in units_per_image:
+        f = int(f)
+        k_i = max(1, int(round(f * float(keep_frac))))
+        rq = qscores[off:off + f]
+        rp = pre_ranks[off:off + f]
+        if fuse == "quota":
+            q_i = min(k_i, int(round(float(rho) * k_i)))
+            if q_i > 0:
+                prot = rp.topk(q_i, largest=False).indices       # best pre-ranks
+            else:
+                prot = torch.zeros(0, dtype=torch.long, device=dev)
+            is_prot = torch.zeros(f, dtype=torch.bool, device=dev)
+            is_prot[prot] = True
+            rest = (~is_prot).nonzero(as_tuple=False).squeeze(-1)
+            k_rest = k_i - int(prot.numel())
+            if k_rest > 0 and rest.numel() > 0:
+                take = rest[rq.index_select(0, rest)
+                            .topk(min(k_rest, int(rest.numel()))).indices]
+            else:
+                take = torch.zeros(0, dtype=torch.long, device=dev)
+            sel = torch.cat([prot, take])
+            n_protected += int(prot.numel())
+        elif fuse == "rrf":
+            r_q = rq.argsort(descending=True).argsort() + 1      # 1 = best attn
+            score = (1.0 / (float(rrf_c) + rp.float())
+                     + float(rrf_lambda) / (float(rrf_c) + r_q.float()))
+            sel = score.topk(min(k_i, f)).indices
+        else:
+            raise ValueError(f"unknown --rb-fuse: {fuse}")
+        keep_img.append(img_pos[off:off + f].index_select(0, sel))
+        k_per_image.append(int(sel.numel()))
+        off += f
+    non_img = (~image_mask).nonzero(as_tuple=False).squeeze(-1)
+    keep = torch.cat([non_img, *keep_img]).sort().values
+    return keep, {"k_per_image": k_per_image, "n_protected": n_protected,
+                  "keep_total": int(sum(k_per_image))}
 
 
 def mimic_vllm_pre_positions(n_text_pre: int, grid_thw, spatial_merge_size: int,
@@ -675,6 +814,7 @@ def prefill_pruned(model, inputs_embeds: torch.Tensor, position_ids: torch.Tenso
     pos_emb = LM.rotary_emb(hidden, position_ids)               # (cos,sin) [1,L,hd]
     n_image_kept = n_image0
     fired = []
+    rb_diag = None
     n_deepstack = len(deepstack) if deepstack is not None else 0
     attn_mask = make_causal_mask(int(hidden.shape[1]), device, dtype)
     for idx, layer in enumerate(LM.layers):
@@ -689,7 +829,14 @@ def prefill_pruned(model, inputs_embeds: torch.Tensor, position_ids: torch.Tenso
             emb = emb.index_select(0, sel)
             hidden[:, image_mask] = hidden[:, image_mask] + emb
         if need and hidden.shape[1] > 1:
-            keep = rank_keep_indices(attn_w, image_mask, plan[idx])
+            if mode == "rankbridge":
+                rb = cfg["rb"]
+                keep, rb_diag = rankbridge_keep_indices(
+                    attn_w, image_mask, rb["pre_ranks"], rb["units_per_image"],
+                    rb["keep_frac"], rb["fuse"], rb["rho"], rb["rrf_lambda"],
+                    rb["rrf_c"])
+            else:
+                keep = rank_keep_indices(attn_w, image_mask, plan[idx])
             hidden = hidden.index_select(1, keep)
             position_ids = position_ids.index_select(2, keep)
             image_mask = image_mask.index_select(0, keep)
@@ -708,6 +855,8 @@ def prefill_pruned(model, inputs_embeds: torch.Tensor, position_ids: torch.Tenso
             "n_text": n_text, "L0": L0, "L_after": int(image_mask.numel()),
             "prune_plan": {str(k): v for k, v in plan.items()}, "fired": fired,
             "n_deepstack": n_deepstack}
+    if rb_diag is not None:
+        diag["rb"] = rb_diag
     return hidden, position_ids, cache, image_mask, diag
 
 
@@ -836,7 +985,8 @@ def build_inputs(processor, image, question: str, max_pixels: int, device):
 def parse_args():
     ap = argparse.ArgumentParser()
     ap.add_argument("--mode", default="none",
-                    choices=["none", "fastv", "pyramid", "pre", "cascade"])
+                    choices=["none", "fastv", "pyramid", "pre", "cascade",
+                             "rankbridge"])
     ap.add_argument("--model", default=None,
                     help="HF id (Qwen/Qwen3-VL-8B-Instruct or "
                          "Qwen/Qwen2.5-VL-7B-Instruct). Family auto-detected.")
@@ -872,6 +1022,19 @@ def parse_args():
                          "the reference vLLM pre cells; native keeps each "
                          "survivor's original get_rope_index coordinate "
                          "(diagnostic).")
+    ap.add_argument("--rb-fuse", default="quota", choices=["quota", "rrf"],
+                    help="rankbridge ONLY: fusion of pre-merger L2 rank and "
+                         "layer-K attention rank. quota: rho*k_i protected "
+                         "seats for best pre-ranks, rest by attention; rrf: "
+                         "score=1/(c+r_pre)+lambda/(c+r_query).")
+    ap.add_argument("--rb-rho", type=float, default=0.2,
+                    help="rankbridge quota ONLY: protected fraction of each "
+                         "image's keep budget (0 -> identical to FastV; "
+                         "1 -> pure pre-rank top-k).")
+    ap.add_argument("--rb-lambda", type=float, default=1.0,
+                    help="rankbridge rrf ONLY: weight of the query-rank term.")
+    ap.add_argument("--rb-rrf-c", type=float, default=60.0,
+                    help="rankbridge rrf ONLY: RRF constant c.")
     ap.add_argument("--max-tokens", type=int, default=32)
     ap.add_argument("--fastv-k", type=int, default=2,
                     help="FastV prune layer (paper default K=2; attention of this "
@@ -974,6 +1137,44 @@ def run_dry_check():
     assert dp2["k_per_image"] == [1, 1], dp2         # k floors at 1
     print(f"[dry-check]   OK premerger mask (runner semantics: per-img top-k "
           f"{dp['k_per_image']}, keep=1.0 identity, floor@1)")
+
+    # RankBridge: premerger_unit_ranks + fused keep sets (pure functions).
+    torch.manual_seed(2)
+    hs2 = torch.randn(24, 6)                                   # 6 units x 4 patches
+    grid2 = torch.tensor([[1, 4, 4], [1, 2, 4]])               # 4 + 2 units
+    ranks2, dr2 = premerger_unit_ranks(hs2, grid2, 4)
+    sc2 = hs2.reshape(6, 4, 6).float().norm(dim=-1).mean(dim=-1)  # runner l2 score
+    assert dr2["full_per_image"] == [4, 2], dr2
+    assert int(ranks2[:4][int(sc2[:4].argmax().item())]) == 1  # rank 1 = best L2
+    assert sorted(ranks2[:4].tolist()) == [1, 2, 3, 4] and \
+        sorted(ranks2[4:].tolist()) == [1, 2], ranks2
+    print("[dry-check]   OK premerger_unit_ranks (within-image, 1=best L2)")
+
+    L3 = 12
+    attn3 = torch.rand(1, 3, L3, L3)
+    img3 = torch.zeros(L3, dtype=torch.bool); img3[2:8] = True  # 6 image tokens
+    pr3 = torch.tensor([1, 2, 3, 4, 5, 6])                     # unit j == token j
+    keep_rb0, d_rb0 = rankbridge_keep_indices(
+        attn3, img3, pr3, [6], 0.5, fuse="quota", rho=0.0)
+    keep_fv3 = rank_keep_indices(attn3, img3, 3)
+    assert torch.equal(keep_rb0, keep_fv3), (keep_rb0, keep_fv3)
+    assert d_rb0["n_protected"] == 0 and d_rb0["keep_total"] == 3, d_rb0
+    keep_rb1, d_rb1 = rankbridge_keep_indices(
+        attn3, img3, pr3, [6], 0.5, fuse="quota", rho=1.0)
+    got_img = torch.masked_select(keep_rb1, img3.index_select(0, keep_rb1))
+    assert torch.equal(got_img, torch.tensor([2, 3, 4])), got_img  # pre top-3
+    assert d_rb1["n_protected"] == 3, d_rb1
+    keep_rrf, d_rrf = rankbridge_keep_indices(
+        attn3, img3, pr3, [6], 0.5, fuse="rrf", rrf_lambda=1.0, rrf_c=60.0)
+    assert d_rrf["keep_total"] == 3 and keep_rrf.numel() == 3 + (L3 - 6), d_rrf
+    # per-image budget with 2 images: k = [max(1,round(4*.25)), max(1,round(2*.25))]
+    img3b = torch.zeros(L3, dtype=torch.bool); img3b[2:8] = True
+    pr3b = torch.tensor([3, 1, 2, 6, 1, 2])                    # img1: 4, img2: 2
+    keep_q, d_q = rankbridge_keep_indices(
+        attn3, img3b, pr3b, [4, 2], 0.25, fuse="quota", rho=0.5)
+    assert d_q["k_per_image"] == [1, 1], d_q                   # floor@1 per image
+    print("[dry-check]   OK rankbridge fusion (quota rho=0 == FastV keep set; "
+          "rho=1 == pre top-k; rrf counts; per-image budget floor@1)")
 
     # apply_premerger: text untouched, survivors keep their seq positions,
     # deepstack rows sliced by the SAME kept unit indices (row j == unit j).
@@ -1118,6 +1319,33 @@ def run_dry_check():
     print("[dry-check]   OK cascade two-stage counts: 6 units -> pre 3 -> "
           f"FastV 2 (L 12->9->8, cache@8, fired={dc3['fired']})")
 
+    # (B8) rankbridge DEGENERATE IDENTITY: quota rho=0 == FastV end-to-end
+    # (same keep set at layer K -> identical hidden), and rho=0.5 fires the
+    # protected-quota path with the right counts (single 6-token image:
+    # k=max(1,round(6*.5))=3, protected=round(.5*3)=2).
+    cfg_rb = {"r": 0.5, "fastv_k": 2, "ratios": [1, .75, .5, .25],
+              "rb": {"pre_ranks": torch.arange(1, 7), "units_per_image": [6],
+                     "keep_frac": 0.5, "fuse": "quota", "rho": 0.0,
+                     "rrf_lambda": 1.0, "rrf_c": 60.0}}
+    hid_rb, _, _, _, drb = prefill_pruned(
+        m, X.clone(), P.clone(), img.clone(), "rankbridge", cfg_rb)
+    assert drb["n_image_kept"] == 3, drb
+    assert drb["rb"]["n_protected"] == 0, drb
+    assert torch.allclose(hid_rb, hid_fv, atol=1e-5), \
+        f"rankbridge rho=0 != FastV (maxdiff={(hid_rb-hid_fv).abs().max():.2e})"
+    print("[dry-check]   OK rankbridge rho=0 == FastV (hidden identical, "
+          f"fired={drb['fired']})")
+    cfg_rb["rb"] = {**cfg_rb["rb"], "rho": 0.5}
+    hid_rb2, _, _, _, drb2 = prefill_pruned(
+        m, X.clone(), P.clone(), img.clone(), "rankbridge", cfg_rb)
+    assert drb2["n_image_kept"] == 3 and drb2["rb"]["n_protected"] == 2, drb2
+    cfg_rb["rb"] = {**cfg_rb["rb"], "fuse": "rrf"}
+    hid_rb3, _, _, _, drb3 = prefill_pruned(
+        m, X.clone(), P.clone(), img.clone(), "rankbridge", cfg_rb)
+    assert drb3["n_image_kept"] == 3, drb3
+    print("[dry-check]   OK rankbridge quota rho=0.5 (protected=2/3) + rrf "
+          "(kept=3) end-to-end")
+
     # (B4) end-to-end greedy generation runs and terminates.
     eos = {cfg.text_config.eos_token_id if hasattr(cfg.text_config, 'eos_token_id')
            else 1}
@@ -1178,9 +1406,11 @@ def main():
     load_s = time.perf_counter() - t0
     image_token_id = model.config.image_token_id
 
-    # cascade/pre: tap the merger inputs for the pre-merger L2 mask (first
-    # merger called wins: qwen3vl deepstack_0 / qwen2vl main -- runner parity).
-    tap = MergerTap(model.visual) if args.mode in ("pre", "cascade") else None
+    # cascade/pre/rankbridge: tap the merger inputs for the pre-merger L2
+    # mask/ranks (first merger called wins: qwen3vl deepstack_0 / qwen2vl main
+    # -- runner parity).
+    tap = (MergerTap(model.visual)
+           if args.mode in ("pre", "cascade", "rankbridge") else None)
     spatial_merge = int(getattr(model.visual, "spatial_merge_size", 2))
     spatial_unit = spatial_merge ** 2
 
@@ -1209,6 +1439,11 @@ def main():
                              "REMAINDER -> total keep = r_pre*(1-r)")
         keep_equiv = None
         r_eff = round(1.0 - args.r_pre * (1.0 - args.r), 4)
+    elif args.mode == "rankbridge":
+        if not (0.0 < args.r < 1.0):
+            raise SystemExit("--mode rankbridge requires 0 < --r < 1 (TOTAL drop "
+                             "fraction; keep=1-r, e.g. --r 0.75 for 25% keep)")
+        keep_equiv, r_eff = None, args.r
     else:
         keep_equiv, r_eff = None, 0.0
     cfg = {"r": args.r, "fastv_k": args.fastv_k, "ratios": ratios}
@@ -1295,6 +1530,43 @@ def main():
                                    else round(args.r_pre * (1.0 - args.r), 4))}
                 ans = processor.decode(gen, skip_special_tokens=True).strip()
                 ptid = int(diag["L_after"])
+            elif args.mode == "rankbridge":
+                # FULL visual tokens through layer K; per-unit pre-merger L2 RANKS
+                # cached from the first-called merger input; at layer K the
+                # fused rank (quota/RRF) picks the final keep set.  Survivors
+                # keep NATIVE mrope coordinates (prune inside the LLM == FastV).
+                image_mask = (inputs["input_ids"][0] == image_token_id)
+                tap.reset()
+                inputs_embeds, position_ids, deepstack = capture_prepared_inputs(
+                    model, {k: v for k, v in inputs.items()})
+                if tap.first_hs is None:
+                    raise RuntimeError("merger tap captured nothing (no image?)")
+                pre_ranks, drk = premerger_unit_ranks(
+                    tap.first_hs, inputs["image_grid_thw"], spatial_unit)
+                n_img_tok = int(image_mask.sum())
+                assert pre_ranks.numel() == n_img_tok, \
+                    f"unit/image-token mismatch: {pre_ranks.numel()} vs {n_img_tok}"
+                cfg_rb = dict(cfg)
+                cfg_rb["rb"] = {"pre_ranks": pre_ranks,
+                                "units_per_image": drk["full_per_image"],
+                                "keep_frac": 1.0 - args.r,
+                                "fuse": args.rb_fuse, "rho": args.rb_rho,
+                                "rrf_lambda": args.rb_lambda,
+                                "rrf_c": args.rb_rrf_c}
+                gen, diag = generate_pruned(
+                    model, inputs_embeds, position_ids, image_mask, "rankbridge",
+                    cfg_rb, args.max_tokens, eos_ids, deepstack=deepstack)
+                diag["rb"] = {**diag.get("rb", {}), "fuse": args.rb_fuse,
+                              "rho": (args.rb_rho
+                                      if args.rb_fuse == "quota" else None),
+                              "rrf_lambda": (args.rb_lambda
+                                             if args.rb_fuse == "rrf" else None),
+                              "rrf_c": (args.rb_rrf_c
+                                        if args.rb_fuse == "rrf" else None),
+                              "keep_frac": round(1.0 - args.r, 4),
+                              "mask_source": tap.first_tag}
+                ans = processor.decode(gen, skip_special_tokens=True).strip()
+                ptid = int(diag["L_after"])
             else:
                 # MANUAL pruned prefill + greedy decode.
                 image_mask = (inputs["input_ids"][0] == image_token_id)
@@ -1331,6 +1603,8 @@ def main():
             rec["question_type"] = s.extra["question_type"]
         if "pre" in diag:                                      # pre/cascade diag
             rec["pre"] = diag["pre"]                           # incl. kept_per_image
+        if "rb" in diag:                                       # rankbridge diag
+            rec["rb"] = diag["rb"]
         per_sample.append(rec)
         if (i + 1) % 10 == 0:
             print(f"[j4] {i+1}/{len(samples)} running_acc="
@@ -1344,15 +1618,26 @@ def main():
         "mode": args.mode, "benchmark": args.benchmark, "r": r_eff,
         "n": len(samples), "max_tokens": args.max_tokens, "max_pixels": args.max_pixels,
         "seed": args.seed,
-        "fastv_k": args.fastv_k if args.mode in ("fastv", "cascade") else None,
+        "fastv_k": (args.fastv_k if args.mode in ("fastv", "cascade",
+                                                  "rankbridge") else None),
         "r_pre": args.r_pre if args.mode in ("pre", "cascade") else None,
         "r_fastv": args.r if args.mode == "cascade" else None,
         "total_keep": (round(args.r_pre, 4) if args.mode == "pre" else
                        round(args.r_pre * (1.0 - args.r), 4)
-                       if args.mode == "cascade" else None),
+                       if args.mode == "cascade" else
+                       round(1.0 - args.r, 4)
+                       if args.mode == "rankbridge" else None),
+        "rb_fuse": args.rb_fuse if args.mode == "rankbridge" else None,
+        "rb_rho": (args.rb_rho if args.mode == "rankbridge"
+                   and args.rb_fuse == "quota" else None),
+        "rb_lambda": (args.rb_lambda if args.mode == "rankbridge"
+                      and args.rb_fuse == "rrf" else None),
+        "rb_rrf_c": (args.rb_rrf_c if args.mode == "rankbridge"
+                     and args.rb_fuse == "rrf" else None),
         "r_convention": ("r = TOTAL drop (runner convention); cascade --r is "
                          "the FastV drop of the STAGE-1 remainder, total keep "
-                         "= r_pre*(1-r)"),
+                         "= r_pre*(1-r); rankbridge total keep = 1-r with the "
+                         "per-image budget max(1, round(f_i*(1-r)))"),
         "pyramid_ratios": ratios if args.mode == "pyramid" else None,
         "pyramid_keep_equiv": (round(keep_equiv, 4)
                                if args.mode == "pyramid" else None),
