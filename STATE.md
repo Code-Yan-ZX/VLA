@@ -3,14 +3,14 @@
 > 项目：VLM 视觉 token 压缩 · 目标：Rank-Before-Merge -> ACM MM'27
 > 最近更新：2026-08-07 · **RankBridge gate 进行中**（user /goal 指令，预注册判据锁定）。
 
-## ★ 当前：RankBridge gate（user 指令 2026-08-07，进行中）
-- 背景：plain RBM 创新偏弱、stage-law 证据强；J5(07-24)/cascade(07-29) 冻结指串行 hybrid，RankBridge 为 user 令重启的**结构不同**设计（完整候选集上融合，非级联）。
-- 方法：全 visual tokens 保留到 FastV layer-K；缓存每 merger unit 的 pre-merger L2 rank；layer-K attention rank 与 pre-rank 融合生成最终 25% keep mask。融合=quota（rho·k_i 保护席位）+ RRF（备选）；K=3。
-- 实现：src/v3_premerger/baselines_hf.py `--mode rankbridge`（commit 5fa3933）。dry-check ALL PASS（quota rho=0≡FastV hidden 一致、rho=1≡pre top-k）；真权重 smoke n=4：rho=0 与 FastV 答案/ptid 全同，quota 计数精确。
-- Dev gate（跑前预注册）：Qwen3-VL-8B，textvqa+ocrbench n=64，rho={0.1,0.2,0.3}，lock=max(两基准官方分均值)，平手取小 rho。参照臂：pre25 复用切片 + FastV-k3 新跑。
-- Locked gate：n=200×4 bench（textvqa/docvqa/gqa/ocrbench）；臂=none(新)/RBM=cascade gate pre25(复用)/FastV-k2(复用参照)/FastV-k3(新)/RankBridge(新)。docvqa 用 HF harness 稳定配置 --max-pixels 600000（对应 vLLM mnbt32768/mns4）。
-- GO/NO-GO（锁定）：GO=四基准均 ≥ max(RBM,FastV-k3)−1pp 且 ≥1 基准严格超强 parent（报二项 SE+paired McNemar z）；NO-GO=停止调参，bounded negative 入 digest。
-- 产物：experiments/rankbridge_gate.md（≤80 行）；脚本 runs/rankbridge/{smoke,dev_gate,locked_gate}.sh+gate_analyze.py（gitignored）。
+## ★ RankBridge gate = NO-GO（user 指令 2026-08-07，预注册判据终判，方法冻结 plain RBM）
+- 方法：全 visual tokens 到 FastV layer-3，pre-merger L2 rank × attention rank 融合（quota rho=0.2 locked），25% keep。实现 baselines_hf.py `--mode rankbridge`（commit 5fa3933；dry-check 全过，rho=0≡FastV）。
+- Dev n=64：rho=0.2 lock（textvqa 0.7344/ocrbench 0.4310，mean 0.5827 > fst3 0.5671 > pre 0.4758）。
+- Locked n=200 官方指标：textvqa rb **0.7950** > fst3 0.7633（z=+2.11）；docvqa **0.6023** > 0.5863；gqa 0.5100 ≈ 0.5050；ocrbench **0.4641 ≪ RBM 0.5801**（−11.6pp，z=−3.66）→ cond1 挂。
+- 判据：GO 需四基准均 ≥max(RBM,FastV-k3)−1pp 且 ≥1 严格超强 parent → **NO-GO**（ocrbench 失败）。停止调参（不搜 rho/RRF/K），bounded negative 入 digest；方法维持 plain RBM。
+- 观察：rb 全胜 FastV-k3（quota 有增益、救回部分 OCR 0.171→0.464），但纯 OCR 上全 pre 选择仍是唯一最优——非保护 80% 由 merger-distorted 特征上的 attention 选 = 机制预测的误排。training-free 组合四连负（router/QA/cascade/RankBridge），支持 fixed-point framing。
+- 预算：rb≡RBM per-sample ptid 全等（200/200×3+181/181）；wall ≈ FastV。GPU ≈2.3h <6，无训练。
+- 产物：experiments/rankbridge_gate.md（79 行 digest）；runs/rankbridge/（gitignored）。论文 spine 不变；§6 可选引用待 user OK。
 
 ## ★ 既有结论（未变）
 - P0-1：GLM 集成 blocker（think loop）→ GLM 全撤出论文（user 选 A，commit e772a18）。
