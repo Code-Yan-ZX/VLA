@@ -1,7 +1,9 @@
 {
   "n_common": 200,
-  "n_qualifying": 12,
-  "criteria": "RBM.correct==1 AND FastV-k3.correct==0 AND post25.correct==0",
+  "n_strict": 9,
+  "n_padded_two_arm": 3,
+  "criteria_strict": "RBM.correct==1 AND FastV-k3.correct==0 AND post25.correct==0",
+  "criteria_padding": "RBM.correct==1 AND post25.correct==0; FastV may be correct",
   "rank_key": "(len(gt), rbm_clean): shortest GT first, exact matches preferred",
   "n_top": 12,
   "candidates": [
@@ -24,7 +26,8 @@
       "pst_nimg_kept": 106,
       "pre_ok": 1,
       "fst_ok": 0,
-      "pst_ok": 0
+      "pst_ok": 0,
+      "selection_tier": "strict_three_arm"
     },
     {
       "id": "ocr0329",
@@ -45,7 +48,8 @@
       "pst_nimg_kept": 44,
       "pre_ok": 1,
       "fst_ok": 0,
-      "pst_ok": 0
+      "pst_ok": 0,
+      "selection_tier": "strict_three_arm"
     },
     {
       "id": "ocr0552",
@@ -66,7 +70,8 @@
       "pst_nimg_kept": 106,
       "pre_ok": 1,
       "fst_ok": 0,
-      "pst_ok": 0
+      "pst_ok": 0,
+      "selection_tier": "strict_three_arm"
     },
     {
       "id": "ocr0422",
@@ -87,7 +92,8 @@
       "pst_nimg_kept": 54,
       "pre_ok": 1,
       "fst_ok": 0,
-      "pst_ok": 0
+      "pst_ok": 0,
+      "selection_tier": "strict_three_arm"
     },
     {
       "id": "ocr0168",
@@ -108,7 +114,8 @@
       "pst_nimg_kept": 17,
       "pre_ok": 1,
       "fst_ok": 0,
-      "pst_ok": 0
+      "pst_ok": 0,
+      "selection_tier": "strict_three_arm"
     },
     {
       "id": "ocr0804",
@@ -129,7 +136,8 @@
       "pst_nimg_kept": 186,
       "pre_ok": 1,
       "fst_ok": 0,
-      "pst_ok": 0
+      "pst_ok": 0,
+      "selection_tier": "strict_three_arm"
     },
     {
       "id": "ocr0479",
@@ -150,7 +158,8 @@
       "pst_nimg_kept": 48,
       "pre_ok": 1,
       "fst_ok": 0,
-      "pst_ok": 0
+      "pst_ok": 0,
+      "selection_tier": "strict_three_arm"
     },
     {
       "id": "ocr0389",
@@ -171,7 +180,8 @@
       "pst_nimg_kept": 256,
       "pre_ok": 1,
       "fst_ok": 0,
-      "pst_ok": 0
+      "pst_ok": 0,
+      "selection_tier": "strict_three_arm"
     },
     {
       "id": "ocr0933",
@@ -192,7 +202,8 @@
       "pst_nimg_kept": 17,
       "pre_ok": 1,
       "fst_ok": 0,
-      "pst_ok": 0
+      "pst_ok": 0,
+      "selection_tier": "strict_three_arm"
     },
     {
       "id": "ocr0108",
@@ -213,7 +224,8 @@
       "pst_nimg_kept": 27,
       "pre_ok": 1,
       "fst_ok": 1,
-      "pst_ok": 0
+      "pst_ok": 0,
+      "selection_tier": "padded_two_arm"
     },
     {
       "id": "ocr0144",
@@ -234,7 +246,8 @@
       "pst_nimg_kept": 18,
       "pre_ok": 1,
       "fst_ok": 1,
-      "pst_ok": 0
+      "pst_ok": 0,
+      "selection_tier": "padded_two_arm"
     },
     {
       "id": "ocr0147",
@@ -255,7 +268,8 @@
       "pst_nimg_kept": 18,
       "pre_ok": 1,
       "fst_ok": 1,
-      "pst_ok": 0
+      "pst_ok": 0,
+      "selection_tier": "padded_two_arm"
     }
   ]
 }

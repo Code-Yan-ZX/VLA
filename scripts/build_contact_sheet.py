@@ -104,7 +104,8 @@ def main():
                 "pst_nimg_kept": ts["n_image_kept"],
                 "pre_ok": 1, "fst_ok": 0, "pst_ok": 0,
             })
-    print(f"Qualifying (RBM=1, FastV=0, post=0): {len(qual)}", flush=True)
+    n_strict = len(qual)
+    print(f"Qualifying (RBM=1, FastV=0, post=0): {n_strict}", flush=True)
 
     def rbm_clean(rec):
         a = rec["pre_ans"].lower()
@@ -117,7 +118,7 @@ def main():
 
     qual.sort(key=lambda r: (len(r["gt"]), rbm_clean(r)))
     # Pad with 2-arm-rescue (RBM=1, post=0) if fewer than 12 strict cases
-    if len(qual) < 12:
+    if n_strict < 12:
         strict_ids = {r["id"] for r in qual}
         qual2 = []
         for sid in common:
@@ -142,7 +143,7 @@ def main():
                     "pre_ok": 1, "fst_ok": fs["correct"], "pst_ok": 0,
                 })
         qual2.sort(key=lambda r: (len(r["gt"]), rbm_clean(r)))
-        qual.extend(qual2[:12 - len(qual)])
+        qual.extend(qual2[:12 - n_strict])
     top12 = qual[:12]
     for r in top12:
         print(f"  {r['id']}: q={r['question'][:40]!r} gt={r['gt']!r} "
@@ -151,11 +152,15 @@ def main():
 
     manifest = {
         "n_common": len(common),
-        "n_qualifying": len(qual),
-        "criteria": "RBM.correct==1 AND FastV-k3.correct==0 AND post25.correct==0",
+        "n_strict": n_strict,
+        "n_padded_two_arm": len(top12) - n_strict,
+        "criteria_strict": "RBM.correct==1 AND FastV-k3.correct==0 AND post25.correct==0",
+        "criteria_padding": "RBM.correct==1 AND post25.correct==0; FastV may be correct",
         "rank_key": "(len(gt), rbm_clean): shortest GT first, exact matches preferred",
         "n_top": len(top12),
-        "candidates": top12,
+        "candidates": [dict(r, selection_tier=(
+            "strict_three_arm" if i < n_strict else "padded_two_arm"
+        )) for i, r in enumerate(top12)],
     }
     (OUTDIR / "contact_sheet_manifest.json").write_text(
         json.dumps(manifest, indent=2, ensure_ascii=False))
