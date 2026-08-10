@@ -1346,6 +1346,44 @@ def run_dry_check():
     print("[dry-check]   OK rankbridge quota rho=0.5 (protected=2/3) + rrf "
           "(kept=3) end-to-end")
 
+    # (B9) DEFERRED RBM (rho=1.0) vs plain RBM (pre): per-image kept indices
+    # bit-identical (survivor positions equal), but survivor hidden states
+    # NON-identical -- all tokens live through layers 0..K, so anchors are
+    # contextualized with tokens that are deleted only at layer K.  Stage-A
+    # token-lifetime arm of experiments/rbm_ot_server_task.md.
+    keep_frac_def = 0.25                                   # locked keep 25%
+    k_def = max(1, int(round(6 * keep_frac_def)))          # 6 units -> 2
+    sc_def = X[0, 2:8].float().norm(dim=-1)                # unit==token l2 score
+    order_def = sc_def.argsort(descending=True)
+    ranks_def = torch.empty(6, dtype=torch.long)
+    ranks_def[order_def] = torch.arange(1, 7)
+    kept_def = order_def[:k_def].sort().values             # plain-RBM keep set
+    X_pre, pos_pre, _, im_pre = apply_premerger(
+        X.clone(), P.clone(), None, img.clone(), kept_def)
+    hid_pre, pos_pre2, _, _, dpre = prefill_pruned(
+        m, X_pre, pos_pre, im_pre, "pre",
+        {"r": 0.0, "fastv_k": 2, "ratios": [1, .75, .5, .25]})
+    assert dpre["n_image_kept"] == k_def, dpre
+    cfg_def = {"r": 0.75, "fastv_k": 2, "ratios": [1, .75, .5, .25],
+               "rb": {"pre_ranks": ranks_def, "units_per_image": [6],
+                      "keep_frac": keep_frac_def, "fuse": "quota", "rho": 1.0,
+                      "rrf_lambda": 1.0, "rrf_c": 60.0}}
+    hid_def, pos_def, _, _, ddef = prefill_pruned(
+        m, X.clone(), P.clone(), img.clone(), "rankbridge", cfg_def)
+    assert ddef["n_image_kept"] == k_def and \
+        ddef["rb"]["n_protected"] == k_def, ddef
+    assert ddef["rb"]["k_per_image"] == [k_def], ddef
+    assert hid_def.shape == hid_pre.shape == (1, 6 + k_def, hidden_size), \
+        (hid_def.shape, hid_pre.shape)
+    assert torch.equal(pos_def, pos_pre2), \
+        "kept positions (per-image kept indices) must be bit-identical"
+    diff_def = (hid_def - hid_pre).abs().max().item()
+    assert diff_def > 1e-4, \
+        f"deferred survivor hidden must differ from pre (maxdiff={diff_def:.2e})"
+    print(f"[dry-check]   OK deferred rho=1 == plain-RBM kept indices "
+          f"(k={k_def}, positions equal), survivor hidden NON-identical "
+          f"(maxdiff={diff_def:.2e})")
+
     # (B4) end-to-end greedy generation runs and terminates.
     eos = {cfg.text_config.eos_token_id if hasattr(cfg.text_config, 'eos_token_id')
            else 1}
