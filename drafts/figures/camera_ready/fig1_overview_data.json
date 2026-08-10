@@ -1,0 +1,185 @@
+{
+  "_meta": {
+    "purpose": "Auditable data backing drafts/figures/camera_ready/fig1_overview_base.{svg,pdf,png}",
+    "paper_freeze_anchor": "2026-08-10 (RBM-OT + Deferred RBM both NO-GO; method frozen = plain RBM)",
+    "scope_policy": "Per-cell same-scope pair. If exact same-scope numerator+denominator unavailable, cell marked 'MISSING' or 'CROSS_SCOPE' in radar.",
+    "n_policy": "Full-split where available; n200 paired where full-split not available; n500 where only HF baseline (j7hf) ran.",
+    "scorer": "Official rescore via rescore_official.py for RBM/post-L2/none; r2b/r2c r2b_fastv_k3.md for FastV-k3; paired_metric_statistics.md for recomputed margins.",
+    "engine": "vLLM for throughput (panel d); native HF eager for OCRBench paired (panel c); mixed for radar (panel a/b).",
+    "color_palette": {
+      "RBM": "#2F66B0",
+      "FastV_k3": "#DD8452",
+      "Post_L2": "#8A93A3",
+      "None": "#0b0b0b",
+      "OCR_accent": "#F2B701"
+    },
+    "marker_shapes": {"Qwen3_VL": "circle", "Qwen2_5_VL": "square"},
+    "size_inches": [7.1, 5.2]
+  },
+
+  "panel_a_qwen3vl_retention_25pct": {
+    "description": "Qwen3-VL-8B performance retention at 25% visual-token retention (r=0.75 keep). 4 axes: OCRBench, TextVQA, DocVQA, GQA. 3 methods: RBM, FastV-k3, Post-merger L2. Each value = 100 * compressed / uncompressed on the exact same sample scope. Mixed scope per cell, see scope field.",
+    "axes_order": ["OCRBench", "TextVQA", "DocVQA", "GQA"],
+    "axis_accent": "OCRBench (RBM home regime)",
+    "radial_ticks_pct": [50, 75, 100],
+    "raw_scores": {
+      "OCRBench": {
+        "none":     {"score": 0.760, "scope": "full-split", "N": 1000, "source": "runs/full_matrix/j7_main_table.json"},
+        "RBM":      {"score": 0.547, "scope": "full-split", "N": 1000, "source": "runs/full_matrix/j7_main_table.json"},
+        "FastV_k3": {"score": 0.415, "scope": "n200",        "N": 200,  "source": "experiments/r2b_fastv_k3.md"},
+        "Post_L2":  {"score": 0.184, "scope": "full-split", "N": 1000, "source": "runs/full_matrix/j7_main_table.json"}
+      },
+      "TextVQA": {
+        "none":     {"score": 0.844, "scope": "full-split", "N": 5000,  "source": "runs/full_matrix/j7_main_table.json"},
+        "RBM":      {"score": 0.605, "scope": "full-split", "N": 5000,  "source": "runs/full_matrix/j7_main_table.json"},
+        "FastV_k3": {"score": 0.7771,"scope": "full-split", "N": 5000,  "source": "experiments/r2b_fastv_k3.md"},
+        "Post_L2":  {"score": 0.222, "scope": "full-split", "N": 5000,  "source": "runs/full_matrix/j7_main_table.json"}
+      },
+      "DocVQA": {
+        "none":     {"score": null,    "scope": "MISSING", "N": null,  "source": "giant-image OOM on full-split; n200 n/a in main JSON"},
+        "RBM":      {"score": 0.481,   "scope": "full-split (partial)", "N": 5349,  "source": "runs/full_matrix/j7_main_table.json (native, partial)"},
+        "FastV_k3": {"score": 0.5863,  "scope": "n500",    "N": 500,   "source": "runs/full_matrix/j7hf_official_summary.json"},
+        "Post_L2":  {"score": 0.238,   "scope": "full-split (partial)", "N": 5349,  "source": "runs/full_matrix/j7_main_table.json (native, partial)"}
+      },
+      "GQA": {
+        "none":     {"score": 0.616, "scope": "full-split", "N": 12578, "source": "runs/full_matrix/j7_main_table.json"},
+        "RBM":      {"score": 0.449, "scope": "full-split", "N": 12578, "source": "runs/full_matrix/j7_main_table.json"},
+        "FastV_k3": {"score": 0.5376,"scope": "full-split", "N": 12578, "source": "experiments/r2b_fastv_k3.md"},
+        "Post_L2":  {"score": 0.477, "scope": "full-split", "N": 12578, "source": "runs/full_matrix/j7_main_table.json"}
+      }
+    },
+    "retention_pct": {
+      "RBM":      {"OCRBench": 71.97, "TextVQA": 71.68, "DocVQA": "DAGGER_DOCVQA_NONE_MISSING", "GQA": 72.89},
+      "FastV_k3": {"OCRBench": 54.61, "TextVQA": 92.07, "DocVQA": 60.10, "GQA": 87.27},
+      "Post_L2":  {"OCRBench": 24.21, "TextVQA": 26.30, "DocVQA": "DAGGER_DOCVQA_NONE_MISSING", "GQA": 77.44}
+    },
+    "retention_pct_notes": {
+      "DocVQA": "none full-split score not on disk (giant-image OOM). Plot as dagger/hollow marker; do not silently substitute. n200 n/a for none.",
+      "OCRBench_FastV_k3": "n200 numerator over full-split denominator — cross-scope, but the n200 subset is a random sample of the 1000 full-split so the estimate is informative; show value but flag with footnote.",
+      "RBM_DocVQA": "partial 5349 (full-split native). RBM at 0.481 (native, partial) implies retention ~49% of an estimated full-split none (~0.97). Marker as dagger.",
+      "Post_L2_DocVQA": "partial 5349 native. Marker as dagger."
+    },
+    "stat_inconclusive_marker": {
+      "DocVQA_RBM": "dagger (none missing)",
+      "DocVQA_Post_L2": "dagger (none missing)"
+    }
+  },
+
+  "panel_b_qwen25vl_retention_25pct": {
+    "description": "Qwen2.5-VL-7B performance retention at 25% visual-token retention (r=0.75 keep). PAIRED n200 same-scope (none, RBM, FastV-k3, post-L2 on identical subset). Exact-scope comparison.",
+    "axes_order": ["OCRBench", "TextVQA", "DocVQA", "GQA"],
+    "scope_label": "paired n200 (same skip set across all 4 methods)",
+    "raw_scores": {
+      "OCRBench": {
+        "none":     {"score": 0.805, "scope": "n200 paired", "N": 200, "source": "runs/v3_crossarch_cells/j2_official_summary.json"},
+        "RBM":      {"score": 0.370, "scope": "n200 paired", "N": 200, "source": "experiments/r2c_rbm_scope.md"},
+        "FastV_k3": {"score": 0.285, "scope": "n200 paired", "N": 200, "source": "experiments/r2b_fastv_k3.md"},
+        "Post_L2":  {"score": 0.180, "scope": "n200 paired", "N": 200, "source": "runs/v3_crossarch_cells/j2_official_summary.json"}
+      },
+      "TextVQA": {
+        "none":     {"score": 0.870, "scope": "n200 paired", "N": 200, "source": "runs/v3_crossarch_cells/j2_official_summary.json"},
+        "RBM":      {"score": 0.6683,"scope": "n200 paired", "N": 200, "source": "experiments/r2c_rbm_scope.md"},
+        "FastV_k3": {"score": 0.7467,"scope": "n200 paired", "N": 200, "source": "experiments/r2b_fastv_k3.md"},
+        "Post_L2":  {"score": 0.415, "scope": "n200 paired", "N": 200, "source": "runs/v3_crossarch_cells/j2_official_summary.json"}
+      },
+      "DocVQA": {
+        "none":     {"score": 0.9748,"scope": "n200 paired", "N": 200, "source": "runs/v3_crossarch_cells/j2_official_summary.json"},
+        "RBM":      {"score": 0.5062,"scope": "n200 paired", "N": 200, "source": "experiments/r2c_rbm_scope.md"},
+        "FastV_k3": {"score": 0.4852,"scope": "n200 paired", "N": 200, "source": "experiments/r2b_fastv_k3.md"},
+        "Post_L2":  {"score": 0.4985,"scope": "n200 paired", "N": 200, "source": "runs/v3_crossarch_cells/j2_official_summary.json"}
+      },
+      "GQA": {
+        "none":     {"score": 0.585, "scope": "n200 paired", "N": 200, "source": "runs/v3_crossarch_cells/j2_official_summary.json"},
+        "RBM":      {"score": 0.520, "scope": "n200 paired", "N": 200, "source": "experiments/r2c_rbm_scope.md"},
+        "FastV_k3": {"score": 0.475, "scope": "n200 paired", "N": 200, "source": "experiments/r2b_fastv_k3.md"},
+        "Post_L2":  {"score": 0.555, "scope": "n200 paired", "N": 200, "source": "runs/v3_crossarch_cells/j2_official_summary.json"}
+      }
+    },
+    "retention_pct": {
+      "RBM":      {"OCRBench": 45.96, "TextVQA": 76.82, "DocVQA": 51.93, "GQA": 88.89},
+      "FastV_k3": {"OCRBench": 35.40, "TextVQA": 85.83, "DocVQA": 49.77, "GQA": 81.20},
+      "Post_L2":  {"OCRBench": 22.36, "TextVQA": 47.70, "DocVQA": 51.14, "GQA": 94.87}
+    },
+    "stat_inconclusive_marker": {
+      "DocVQA_RBM_vs_FastV_k3": "RBM 51.93 vs FastV 49.77, diff 2.16 pp, within n200 noise — hollow marker per spec",
+      "GQA_RBM_vs_FastV_k3": "RBM 88.89 vs FastV 81.20, diff 7.69 pp, larger but Qwen2.5 GQA n200 paired has known high variance — dagger if outside CI",
+      "OCRBench_RBM_vs_FastV_k3": "RBM 45.96 vs FastV 35.40, diff 10.56 pp — firm RBM win (the 8.5 pp claim is conservative, recompute +9.44 pp on native n200 HF)"
+    }
+  },
+
+  "panel_c_ocr_pareto": {
+    "description": "OCRBench accuracy vs mean visual tokens sent to LLM at 25% retention. Two models (Qwen3-VL circle, Qwen2.5-VL square). Methods: none, RBM, FastV-k3, post-L2. Guide lines connect same-model points. Annotated RBM-vs-FastV margins: Qwen3 +16.0 pp (paper claim, recompute +17.68 pp), Qwen2.5 +8.5 pp (paper claim, recompute +9.44 pp).",
+    "scope": "Paired n200 native HF for RBM/FastV; j2/vLLM n200 crossarch for none/post-L2 (Qwen2.5); full vLLM 1000 for Qwen3 none/post-L2. NOTE: scope differs across methods for Qwen2.5 — see provenance.",
+    "x_axis": "mean visual tokens sent to LLM (ptid_len)",
+    "y_axis": "OCRBench official score / 1.0 (0-1 range; annotate as 0-100%)",
+    "data": {
+      "Qwen3_VL_8B": {
+        "marker": "circle",
+        "none":     {"score": 0.7569, "tokens": 391.1, "scope": "n200 native HF paired",   "source": "runs/rankbridge/locked_none_ocrbench_n200.json"},
+        "RBM":      {"score": 0.6354, "tokens": 114.8, "scope": "n200 native HF paired",   "source": "runs/r2_same_scope/r2c_qwen3vl_pre_r0.75_ocrbench_n200.json", "margin_vs_FastV_pp": 16.0, "recompute_pp": 17.68},
+        "FastV_k3": {"score": 0.4586, "tokens": 114.8, "scope": "n200 native HF paired",   "source": "runs/r2_same_scope/r2b_qwen3vl_fastv_k3_ocrbench_r0.75_n500.json"},
+        "Post_L2":  {"score": null,   "tokens": null,   "scope": "MISSING at this scope",  "source": "post-L2 native n200 HF for Qwen3 OCRBench not on disk"}
+      },
+      "Qwen2_5_VL_7B": {
+        "marker": "square",
+        "none":     {"score": 0.8256, "tokens": 798.3, "scope": "n200 vLLM j2 crossarch",  "source": "runs/v3_crossarch_cells/j2_official_summary.json (note: 5 skips, different skip set from RBM/FastV n=200)"},
+        "RBM":      {"score": 0.4111, "tokens": 143.6, "scope": "n200 native HF paired",   "source": "runs/r2_same_scope/r2c_qwen2vl_pre_r0.75_ocrbench_n200.json", "margin_vs_FastV_pp": 8.5, "recompute_pp": 9.44},
+        "FastV_k3": {"score": 0.3167, "tokens": 143.6, "scope": "n200 native HF paired",   "source": "runs/r2_same_scope/r2b_qwen2vl_fastv_k3_ocrbench_r0.75_n200.json"},
+        "Post_L2":  {"score": 0.180,  "tokens": 314.6, "scope": "n200 vLLM j2 crossarch",  "source": "runs/v3_crossarch_cells/j2_official_summary.json (note: 20 skips, different skip set from RBM/FastV n=200)"}
+      }
+    },
+    "annotations": [
+      {"text": "+16.0 pp", "where": "Qwen3 RBM vs FastV-k3", "y_offset": 0.04, "recompute": "+17.68 pp (latest paired recompute)"},
+      {"text": "+8.5 pp",  "where": "Qwen2.5 RBM vs FastV-k3", "y_offset": 0.04, "recompute": "+9.44 pp (latest paired recompute)"}
+    ],
+    "guide_lines": "thin light-gray, connect same-model {none, RBM, FastV-k3, post-L2} where present"
+  },
+
+  "panel_d_vllm_efficiency": {
+    "description": "vLLM-measured RBM throughput speedup vs visual-token retention. x-axis 100%->25%. Per repeatability verdict (claim_retained=False at r0.25 and r0.75, pre/post throughput diff <=2.6%), NO stage-specific throughput claims; only RBM-pretokenize vs uncompressed reported.",
+    "engine": "vLLM",
+    "x_axis": "visual-token retention (ordered 100% -> 25%)",
+    "y_axis": "measured speedup over none (x times)",
+    "primary_curve": {
+      "model": "Qwen3-VL-8B",
+      "workload": "TextVQA",
+      "engine": "vLLM 0.19.0, max_num_seqs=16, N=200, 5-rep mean",
+      "retention_points_pct": [100, 75, 50, 25],
+      "speedup_over_none": [1.00, 1.155, 1.391, 1.697],
+      "req_per_s": [4.914, 5.676, 6.834, 8.336],
+      "mean_ptid_len_per_retention": [765.8, 581.5, 397.1, 212.8],
+      "source": "runs/qwen3_efficiency/efficiency_summary.json",
+      "scope_note": "Smaller N=200, larger max_num_seqs=16; this is the only complete retention curve in the repo."
+    },
+    "compact_markers_25pct": {
+      "description": "25%-retention RBM (pre) speedup markers from j7 full-matrix vLLM (engine: vLLM 0.19.0, max_num_seqs=4-8, N=full)",
+      "source": "runs/full_matrix/j7_qwen{3,2}vl_{none,pre}_{ocrbench,textvqa,docvqa,gqa}_r{0.000,0.750}_full.json",
+      "Qwen3_VL_8B": {
+        "TextVQA":  {"speedup": 2.49, "mean_tokens": 215.8, "none_tokens": 772.5, "N": 5000,  "max_num_seqs": 8},
+        "OCRBench": {"speedup": 2.27, "mean_tokens": 228.9, "none_tokens": 605.1, "N": 1000,  "max_num_seqs": 8},
+        "GQA":      {"speedup": 2.11, "mean_tokens":  96.8, "none_tokens": 298.1, "N": 12578, "max_num_seqs": 8},
+        "DocVQA":   {"speedup": null, "mean_tokens": null, "none_tokens": null, "note": "none cell missing (giant-image OOM); not plotted"}
+      },
+      "Qwen2_5_VL_7B": {
+        "TextVQA":  {"speedup": 2.34, "mean_tokens":  285.6, "none_tokens": 1018.3, "N": 5000, "max_num_seqs": 8},
+        "OCRBench": {"speedup": 2.62, "mean_tokens":  229.6, "none_tokens":  718.6, "N": 1000, "max_num_seqs": 4},
+        "GQA":      {"speedup": 2.27, "mean_tokens":  128.5, "none_tokens":  392.2, "N": 12578, "max_num_seqs": 8},
+        "DocVQA":   {"speedup": 2.38, "mean_tokens": 1228.2, "none_tokens": 4786.5, "N":  5349, "max_num_seqs": 4}
+      }
+    },
+    "mean_tokens_uncompressed": {
+      "Qwen3_VL_8B": {"TextVQA": 772.5, "OCRBench": 605.1, "GQA": 298.1},
+      "Qwen2_5_VL_7B": {"TextVQA": 1018.3, "OCRBench": 718.6, "GQA": 392.2, "DocVQA": 4786.5}
+    },
+    "repeatability_verdict": "claim_retained=False; stage throughput diff <=2.6% at all retention points. No stage-specific throughput significance claim."
+  },
+
+  "scientific_headline": "RBM preserves the OCR regime under aggressive compression while delivering the standard token-reduction speedup; query-conditioned FastV remains stronger on reference/object-grounded workloads.",
+
+  "panel_titles": {
+    "a": "Qwen3-VL-8B retention @ 25% (mixed scope)",
+    "b": "Qwen2.5-VL-7B retention @ 25% (paired n=200)",
+    "c": "OCR regime: accuracy vs visual tokens",
+    "d": "vLLM inference efficiency (Qwen3-VL-8B)"
+  }
+}
