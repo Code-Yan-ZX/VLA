@@ -490,7 +490,13 @@ def apply_premerger(inputs_embeds: torch.Tensor, position_ids: torch.Tensor,
     (index_select along the seq axis of the native get_rope_index positions);
     every deepstack row set [n_units_full, H] is sliced by the SAME kept unit
     indices (shared block-major patch order).  Returns (inputs_embeds',
-    position_ids', deepstack', image_mask')."""
+    position_ids', deepstack', image_mask').
+
+    Used by both the pre-merger (kept_units = pre-merge unit indices, 1:1 with
+    post-merge image rows) and the post-merger (kept_units = post-merge image
+    row indices) branches.  For post-merger, deepstack rows ARE the post-merge
+    image rows so the same index plumbing is correct.
+    """
     img_pos = image_mask_1d.nonzero(as_tuple=False).view(-1)      # [n_units_full]
     assert int(kept_units.numel()) <= int(img_pos.numel()) and (
         kept_units.numel() == 0 or int(kept_units.max()) < int(img_pos.numel())
@@ -503,6 +509,57 @@ def apply_premerger(inputs_embeds: torch.Tensor, position_ids: torch.Tensor,
     ds = (None if deepstack is None
           else [e.index_select(0, kept_units.to(e.device)) for e in deepstack])
     return ie, pos, ds, image_mask_1d.index_select(0, keep)
+
+
+# --------------------------------------------------------------------------- #
+# POST-merger stage (--mode post).  Pure function: per-image L2 top-k of the
+# post-merge image rows captured by capture_prepared_inputs.  No merger tap
+# needed -- we score the captured inputs_embeds image rows directly.  Same
+# per-image budget as --mode pre (k_i = max(1, round(f_i*keep_frac))) so the
+# LLM-visible image-token count is matched cell-for-cell at the same keep_frac.
+# f_i here = prod(grid_thw[i]) / spatial_unit = POST-merge image rows for
+# image i.  For Qwen3-VL, image_mask_1d (== image_token_id) has exactly the
+# post-merge count of True positions (one contiguous block per image), so
+# sum(n_per) == image_mask_1d.sum() == inputs_embeds rows scored.
+# --------------------------------------------------------------------------- #
+def postmerger_keep_tokens(inputs_embeds: torch.Tensor,
+                           image_mask: torch.Tensor, keep_frac: float,
+                           grid_thw: torch.Tensor, spatial_unit: int):
+    """inputs_embeds: [1, L, H] (capture output); image_mask: [L] bool;
+    grid_thw: [n_img, 3] PRE-merge; spatial_unit: spatial_merge**2.
+    Returns (kept_idx [K] sorted LOCAL image-row indices in 0..n_img-1,
+    diag dict).  apply_premerger uses these as indices into image_mask.nonzero()
+    to build the global keep set -- identical plumbing to premerger_keep_units.
+    """
+    keep_frac = float(keep_frac)
+    assert 0.0 < keep_frac <= 1.0, f"keep_frac must be in (0,1] (got {keep_frac})"
+    ie = inputs_embeds[0] if inputs_embeds.dim() == 3 else inputs_embeds
+    img_pos = image_mask.nonzero(as_tuple=False).view(-1)        # [n_img_post]
+    n_img = int(img_pos.numel())
+    n_per = [(int(grid_thw[i].prod()) // spatial_unit)
+             for i in range(int(grid_thw.shape[0]))]
+    assert sum(n_per) == n_img, \
+        f"grid sum {sum(n_per)} != image_mask sum {n_img} (post-merge row count)"
+    if keep_frac >= 1.0:
+        return (torch.arange(n_img, dtype=torch.long, device=ie.device),
+                {"n_image_full": n_img, "n_image_kept": n_img,
+                 "full_per_image": n_per, "k_per_image": list(n_per)})
+    if n_img == 0:
+        return (torch.zeros(0, dtype=torch.long, device=ie.device),
+                {"n_image_full": 0, "n_image_kept": 0, "full_per_image": n_per,
+                 "k_per_image": []})
+    rows = ie.index_select(0, img_pos)                           # [n_img, H]
+    scores = rows.float().norm(dim=-1)                           # post-row L2
+    keep = torch.zeros(n_img, dtype=torch.bool, device=ie.device)
+    k_per = [max(1, int(round(f * keep_frac))) for f in n_per]
+    off = 0
+    for f, k in zip(n_per, k_per):
+        idx = torch.topk(scores[off:off + f], min(k, f)).indices
+        keep[off + idx] = True
+        off += f
+    kept = keep.nonzero(as_tuple=False).squeeze(-1)              # [K] LOCAL idx
+    return kept, {"n_image_full": n_img, "n_image_kept": int(kept.numel()),
+                  "full_per_image": n_per, "k_per_image": k_per}
 
 
 # --------------------------------------------------------------------------- #
@@ -1140,7 +1197,7 @@ def parse_args():
     ap = argparse.ArgumentParser()
     ap.add_argument("--mode", default="none",
                     choices=["none", "fastv", "pyramid", "pre", "cascade",
-                             "rankbridge", "rbmot"])
+                             "rankbridge", "rbmot", "post"])
     ap.add_argument("--model", default=None,
                     help="HF id (Qwen/Qwen3-VL-8B-Instruct or "
                          "Qwen/Qwen2.5-VL-7B-Instruct). Family auto-detected.")
@@ -1166,6 +1223,16 @@ def parse_args():
                          "(documented convention, not of the full grid). "
                          "Degenerate: r_pre=1.0 -> cascade==FastV; r=0.0 -> "
                          "cascade==pre.")
+    ap.add_argument("--r-post", type=float, default=None,
+                    help="POST-merger stage: KEEP fraction of POST-merge image "
+                         "rows (top-k by per-row L2, per image; query-blind). "
+                         "REQUIRED for --mode post. mode=post: total keep = r_post. "
+                         "NOTE: the LLM-visible image-token count after --mode post "
+                         "is r_post * (pre-merge keep), which differs from "
+                         "--mode pre by the spatial_merge^2 factor (Qwen3-VL: 4x). "
+                         "This is the inherent budget arithmetic of the two "
+                         "regimes; --r-post == --r-pre keeps the same RATIO but "
+                         "different absolute counts.")
     ap.add_argument("--mrope", default="vllm-mimic",
                     choices=["vllm-mimic", "native"],
                     help="pre/cascade ONLY: mrope positions of the pruned "
@@ -1680,6 +1747,49 @@ def run_dry_check():
     assert (ie - emb0).abs().sum().item() > 0        # vision embeds were scattered
     print("[dry-check]   OK capture: native vision+merger+get_rope_index "
           f"-> inputs_embeds{tuple(ie.shape)}, pos{tuple(pos.shape)}, scatter=on")
+    # (P1) postmerger_keep_tokens: per-image top-k of L2 on captured
+    # post-merge image rows; keep=1.0 identity; k_i floors at 1.
+    torch.manual_seed(20)
+    ie_p = torch.randn(1, 12, 6)
+    im_p = torch.zeros(12, dtype=torch.bool); im_p[2:8] = True
+    grid_p = torch.tensor([[1, 4, 4], [1, 2, 4]])
+    kept_p, dp_p = postmerger_keep_tokens(ie_p, im_p, 0.5, grid_p, 4)
+    sc_p = ie_p[0, 2:8].float().norm(dim=-1)
+    want_local = torch.cat([sc_p[:4].topk(2).indices,
+                            4 + sc_p[4:].topk(1).indices]).sort().values
+    assert torch.equal(kept_p, want_local), (kept_p, want_local)
+    assert dp_p["k_per_image"] == [2, 1] and dp_p["n_image_kept"] == 3, dp_p
+    kept_p1, dp_p1 = postmerger_keep_tokens(ie_p, im_p, 1.0, grid_p, 4)
+    assert kept_p1.numel() == 6 and dp_p1["n_image_kept"] == 6
+    _, dp_p2 = postmerger_keep_tokens(ie_p, im_p, 0.1, grid_p, 4)
+    assert dp_p2["k_per_image"] == [1, 1], dp_p2
+    print(f"[dry-check]   OK postmerger keep (per-img top-k {dp_p['k_per_image']}, keep=1.0 identity, floor@1)")
+
+    # (P2) post keep=1.0 end-to-end via tiny-model capture path.
+    pv_p2 = torch.randn(16, 3 * 2 * 14 * 14)
+    grid_p2 = torch.tensor([[1, 4, 4]])
+    ids_p2 = torch.tensor([[5, 6, 150, 151, 151, 151, 151, 149, 7, 8, 9]])
+    ie_p2_cap, pos_p2_cap, _ = capture_prepared_inputs(
+        m, {"input_ids": ids_p2, "attention_mask": torch.ones_like(ids_p2),
+            "pixel_values": pv_p2, "image_grid_thw": grid_p2})
+    L_p2 = int(ie_p2_cap.shape[1])
+    im_p2 = (ids_p2[0] == 151)                                # image_token_id mask
+    n_img_p2 = int(im_p2.sum())
+    kept_p2, dp_p2 = postmerger_keep_tokens(ie_p2_cap, im_p2, 1.0, grid_p2, 4)
+    ie_ap, pos_ap, _, im_ap = apply_premerger(ie_p2_cap, pos_p2_cap, None, im_p2, kept_p2)
+    assert kept_p2.numel() == n_img_p2 and dp_p2["n_image_kept"] == n_img_p2
+    assert ie_ap.shape == (1, L_p2, hidden_size), ie_ap.shape
+    assert int(im_ap.sum()) == n_img_p2
+    hid_p2, _, _, _, d_p2 = prefill_pruned(
+        m, ie_ap, pos_ap, im_ap, "pre",
+        {"r": 0.0, "fastv_k": 2, "ratios": [1, .75, .5, .25]})
+    assert d_p2["n_image_kept"] == n_img_p2 and d_p2["L_after"] == L_p2, d_p2
+    gen_p2, _ = generate_pruned(
+        m, ie_ap, pos_ap, im_ap, "pre",
+        {"r": 0.0, "fastv_k": 2, "ratios": [1, .75, .5, .25]}, 4, eos)
+    assert 1 <= len(gen_p2) <= 4 and all(isinstance(t, int) for t in gen_p2)
+    print(f"[dry-check]   OK postmerger keep=1.0 -> identity L={ie_ap.shape[1]} -> non-empty decode ({len(gen_p2)} tokens)")
+
     print("[dry-check] ALL PASS")
 
 
@@ -1745,6 +1855,11 @@ def main():
             raise SystemExit("--mode pre requires --r-pre (unit KEEP fraction; "
                              "e.g. --r-pre 0.25 for pre-alone@25%)")
         keep_equiv, r_eff = None, round(1.0 - args.r_pre, 4)
+    elif args.mode == "post":
+        if args.r_post is None:
+            raise SystemExit("--mode post requires --r-post (post-merge KEEP "
+                             "fraction; e.g. --r-post 0.25 for post-alone@25%)")
+        keep_equiv, r_eff = None, round(1.0 - args.r_post, 4)
     elif args.mode == "cascade":
         if args.r_pre is None:
             raise SystemExit("--mode cascade requires --r-pre (Stage-1 unit KEEP "
@@ -1846,6 +1961,32 @@ def main():
                                "total_keep_target": (
                                    round(args.r_pre, 4) if args.mode == "pre"
                                    else round(args.r_pre * (1.0 - args.r), 4))}
+                ans = processor.decode(gen, skip_special_tokens=True).strip()
+                ptid = int(diag["L_after"])
+            elif args.mode == "post":
+                # POST-merger L2 top-k per image on the captured post-merge
+                # inputs_embeds.  No merger tap needed -- the score is computed
+                # directly on the post-merge image rows (== captured rows at
+                # image_mask True positions).  Per-image budget matches the
+                # pre branch formula; LLM-visible image-token count is
+                # r_post * (pre-merge keep) by construction, ~4x smaller than
+                # pre at the same ratio on Qwen3-VL (inherent budget arithmetic
+                # of the two regimes).
+                image_mask = (inputs["input_ids"][0] == image_token_id)
+                inputs_embeds, position_ids, deepstack = capture_prepared_inputs(
+                    model, {k: v for k, v in inputs.items()})
+                kept, dpost = postmerger_keep_tokens(
+                    inputs_embeds, image_mask, args.r_post,
+                    inputs["image_grid_thw"], spatial_unit)
+                ie, pos, ds, im2 = apply_premerger(
+                    inputs_embeds, position_ids, deepstack, image_mask, kept)
+                dpost["mrope"] = "native (post-merge, survivors keep original coords)"
+                gen, diag = generate_pruned(
+                    model, ie, pos, im2, "pre", cfg, args.max_tokens,
+                    eos_ids, deepstack=ds)
+                diag["post"] = {**dpost,
+                                "r_post_keep_frac": args.r_post,
+                                "total_keep_target": round(args.r_post, 4)}
                 ans = processor.decode(gen, skip_special_tokens=True).strip()
                 ptid = int(diag["L_after"])
             elif args.mode == "rankbridge":
@@ -1971,6 +2112,8 @@ def main():
             rec["question_type"] = s.extra["question_type"]
         if "pre" in diag:                                      # pre/cascade diag
             rec["pre"] = diag["pre"]                           # incl. kept_per_image
+        if "post" in diag:                                     # post diag
+            rec["post"] = diag["post"]                         # incl. k_per_image
         if "rb" in diag:                                       # rankbridge diag
             rec["rb"] = diag["rb"]
         if "rbmot" in diag:                                    # rbmot diag
@@ -1992,11 +2135,13 @@ def main():
                                                   "rankbridge") else None),
         "r_pre": args.r_pre if args.mode in ("pre", "cascade") else None,
         "r_fastv": args.r if args.mode == "cascade" else None,
+        "r_post": args.r_post if args.mode == "post" else None,
         "total_keep": (round(args.r_pre, 4) if args.mode == "pre" else
                        round(args.r_pre * (1.0 - args.r), 4)
                        if args.mode == "cascade" else
                        round(1.0 - args.r, 4)
-                       if args.mode in ("rankbridge", "rbmot") else None),
+                       if args.mode in ("rankbridge", "rbmot") else
+                       round(args.r_post, 4) if args.mode == "post" else None),
         "rb_fuse": args.rb_fuse if args.mode == "rankbridge" else None,
         "rb_rho": (args.rb_rho if args.mode == "rankbridge"
                    and args.rb_fuse == "quota" else None),
