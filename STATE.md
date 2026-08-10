@@ -1,7 +1,7 @@
 # STATE.md - 当前项目状态（主窗口维护，保持 ≤30 行）
 
 > 项目：VLM 视觉 token 压缩 · 目标：Rank-Before-Merge -> ACM MM'27
-> 最近更新：2026-08-07 · **RankBridge gate = NO-GO；方法冻结为 plain RBM。**
+> 最近更新：2026-08-10 · **新创新任务已锁定：Deferred RBM 零代码 gate；失败才进入 RBM-OT。**
 
 ## ★ RankBridge gate = NO-GO（预注册判据终判）
 - 方法：全 visual tokens 到 FastV layer-3，pre-merger L2 rank × attention rank 融合（quota rho=0.2 locked），25% keep；实现 `baselines_hf.py --mode rankbridge`（dry-check 全过，rho=0≡FastV）。
@@ -21,4 +21,5 @@
 ## ★ 红线与下一步
 - 不宣 RBM beats/SOTA；RBM=鲁棒 OCR/text-dense 默认，FastV=query-conditioned 强 baseline；RankBridge 只作 bounded negative。
 - 投稿前/claim 推翻/凭据/单次 >6 GPU·h 升级 user；GPU 单卡 A40 串行。
-- 下一步：决定是否在论文 §6 引用 RankBridge negative；随后做投稿前 go/no-go 与行政检查。
+- 服务器任务书：`experiments/rbm_ot_server_task.md`。先核验 CVPR'26 新颖性，再跑 `rho=1,K=3` Deferred RBM；其失败才实现固定 tau=0.05/20-iter RBM-OT。
+- Locked gate：Qwen3-VL keep25% n=200×4；逐项 ≥max(RBM,FastV-k3)-1pp 且 ≥1 项 paired z≥1.5 超强 parent 才 GO；否则停止所有 OT 变体。
