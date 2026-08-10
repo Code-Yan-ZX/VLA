@@ -138,6 +138,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import sys
 import time
@@ -643,6 +644,100 @@ def mimic_vllm_pre_positions(n_text_pre: int, grid_thw, spatial_merge_size: int,
     return pos.view(rows, 1, T1 + k + T2)
 
 
+# --------------------------------------------------------------------------- #
+# RBM-OT (Stage B of experiments/rbm_ot_server_task.md, pre-registered
+# 2026-08-10): keep the plain-RBM anchor set BIT-IDENTICAL, but transport the
+# DROPPED pre-merger units into the anchors via balanced Sinkhorn OT BEFORE
+# the model's native nonlinear merger runs.  LOCKED constants: tau=0.05,
+# exactly 20 Sinkhorn iterations, cosine cost, row mass 1, equal anchor
+# capacity n_drop/n_anchor.  No parameter search permitted after results.
+# --------------------------------------------------------------------------- #
+RBOT_TAU = 0.05
+RBOT_ITERS = 20
+
+
+def rbot_descriptors(hs_unit: torch.Tensor) -> torch.Tensor:
+    """hs_unit: [U, unit, D] -> per-unit descriptor = L2-normalized mean over
+    the patch slots (fp32)."""
+    x = hs_unit.float().mean(1)
+    return x / x.norm(dim=-1, keepdim=True).clamp_min(1e-12)
+
+
+def sinkhorn_balanced_plan(cost: torch.Tensor, tau: float = RBOT_TAU,
+                           iters: int = RBOT_ITERS) -> torch.Tensor:
+    """Balanced entropic-OT plan, stable log-domain, fp32.  cost [n_drop,
+    n_anchor] (cosine cost 1 - cos).  Marginals: every dropped row carries
+    mass 1; every anchor has equal capacity n_drop/n_anchor.  Returns P
+    [n_drop, n_anchor] after exactly `iters` alternating (u, v) updates."""
+    n_drop, n_anchor = cost.shape
+    dev = cost.device
+    log_K = -cost.float() / tau
+    log_u = torch.zeros(n_drop, device=dev)
+    log_v = torch.zeros(n_anchor, device=dev)
+    log_a = torch.zeros(n_drop, device=dev)
+    log_b = torch.full((n_anchor,), math.log(n_drop / n_anchor), device=dev)
+    for _ in range(iters):
+        log_u = log_a - torch.logsumexp(log_K + log_v[None, :], dim=1)
+        log_v = log_b - torch.logsumexp(log_K + log_u[:, None], dim=0)
+    return torch.exp(log_u[:, None] + log_K + log_v[None, :])
+
+
+def rbot_plan(hs, grid_thw, keep_frac, unit, tau=RBOT_TAU, iters=RBOT_ITERS):
+    """From the FIRST-called merger input (the SAME tensor plain RBM scores):
+    RBM anchors (bit-identical to premerger_keep_units) + one balanced
+    Sinkhorn plan per image (dropped descriptors -> anchor descriptors, cosine
+    cost, NO cross-image transport).  Returns dict(kept, diag_pre, unit,
+    imgs=[(drop_idx, anchor_idx, P)] per image, marg_res, tau, iters)."""
+    kept, dp = premerger_keep_units(hs, grid_thw, keep_frac, unit)
+    U = hs.shape[0] // unit
+    desc = rbot_descriptors(hs.reshape(U, unit, hs.shape[-1]))
+    full = dp["full_per_image"]
+    k_per = dp["k_per_image"]
+    kept_set = set(kept.tolist())
+    imgs, marg_res = [], 0.0
+    off = 0
+    for f, k in zip(full, k_per):
+        units_i = range(off, off + f)
+        anchors = [u for u in units_i if u in kept_set]
+        drops = [u for u in units_i if u not in kept_set]
+        assert len(anchors) == k, (len(anchors), k)
+        if drops:
+            D = desc[torch.tensor(drops, device=hs.device)]
+            A = desc[torch.tensor(anchors, device=hs.device)]
+            P = sinkhorn_balanced_plan(1.0 - D @ A.t(), tau, iters)
+            marg_res = max(
+                marg_res, float((P.sum(1) - 1.0).abs().max()),
+                float((P.sum(0) - len(drops) / len(anchors)).abs().max()))
+        else:
+            P = torch.zeros(0, len(anchors))
+        imgs.append((torch.tensor(drops, dtype=torch.long, device=hs.device),
+                     torch.tensor(anchors, dtype=torch.long, device=hs.device),
+                     P))
+        off += f
+    return {"kept": kept, "diag_pre": dp, "imgs": imgs, "unit": unit,
+            "marg_res": marg_res, "tau": tau, "iters": iters}
+
+
+def rbot_apply(hs, plan, unit):
+    """Enrich the anchor rows of a merger-input tensor [U*unit, D] with the
+    cached plan: for each anchor j and each patch slot p INDEPENDENTLY,
+    H'_j,p = (H_j,p + sum_i P_ij H_i,p) / (1 + sum_i P_ij).  Dropped/other
+    rows untouched; length and dtype preserved; keep=100% -> bitwise identity.
+    Applied on EVERY merger call (deepstack + main) with the SAME plan."""
+    U = hs.shape[0] // unit
+    H = hs.reshape(U, unit, hs.shape[-1])
+    out = H.clone()
+    for drops, anchors, P in plan["imgs"]:
+        if drops.numel() == 0:
+            continue
+        Hd = H[drops].float()                       # [n_drop, unit, D]
+        W = P.sum(0)                                # [n_anchor]
+        contrib = torch.einsum("ia,iud->aud", P.float(), Hd)
+        out[anchors] = ((H[anchors].float() + contrib)
+                        / (1.0 + W)[:, None, None]).to(hs.dtype)
+    return out.reshape(-1, hs.shape[-1])
+
+
 class MergerTap:
     """Captures the FIRST merger call's input hidden_states (once per sample
     pass) across visual.merger + visual.deepstack_merger_list[*] -- the mask
@@ -675,6 +770,65 @@ class MergerTap:
 
     def reset(self):
         self.first_hs = None
+        self.first_tag = None
+        self.call_order = []
+
+    def remove(self):
+        for h in self._handles:
+            h.remove()
+        self._handles = []
+
+
+class MergerEnrichTap:
+    """RBM-OT enrichment at the merger inputs.  Forward PRE-hooks on
+    visual.merger + visual.deepstack_merger_list[*].  Per sample pass: the
+    FIRST merger call computes the RBM anchor set + balanced Sinkhorn plans
+    from its own input (plan source == plain-RBM mask source, runner parity)
+    and the hook swaps in the enriched tensor (SAME shape/dtype, full length
+    unchanged -- only anchor rows are rewritten); every subsequent merger call
+    reuses the SAME plan on its OWN features (row alignment exact: unit j is
+    the same spatial unit for all mergers, so main/deepstack stay aligned).
+    Install once after model load; reset(grid_thw) per sample."""
+
+    def __init__(self, visual, keep_frac, unit, tau=RBOT_TAU,
+                 iters=RBOT_ITERS):
+        self.keep_frac = keep_frac
+        self.unit = unit
+        self.tau = tau
+        self.iters = iters
+        self.grid_thw = None
+        self.plan = None
+        self.first_tag = None
+        self.call_order = []
+        self._handles = []
+        targets = [("main", visual.merger)]
+        dsl = getattr(visual, "deepstack_merger_list", None)
+        if dsl is not None:
+            targets += [(f"deepstack_{i}", m) for i, m in enumerate(dsl)]
+        for tag, mod in targets:
+            self._handles.append(mod.register_forward_pre_hook(
+                self._make_hook(tag), with_kwargs=True))
+
+    def _make_hook(self, tag):
+        def hook(module, args, kwargs):
+            self.call_order.append(tag)
+            hs = kwargs.get("hidden_states", args[0] if args else None)
+            if hs is None or self.grid_thw is None:
+                return None
+            if self.plan is None:
+                self.plan = rbot_plan(hs.detach(), self.grid_thw,
+                                      self.keep_frac, self.unit,
+                                      self.tau, self.iters)
+                self.first_tag = tag
+            new = rbot_apply(hs, self.plan, self.unit)
+            if "hidden_states" in kwargs:
+                return args, {**kwargs, "hidden_states": new}
+            return (new,) + tuple(args[1:]), kwargs
+        return hook
+
+    def reset(self, grid_thw):
+        self.grid_thw = grid_thw
+        self.plan = None
         self.first_tag = None
         self.call_order = []
 
@@ -986,7 +1140,7 @@ def parse_args():
     ap = argparse.ArgumentParser()
     ap.add_argument("--mode", default="none",
                     choices=["none", "fastv", "pyramid", "pre", "cascade",
-                             "rankbridge"])
+                             "rankbridge", "rbmot"])
     ap.add_argument("--model", default=None,
                     help="HF id (Qwen/Qwen3-VL-8B-Instruct or "
                          "Qwen/Qwen2.5-VL-7B-Instruct). Family auto-detected.")
@@ -1214,6 +1368,75 @@ def run_dry_check():
     print("[dry-check]   OK vllm-mimic mrope (grid-block + truncation, "
           "3-row and 4-row conventions)")
 
+    # RBM-OT (Stage B) pure-function gates ----------------------------------
+    # (C1) balanced Sinkhorn plan: marginals (row 1, col n_drop/n_anchor)
+    # residual < 1e-3, finite.  Uses the locked input distribution: cosine
+    # cost 1 - D.A^T over L2-normalized unit descriptors (arbitrary cost
+    # matrices are NOT the method's input contract).
+    torch.manual_seed(11)
+    desc_c1 = torch.nn.functional.normalize(torch.randn(13, 16), dim=-1)
+    cost_c1 = 1.0 - desc_c1[4:] @ desc_c1[:4].t()  # 9 dropped x 4 anchors
+    P_c1 = sinkhorn_balanced_plan(cost_c1)
+    assert torch.isfinite(P_c1).all()
+    res_row = float((P_c1.sum(1) - 1.0).abs().max())
+    res_col = float((P_c1.sum(0) - 9.0 / 4.0).abs().max())
+    assert max(res_row, res_col) < 1e-3, (res_row, res_col)
+    print(f"[dry-check]   OK rbmot Sinkhorn marginals (row res {res_row:.2e}, "
+          f"col res {res_col:.2e} < 1e-3; tau={RBOT_TAU}, iters={RBOT_ITERS})")
+
+    # (C2) anchors == plain-RBM kept BIT-EXACT; per-image budget = k_i units
+    # (= sum(k_i) merged tokens, sum(k_i)*unit pre-merger patch rows).
+    torch.manual_seed(12)
+    hs_c2 = torch.randn(28, 8)                     # 7 units x 4 patches
+    grid_c2 = torch.tensor([[1, 4, 4], [1, 3, 4]])  # 4 + 3 units
+    plan_c2 = rbot_plan(hs_c2, grid_c2, 0.5, 4)
+    kept_ref, dp_ref = premerger_keep_units(hs_c2, grid_c2, 0.5, 4)
+    assert torch.equal(plan_c2["kept"], kept_ref)  # RBM bit-identity
+    assert dp_ref["k_per_image"] == [2, 2], dp_ref
+    n_anchor_c2 = int(plan_c2["kept"].numel())
+    assert n_anchor_c2 == sum(dp_ref["k_per_image"]) == 4, n_anchor_c2
+    assert n_anchor_c2 * 4 == 16                   # kept pre-merger patch rows
+    print("[dry-check]   OK rbmot anchors == plain-RBM kept bitwise; budget "
+          "sum(k_i)=4 merged tokens / 16 pre-merger rows")
+
+    # (C3) each enriched patch slot == specified weighted barycenter; dropped
+    # rows untouched.
+    H_c2 = hs_c2.reshape(7, 4, 8)
+    out_c2 = rbot_apply(hs_c2, plan_c2, 4).reshape(7, 4, 8)
+    for drops, anchors, P in plan_c2["imgs"]:
+        if drops.numel() == 0:
+            continue
+        W = P.sum(0)
+        for jj, a in enumerate(anchors.tolist()):
+            for p in range(4):
+                want = ((H_c2[a, p] + (P[:, jj].unsqueeze(-1)
+                                       * H_c2[drops, p]).sum(0))
+                        / (1.0 + W[jj]))
+                assert torch.allclose(out_c2[a, p], want, atol=1e-5), (a, p)
+    unit_kept_c2 = torch.zeros(7, dtype=torch.bool)
+    unit_kept_c2[plan_c2["kept"]] = True
+    rows_drop_c2 = (~unit_kept_c2).repeat_interleave(4)
+    assert torch.equal(out_c2.reshape(28, 8)[rows_drop_c2],
+                       hs_c2[rows_drop_c2])
+    print("[dry-check]   OK rbmot barycenter per patch slot (all 4 slots) + "
+          "dropped rows untouched")
+
+    # (C4) keep_frac=1.0 -> bitwise identity; (C5) NO cross-image transport,
+    # deterministic repeated output, finite.
+    plan_id = rbot_plan(hs_c2, grid_c2, 1.0, 4)
+    assert torch.equal(rbot_apply(hs_c2, plan_id, 4), hs_c2)
+    assert plan_id["marg_res"] == 0.0
+    hs_c3 = hs_c2.clone()
+    hs_c3[16:] += 10.0                             # perturb image-2 units only
+    plan_c3 = rbot_plan(hs_c3, grid_c2, 0.5, 4)
+    out_c3 = rbot_apply(hs_c3, plan_c3, 4)
+    out_c2b = rbot_apply(hs_c2, plan_c2, 4)
+    assert torch.equal(out_c3[:16], out_c2b[:16])  # image-1 rows unaffected
+    assert torch.isfinite(out_c3).all()
+    assert torch.equal(rbot_apply(hs_c3, plan_c3, 4), out_c3)
+    print("[dry-check]   OK rbmot keep=1 bitwise identity, no cross-image "
+          "transport, deterministic, finite")
+
     print("[dry-check] (B) tiny-model equivalence + end-to-end (CPU)")
     try:
         m, cfg = _tiny_model()
@@ -1384,6 +1607,56 @@ def run_dry_check():
           f"(k={k_def}, positions equal), survivor hidden NON-identical "
           f"(maxdiff={diff_def:.2e})")
 
+    # (B10) RBM-OT keep=100% end-to-end through the NATIVE merger hooks
+    # (tiny model): enriched capture == plain capture bitwise.
+    et10 = MergerEnrichTap(m.visual, 1.0, 4)
+    pv10 = torch.randn(16, 3 * 2 * 14 * 14)
+    grid10 = torch.tensor([[1, 4, 4]])
+    ids10 = torch.tensor([[5, 6, 150, 151, 151, 151, 151, 149, 7, 8, 9]])
+    mi10 = {"input_ids": ids10, "attention_mask": torch.ones_like(ids10),
+            "pixel_values": pv10, "image_grid_thw": grid10}
+    ie_nat, pos_nat, _ = capture_prepared_inputs(
+        m, {k: (v.clone() if torch.is_tensor(v) else v)
+            for k, v in mi10.items()})
+    et10.reset(grid10)
+    ie_ot, pos_ot, _ = capture_prepared_inputs(
+        m, {k: (v.clone() if torch.is_tensor(v) else v)
+            for k, v in mi10.items()})
+    assert torch.equal(ie_ot, ie_nat) and torch.equal(pos_ot, pos_nat), \
+        "keep=100% rbmot must be bitwise identical to native"
+    assert et10.plan is not None and int(et10.plan["kept"].numel()) == 4
+    assert et10.plan["marg_res"] == 0.0 and et10.call_order == ["main"]
+    et10.remove()
+    print("[dry-check]   OK rbmot keep=100% == native bitwise (through real "
+          "merger pre-hooks)")
+
+    # (B11) MergerEnrichTap plan REUSE across mergers: computed ONCE from the
+    # first-called merger input, applied with exact row alignment on every
+    # subsequent merger's own features (deepstack/main alignment mechanism).
+    import torch.nn as nn
+    from types import SimpleNamespace
+    torch.manual_seed(13)
+    hs11 = torch.randn(28, 8)                      # 7 units x 4 patches
+    grid11 = torch.tensor([[1, 4, 4], [1, 3, 4]])
+    stub = SimpleNamespace(merger=nn.Identity(),
+                           deepstack_merger_list=[nn.Identity()])
+    et11 = MergerEnrichTap(stub, 0.5, 4)
+    et11.reset(grid11)
+    out_ds = stub.deepstack_merger_list[0](hs11)   # first-called merger
+    out_main = stub.merger(hs11)                   # reuses the cached plan
+    assert et11.call_order == ["deepstack_0", "main"], et11.call_order
+    assert et11.first_tag == "deepstack_0"
+    assert torch.equal(out_ds, out_main)           # same plan, same input
+    unit_kept11 = torch.zeros(7, dtype=torch.bool)
+    unit_kept11[et11.plan["kept"]] = True
+    rows_drop11 = (~unit_kept11).repeat_interleave(4)
+    rows_anch11 = unit_kept11.repeat_interleave(4)
+    assert torch.equal(out_main[rows_drop11], hs11[rows_drop11])
+    assert (out_main[rows_anch11] - hs11[rows_anch11]).abs().max() > 1e-5
+    et11.remove()
+    print("[dry-check]   OK rbmot plan reuse: deepstack_0-first, one plan, "
+          "both mergers row-aligned (anchors enriched, drops untouched)")
+
     # (B4) end-to-end greedy generation runs and terminates.
     eos = {cfg.text_config.eos_token_id if hasattr(cfg.text_config, 'eos_token_id')
            else 1}
@@ -1447,10 +1720,12 @@ def main():
     # cascade/pre/rankbridge: tap the merger inputs for the pre-merger L2
     # mask/ranks (first merger called wins: qwen3vl deepstack_0 / qwen2vl main
     # -- runner parity).
-    tap = (MergerTap(model.visual)
-           if args.mode in ("pre", "cascade", "rankbridge") else None)
     spatial_merge = int(getattr(model.visual, "spatial_merge_size", 2))
     spatial_unit = spatial_merge ** 2
+    tap = (MergerTap(model.visual)
+           if args.mode in ("pre", "cascade", "rankbridge") else
+           MergerEnrichTap(model.visual, 1.0 - args.r, spatial_unit)
+           if args.mode == "rbmot" else None)
 
     # eos set for manual decode
     eos = model.generation_config.eos_token_id
@@ -1480,6 +1755,11 @@ def main():
     elif args.mode == "rankbridge":
         if not (0.0 < args.r < 1.0):
             raise SystemExit("--mode rankbridge requires 0 < --r < 1 (TOTAL drop "
+                             "fraction; keep=1-r, e.g. --r 0.75 for 25% keep)")
+        keep_equiv, r_eff = None, args.r
+    elif args.mode == "rbmot":
+        if not (0.0 < args.r < 1.0):
+            raise SystemExit("--mode rbmot requires 0 < --r < 1 (TOTAL drop "
                              "fraction; keep=1-r, e.g. --r 0.75 for 25% keep)")
         keep_equiv, r_eff = None, args.r
     else:
@@ -1605,6 +1885,56 @@ def main():
                               "mask_source": tap.first_tag}
                 ans = processor.decode(gen, skip_special_tokens=True).strip()
                 ptid = int(diag["L_after"])
+            elif args.mode == "rbmot":
+                # RBM-OT: anchors == plain RBM bit-identical (same first-called
+                # merger input, same L2 keep rule); dropped units transported
+                # into the anchors as balanced Sinkhorn barycenters BEFORE the
+                # native merger (MergerEnrichTap pre-hooks; plan cached once
+                # per pass, reused on every merger's own features).  Locked
+                # tau/iters live in the constants -- no CLI knobs by design.
+                image_mask = (inputs["input_ids"][0] == image_token_id)
+                tap.reset(inputs["image_grid_thw"])
+                inputs_embeds, position_ids, deepstack = capture_prepared_inputs(
+                    model, {k: v for k, v in inputs.items()})
+                if tap.plan is None:
+                    raise RuntimeError("rbmot tap saw no merger call (no image?)")
+                plan = tap.plan
+                kept, dpre = plan["kept"], plan["diag_pre"]
+                ie, pos, ds, im2 = apply_premerger(
+                    inputs_embeds, position_ids, deepstack, image_mask, kept)
+                if args.mrope == "vllm-mimic":
+                    img_run = image_mask.nonzero(as_tuple=False).view(-1)
+                    n_full = int(img_run.numel())
+                    t1 = int(img_run[0]) if n_full else 0
+                    single_span = bool(n_full == 0 or (
+                        int(img_run[-1]) - int(img_run[0]) + 1 == n_full))
+                    multi_img = (inputs["image_grid_thw"].shape[0] > 1
+                                 if "image_grid_thw" in inputs else False)
+                    if single_span and not multi_img:
+                        t2 = int(image_mask.numel()) - t1 - n_full
+                        pos = mimic_vllm_pre_positions(
+                            t1, inputs["image_grid_thw"], spatial_merge,
+                            int(kept.numel()), t2,
+                            position_ids).to(device=position_ids.device)
+                        dpre["mrope"] = "vllm-mimic"
+                    else:
+                        dpre["mrope"] = "native (multi-image/split span)"
+                else:
+                    dpre["mrope"] = "native"
+                gen, diag = generate_pruned(
+                    model, ie, pos, im2, "pre", cfg, args.max_tokens,
+                    eos_ids, deepstack=ds)
+                diag["rbmot"] = {"tau": plan["tau"], "iters": plan["iters"],
+                                 "marg_res": round(plan["marg_res"], 6),
+                                 "keep_frac": round(1.0 - args.r, 4),
+                                 "n_units_full": dpre["n_units_full"],
+                                 "n_anchor": int(kept.numel()),
+                                 "n_drop": dpre["n_units_full"] - int(kept.numel()),
+                                 "mask_source": tap.first_tag,
+                                 "merger_call_order": tap.call_order[:6],
+                                 "mrope": dpre["mrope"]}
+                ans = processor.decode(gen, skip_special_tokens=True).strip()
+                ptid = int(diag["L_after"])
             else:
                 # MANUAL pruned prefill + greedy decode.
                 image_mask = (inputs["input_ids"][0] == image_token_id)
@@ -1643,6 +1973,8 @@ def main():
             rec["pre"] = diag["pre"]                           # incl. kept_per_image
         if "rb" in diag:                                       # rankbridge diag
             rec["rb"] = diag["rb"]
+        if "rbmot" in diag:                                    # rbmot diag
+            rec["rbmot"] = diag["rbmot"]
         per_sample.append(rec)
         if (i + 1) % 10 == 0:
             print(f"[j4] {i+1}/{len(samples)} running_acc="
@@ -1664,7 +1996,7 @@ def main():
                        round(args.r_pre * (1.0 - args.r), 4)
                        if args.mode == "cascade" else
                        round(1.0 - args.r, 4)
-                       if args.mode == "rankbridge" else None),
+                       if args.mode in ("rankbridge", "rbmot") else None),
         "rb_fuse": args.rb_fuse if args.mode == "rankbridge" else None,
         "rb_rho": (args.rb_rho if args.mode == "rankbridge"
                    and args.rb_fuse == "quota" else None),
@@ -1672,6 +2004,8 @@ def main():
                       and args.rb_fuse == "rrf" else None),
         "rb_rrf_c": (args.rb_rrf_c if args.mode == "rankbridge"
                      and args.rb_fuse == "rrf" else None),
+        "rbmot_tau": RBOT_TAU if args.mode == "rbmot" else None,
+        "rbmot_iters": RBOT_ITERS if args.mode == "rbmot" else None,
         "r_convention": ("r = TOTAL drop (runner convention); cascade --r is "
                          "the FastV drop of the STAGE-1 remainder, total keep "
                          "= r_pre*(1-r); rankbridge total keep = 1-r with the "
