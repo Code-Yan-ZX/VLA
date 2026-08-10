@@ -1,0 +1,52 @@
+{
+  "model": "Qwen/Qwen3-VL-8B-Instruct",
+  "decoding": "greedy",
+  "max_tokens": 32,
+  "keep_ratio": 0.25,
+  "seed": "default (0)",
+  "processor": "Qwen3-VL native (2x2 merger)",
+  "package_versions": {
+    "transformers": "resolved at run time",
+    "torch": "resolved at run time",
+    "vllm": "0.19.0 (for j7 full-matrix and j4 baselines)"
+  },
+  "data_sources": {
+    "pre_RBM": "cascade gate pre25 (Qwen3-VL, pre-merger L2 ranking)",
+    "fastv": "cascade gate fst25 (Qwen3-VL, FastV layer-K query-conditioned)",
+    "post_L2": "cascade gate post25 for ocrbench; j7 full-matrix post for textvqa; j4d post (cap600k) for docvqa"
+  },
+  "examples": [
+    {
+      "benchmark": "TextVQA", "id": "34863",
+      "ptid": 218, "n_units_kept": 192, "n_units_full": 768,
+      "answers": {"RBM": "yes", "FastV": "no", "Post-L2": "no"},
+      "ground_truth": "yes",
+      "selection_reason": "RBM correct, both FastV and Post-L2 wrong on the same image with identical ptid=218"
+    },
+    {
+      "benchmark": "DocVQA", "id": "52297",
+      "ptid": 175, "n_units_kept": 147, "n_units_full": 588,
+      "answers": {"RBM": "July 17 and 18, 1996", "FastV": "July 1996", "Post-L2": "July 1972"},
+      "ground_truth": "July 17 and 18, 1996",
+      "selection_reason": "RBM correct, FastV drops the day, Post-L2 corrupts the year; identical ptid=175"
+    },
+    {
+      "benchmark": "OCRBench", "id": "ocr0804",
+      "ptid": 219, "n_units_kept": 186, "n_units_full": 744,
+      "answers": {"RBM": "OCTOBER 1999", "FastV": "OCTOBER", "Post-L2": "4/14/99"},
+      "ground_truth": "OCTOBER 1999",
+      "selection_reason": "RBM correct, FastV drops the year, Post-L2 reads a different date; identical ptid=219; strict 3-arm flip from contact_sheet_manifest"
+    }
+  ],
+  "candidate_pool_counts": {
+    "TextVQA_cascade_pre25_fst25_j7post_intersection": 24,
+    "DocVQA_cascade_pre25_fst25_j4dpost_intersection": 37,
+    "OCRBench_cascade_pre25_fst25_post25_intersection": 9
+  },
+  "limitations": [
+    "FastV and Post-L2 retained-token indices were not stored in the source runs; the pre-merger RBM mask is shown for visual reference in all three method rows.",
+    "Evidence boxes were manually annotated from the source images; verified to contain the GT text by visual inspection.",
+    "DocVQA 58439 (audited anchor) could not be used because FastV was correct on it (ptid=195, j4d post cap600k matched); replaced with DocVQA 52297 which has 2 wrong baselines at the same ptid.",
+    "TextVQA 35014 (audited anchor) could not be used because FastV was correct on it; replaced with TextVQA 34863 (LED scoreboard) which has 2 wrong baselines at the same ptid."
+  ]
+}

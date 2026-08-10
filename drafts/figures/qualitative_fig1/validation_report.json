@@ -1,0 +1,445 @@
+{
+  "n_checks": 87,
+  "n_passed": 87,
+  "n_failed": 0,
+  "n_warnings": 0,
+  "checks": [
+    {
+      "name": "manifest_exists",
+      "ok": true,
+      "detail": "/media/disk2/YZX/research/vla/drafts/figures/qualitative_fig1/data/manifest.json"
+    },
+    {
+      "name": "image_textvqa_34863",
+      "ok": true,
+      "detail": "/media/disk2/YZX/research/vla/drafts/figures/qualitative_fig1/data/textvqa_34863/source.jpg"
+    },
+    {
+      "name": "mask_textvqa_34863_rbm",
+      "ok": true,
+      "detail": "/media/disk2/YZX/research/vla/drafts/figures/qualitative_fig1/data/textvqa_34863/rbm_mask.npz"
+    },
+    {
+      "name": "mask_has_keep_textvqa_34863_rbm",
+      "ok": true,
+      "detail": "['keep', 'kept_indices', 'unit_grid_hw', 'n_units_full', 'n_units_kept']"
+    },
+    {
+      "name": "mask_has_grid_textvqa_34863_rbm",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mask_shape_match_textvqa_34863_rbm",
+      "ok": true,
+      "detail": "keep=(28, 28), grid=(28,28)"
+    },
+    {
+      "name": "mask_kept_count_textvqa_34863_rbm",
+      "ok": true,
+      "detail": "kept=192, expected=192"
+    },
+    {
+      "name": "mask_indices_in_grid_textvqa_34863_rbm",
+      "ok": true,
+      "detail": "n_indices=192, grid_size=784"
+    },
+    {
+      "name": "mask_textvqa_34863_fastv",
+      "ok": true,
+      "detail": "/media/disk2/YZX/research/vla/drafts/figures/qualitative_fig1/data/textvqa_34863/rbm_mask.npz"
+    },
+    {
+      "name": "mask_has_keep_textvqa_34863_fastv",
+      "ok": true,
+      "detail": "['keep', 'kept_indices', 'unit_grid_hw', 'n_units_full', 'n_units_kept']"
+    },
+    {
+      "name": "mask_has_grid_textvqa_34863_fastv",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mask_shape_match_textvqa_34863_fastv",
+      "ok": true,
+      "detail": "keep=(28, 28), grid=(28,28)"
+    },
+    {
+      "name": "mask_kept_count_textvqa_34863_fastv",
+      "ok": true,
+      "detail": "kept=192, expected=192"
+    },
+    {
+      "name": "mask_indices_in_grid_textvqa_34863_fastv",
+      "ok": true,
+      "detail": "n_indices=192, grid_size=784"
+    },
+    {
+      "name": "mask_textvqa_34863_post",
+      "ok": true,
+      "detail": "/media/disk2/YZX/research/vla/drafts/figures/qualitative_fig1/data/textvqa_34863/rbm_mask.npz"
+    },
+    {
+      "name": "mask_has_keep_textvqa_34863_post",
+      "ok": true,
+      "detail": "['keep', 'kept_indices', 'unit_grid_hw', 'n_units_full', 'n_units_kept']"
+    },
+    {
+      "name": "mask_has_grid_textvqa_34863_post",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mask_shape_match_textvqa_34863_post",
+      "ok": true,
+      "detail": "keep=(28, 28), grid=(28,28)"
+    },
+    {
+      "name": "mask_kept_count_textvqa_34863_post",
+      "ok": true,
+      "detail": "kept=192, expected=192"
+    },
+    {
+      "name": "mask_indices_in_grid_textvqa_34863_post",
+      "ok": true,
+      "detail": "n_indices=192, grid_size=784"
+    },
+    {
+      "name": "ptid_match_textvqa_34863",
+      "ok": true,
+      "detail": "ptids=[218, 218, 218]"
+    },
+    {
+      "name": "rbm_correct_textvqa_34863",
+      "ok": true,
+      "detail": "rbm correct=True"
+    },
+    {
+      "name": "two_wrong_baselines_textvqa_34863",
+      "ok": true,
+      "detail": "wrong baselines=2"
+    },
+    {
+      "name": "gt_present_textvqa_34863",
+      "ok": true,
+      "detail": "['yes']"
+    },
+    {
+      "name": "answer_present_textvqa_34863_rbm",
+      "ok": true,
+      "detail": "answer='yes'"
+    },
+    {
+      "name": "answer_present_textvqa_34863_fastv",
+      "ok": true,
+      "detail": "answer='no'"
+    },
+    {
+      "name": "answer_present_textvqa_34863_post",
+      "ok": true,
+      "detail": "answer='no'"
+    },
+    {
+      "name": "image_aspect_preserved_textvqa_34863",
+      "ok": true,
+      "detail": "size=(1024,768)"
+    },
+    {
+      "name": "image_docvqa_52297",
+      "ok": true,
+      "detail": "/media/disk2/YZX/research/vla/drafts/figures/qualitative_fig1/data/docvqa_52297/source.jpg"
+    },
+    {
+      "name": "mask_docvqa_52297_rbm",
+      "ok": true,
+      "detail": "/media/disk2/YZX/research/vla/drafts/figures/qualitative_fig1/data/docvqa_52297/rbm_mask.npz"
+    },
+    {
+      "name": "mask_has_keep_docvqa_52297_rbm",
+      "ok": true,
+      "detail": "['keep', 'kept_indices', 'unit_grid_hw', 'n_units_full', 'n_units_kept']"
+    },
+    {
+      "name": "mask_has_grid_docvqa_52297_rbm",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mask_shape_match_docvqa_52297_rbm",
+      "ok": true,
+      "detail": "keep=(25, 25), grid=(25,25)"
+    },
+    {
+      "name": "mask_kept_count_docvqa_52297_rbm",
+      "ok": true,
+      "detail": "kept=147, expected=147"
+    },
+    {
+      "name": "mask_indices_in_grid_docvqa_52297_rbm",
+      "ok": true,
+      "detail": "n_indices=147, grid_size=625"
+    },
+    {
+      "name": "mask_docvqa_52297_fastv",
+      "ok": true,
+      "detail": "/media/disk2/YZX/research/vla/drafts/figures/qualitative_fig1/data/docvqa_52297/rbm_mask.npz"
+    },
+    {
+      "name": "mask_has_keep_docvqa_52297_fastv",
+      "ok": true,
+      "detail": "['keep', 'kept_indices', 'unit_grid_hw', 'n_units_full', 'n_units_kept']"
+    },
+    {
+      "name": "mask_has_grid_docvqa_52297_fastv",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mask_shape_match_docvqa_52297_fastv",
+      "ok": true,
+      "detail": "keep=(25, 25), grid=(25,25)"
+    },
+    {
+      "name": "mask_kept_count_docvqa_52297_fastv",
+      "ok": true,
+      "detail": "kept=147, expected=147"
+    },
+    {
+      "name": "mask_indices_in_grid_docvqa_52297_fastv",
+      "ok": true,
+      "detail": "n_indices=147, grid_size=625"
+    },
+    {
+      "name": "mask_docvqa_52297_post",
+      "ok": true,
+      "detail": "/media/disk2/YZX/research/vla/drafts/figures/qualitative_fig1/data/docvqa_52297/rbm_mask.npz"
+    },
+    {
+      "name": "mask_has_keep_docvqa_52297_post",
+      "ok": true,
+      "detail": "['keep', 'kept_indices', 'unit_grid_hw', 'n_units_full', 'n_units_kept']"
+    },
+    {
+      "name": "mask_has_grid_docvqa_52297_post",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mask_shape_match_docvqa_52297_post",
+      "ok": true,
+      "detail": "keep=(25, 25), grid=(25,25)"
+    },
+    {
+      "name": "mask_kept_count_docvqa_52297_post",
+      "ok": true,
+      "detail": "kept=147, expected=147"
+    },
+    {
+      "name": "mask_indices_in_grid_docvqa_52297_post",
+      "ok": true,
+      "detail": "n_indices=147, grid_size=625"
+    },
+    {
+      "name": "ptid_match_docvqa_52297",
+      "ok": true,
+      "detail": "ptids=[175, 175, 175]"
+    },
+    {
+      "name": "rbm_correct_docvqa_52297",
+      "ok": true,
+      "detail": "rbm correct=True"
+    },
+    {
+      "name": "two_wrong_baselines_docvqa_52297",
+      "ok": true,
+      "detail": "wrong baselines=2"
+    },
+    {
+      "name": "gt_present_docvqa_52297",
+      "ok": true,
+      "detail": "['July 17 and 18, 1996']"
+    },
+    {
+      "name": "answer_present_docvqa_52297_rbm",
+      "ok": true,
+      "detail": "answer='July 17 and 18, 1996'"
+    },
+    {
+      "name": "answer_present_docvqa_52297_fastv",
+      "ok": true,
+      "detail": "answer='July 1996'"
+    },
+    {
+      "name": "answer_present_docvqa_52297_post",
+      "ok": true,
+      "detail": "answer='July 1972'"
+    },
+    {
+      "name": "image_aspect_preserved_docvqa_52297",
+      "ok": true,
+      "detail": "size=(1692,2245)"
+    },
+    {
+      "name": "image_ocrbench_ocr0804",
+      "ok": true,
+      "detail": "/media/disk2/YZX/research/vla/drafts/figures/qualitative_fig1/data/ocrbench_ocr0804/source.jpg"
+    },
+    {
+      "name": "mask_ocrbench_ocr0804_rbm",
+      "ok": true,
+      "detail": "/media/disk2/YZX/research/vla/drafts/figures/qualitative_fig1/data/ocrbench_ocr0804/rbm_mask.npz"
+    },
+    {
+      "name": "mask_has_keep_ocrbench_ocr0804_rbm",
+      "ok": true,
+      "detail": "['keep', 'kept_indices', 'unit_grid_hw', 'n_units_full', 'n_units_kept']"
+    },
+    {
+      "name": "mask_has_grid_ocrbench_ocr0804_rbm",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mask_shape_match_ocrbench_ocr0804_rbm",
+      "ok": true,
+      "detail": "keep=(28, 28), grid=(28,28)"
+    },
+    {
+      "name": "mask_kept_count_ocrbench_ocr0804_rbm",
+      "ok": true,
+      "detail": "kept=186, expected=186"
+    },
+    {
+      "name": "mask_indices_in_grid_ocrbench_ocr0804_rbm",
+      "ok": true,
+      "detail": "n_indices=186, grid_size=784"
+    },
+    {
+      "name": "mask_ocrbench_ocr0804_fastv",
+      "ok": true,
+      "detail": "/media/disk2/YZX/research/vla/drafts/figures/qualitative_fig1/data/ocrbench_ocr0804/rbm_mask.npz"
+    },
+    {
+      "name": "mask_has_keep_ocrbench_ocr0804_fastv",
+      "ok": true,
+      "detail": "['keep', 'kept_indices', 'unit_grid_hw', 'n_units_full', 'n_units_kept']"
+    },
+    {
+      "name": "mask_has_grid_ocrbench_ocr0804_fastv",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mask_shape_match_ocrbench_ocr0804_fastv",
+      "ok": true,
+      "detail": "keep=(28, 28), grid=(28,28)"
+    },
+    {
+      "name": "mask_kept_count_ocrbench_ocr0804_fastv",
+      "ok": true,
+      "detail": "kept=186, expected=186"
+    },
+    {
+      "name": "mask_indices_in_grid_ocrbench_ocr0804_fastv",
+      "ok": true,
+      "detail": "n_indices=186, grid_size=784"
+    },
+    {
+      "name": "mask_ocrbench_ocr0804_post",
+      "ok": true,
+      "detail": "/media/disk2/YZX/research/vla/drafts/figures/qualitative_fig1/data/ocrbench_ocr0804/rbm_mask.npz"
+    },
+    {
+      "name": "mask_has_keep_ocrbench_ocr0804_post",
+      "ok": true,
+      "detail": "['keep', 'kept_indices', 'unit_grid_hw', 'n_units_full', 'n_units_kept']"
+    },
+    {
+      "name": "mask_has_grid_ocrbench_ocr0804_post",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "name": "mask_shape_match_ocrbench_ocr0804_post",
+      "ok": true,
+      "detail": "keep=(28, 28), grid=(28,28)"
+    },
+    {
+      "name": "mask_kept_count_ocrbench_ocr0804_post",
+      "ok": true,
+      "detail": "kept=186, expected=186"
+    },
+    {
+      "name": "mask_indices_in_grid_ocrbench_ocr0804_post",
+      "ok": true,
+      "detail": "n_indices=186, grid_size=784"
+    },
+    {
+      "name": "ptid_match_ocrbench_ocr0804",
+      "ok": true,
+      "detail": "ptids=[219, 219, 219]"
+    },
+    {
+      "name": "rbm_correct_ocrbench_ocr0804",
+      "ok": true,
+      "detail": "rbm correct=True"
+    },
+    {
+      "name": "two_wrong_baselines_ocrbench_ocr0804",
+      "ok": true,
+      "detail": "wrong baselines=2"
+    },
+    {
+      "name": "gt_present_ocrbench_ocr0804",
+      "ok": true,
+      "detail": "['OCTOBER 1999']"
+    },
+    {
+      "name": "answer_present_ocrbench_ocr0804_rbm",
+      "ok": true,
+      "detail": "answer='The value for \"CIRCULATION DATES\" is **OCTOBER 1999**.'"
+    },
+    {
+      "name": "answer_present_ocrbench_ocr0804_fastv",
+      "ok": true,
+      "detail": "answer='OCTOBER'"
+    },
+    {
+      "name": "answer_present_ocrbench_ocr0804_post",
+      "ok": true,
+      "detail": "answer='4/14/99'"
+    },
+    {
+      "name": "image_aspect_preserved_ocrbench_ocr0804",
+      "ok": true,
+      "detail": "size=(754,1000)"
+    },
+    {
+      "name": "pdf_exists",
+      "ok": true,
+      "detail": "/media/disk2/YZX/research/vla/drafts/figs/fig1.pdf"
+    },
+    {
+      "name": "png_exists",
+      "ok": true,
+      "detail": "/media/disk2/YZX/research/vla/drafts/figs/fig1.png"
+    },
+    {
+      "name": "pdf_nonblank",
+      "ok": true,
+      "detail": "size=1850111"
+    },
+    {
+      "name": "png_nonblank",
+      "ok": true,
+      "detail": "size=2500735"
+    },
+    {
+      "name": "pool_counts_present",
+      "ok": true,
+      "detail": "{'TextVQA_cascade_pre25_fst25_j7post_intersection': 24, 'DocVQA_cascade_pre25_fst25_j4dpost_intersection': 37, 'OCRBench_cascade_pre25_fst25_post25_intersection': 9}"
+    }
+  ],
+  "errors": [],
+  "warnings": []
+}

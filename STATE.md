@@ -19,4 +19,4 @@
 - 投稿前/claim 推翻/凭据/单次 >6 GPU·h 升级 user；GPU 单卡 A40 串行。
 - 双门 NO-GO 落地后方法维持 plain RBM；§6 引用待 user OK。
 - 任务书交付齐：experiments/cvpr2026_token_compression_audit.md（新颖性）+ deferred_rbm_gate.md（Stage A）+ rbm_ot_gate.md（Stage B）+ DECISIONS/STATE 更新；以 Code-Yan-ZX 身份 commit+push（无 AI 署名）。
-- Fig.1 拟改为 TextVQA+DocVQA+OCRBench 真实定性对比；OCR 已挖出 9 个严格三臂翻转（首选 ocr0804），本地仍缺原图/同样本多方法 mask，服务器闭环任务见 `drafts/figures/CLAUDE_CODE_PROMPT_FIG1_QUALITATIVE.md`。
+- Fig.1 改为 TextVQA+DocVQA+OCRBench 真实定性对比 → 服务器闭环完成（drafts/figures/qualitative_fig1/）：3 例（TextVQA 34863/DocVQA 52297/OCRBench ocr0804）ptid 一致（218/175/219），RBM 全对/FastV+Post-L2 全错；池 24/37/9；mask 仅 RBM 存（已注）；drafts/figs/fig1.{pdf,png} 已替换。

@@ -361,34 +361,39 @@ fixed:
     only in Table~\ref{tab:tab3}.
 \end{itemize}
 
-% FIG 1 --- measured-data method figure (Qwen3-VL-8B merger-input/output L2 on
-% one real image; wired from figs/fig1.pdf, no proxy).
+% FIG 1 --- real qualitative case-level comparison (Qwen3-VL-8B-Instruct, 3
+% examples x 3 methods; wired from figs/fig1.pdf, no proxy).
 \begin{figure*}[t]
   \centering
   \includegraphics[width=\textwidth]{figs/fig1.pdf}
-  \caption{The stage axis under iso-model / iso-token / iso-selector control,
-    rendered from \textbf{measured Qwen3-VL-8B features on a single real image}
-    (sample df7282e1; $N = 1144$ merge units, $\kappa = 25\%$ so $k = 286$
-    kept) --- not a schematic. The left column shows the shared visual input and
-    its ViT merge units; the two rows apply the \emph{same} query-blind L2
-    selector and the \emph{same} native merger, differing only in the tap point
-    of the score. \textbf{(a)}~RBM (ours): (1)~rank the merger-\emph{input}
-    $2\!\times\!2$-unit features by their measured L2; (2)~keep the top-$\kappa
-    N$ units; (3)~apply the unmodified native merger to the survivors only.
-    \textbf{(b)}~Post-merger control: (1)~merge all $N$ units; (2)~rank the
-    merger-\emph{output} features by the same L2; (3)~keep the top-$\kappa N$
-    merged tokens. In both rows, solid-bordered cells are kept, faded cells are
-    discarded, and blocky tiles are merged tokens; the overlaid cell intensity
-    is a per-arm min-max map of the measured L2 used only for visibility, while
-    the kept/discarded mask is the raw measured top-$k$ selection on this image,
-    and no attention or query signal is depicted (the FastV layer-2 variant is
-    intentionally excluded from this figure). Because the merger is per-unit,
-    the two rows feed the language model identical token counts and identical
-    bits for any shared kept unit; the figure visualizes why the \emph{ranking}
-    the merger rewrites --- not the forward path --- is the lever
-    (\S\ref{sec:mechanism}).}
+  \caption{\textbf{Selected cases where RBM preserves text that baselines miss.}
+    Three cases where \textbf{Qwen3-VL-8B-Instruct} under greedy decoding at
+    $\kappa = 25\%$ visual-token retention produces the correct answer under
+    our pre-merger RBM selector while at least two displayed baselines
+    (FastV, Post-L2) fail. Every row of an example is evaluated on the
+    \emph{identical} final visual-token count ($N_{\text{ptid}}$; 218, 175,
+    219 for the three rows). The red box marks the answer-bearing region in
+    the source image; the tinted blocks are the pre-merger RBM retained units
+    (FastV and Post-L2 retained-token indices were not stored in the source
+    runs, so the pre-merger mask is shown for visual reference only; the
+    contrast is in the \emph{answer}, not in the overlay). Answers are
+    generation-truncated (max\_tokens = 32, greedy). \emph{Top}: TextVQA
+    34863, "does it say happy birthday?" --- RBM~\checkmark, FastV/Post-L2
+    read the LED scoreboard as `no'. \emph{Middle}: DocVQA 52297, "What are
+    the dates for the conference?" --- RBM~\checkmark, FastV drops the day
+    to `July 1996', Post-L2 corrupts the year to `July 1972'. \emph{Bottom}:
+    OCRBench ocr0804, "value for CIRCULATION DATES?" --- RBM~\checkmark,
+    FastV drops the year, Post-L2 reads a different date. We do not claim
+    RBM is universally better; on text-dense workloads (TextVQA, DocVQA,
+    OCRBench) the pre-merger selector protects small/dense text that the
+    2$\times$2 merger would otherwise average into background, while on
+    object/scene workloads (e.g.\ GQA) post-merger selection can win. The
+    pool sizes from which these three cases were drawn (all constrained to
+    matched $\kappa$ and same-image pairing) are 24, 37, and 9 respectively
+    for TextVQA, DocVQA, and OCRBench.}
   \label{fig:fig1}
 \end{figure*}
+
 
 \textbf{Budget definition.} Retention $\kappa$ is defined over \emph{merge
 units} relative to each image's \textbf{own} full unit count, so two methods at
