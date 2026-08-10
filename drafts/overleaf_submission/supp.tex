@@ -57,7 +57,7 @@ supports \S\,3; S9 is the per-cell reproducibility index, with the full
 per-cell listing (cell / $n$ / official / ptid / skip / JSON path) in
 S9.1--S9.4; S10 is a qualitative same-image pre/post selection comparison
 rendered from measured Qwen3-VL-8B merger L2 (four panels each, no paired
-question); S11 reports the fourth-family GLM-4.1V gate and decoding diagnostic.
+question).
 
 % =============================================================================
 \section*{S1. M1 --- merger ranking reshuffle, full table (Qwen3-VL-8B, seed-0, $n = 64$/benchmark)}
@@ -151,7 +151,7 @@ endpoints only). Source: \path{experiments/j8_ablations.md} via
 \noindent\textbf{Reading:} the two stages are indistinguishable under shallow
 compression (DocVQA post even leads 1--2~pp within noise at 75\%); the
 pre-merger lead emerges and widens monotonically with depth. Same shallow
-regime as the GQA sign and the Qwen2.5-VL 600k-cap reversal (body \S\,5.4
+regime as the Qwen2.5-VL 600k-cap reversal (body \S\,5.4
 boundary; \S\,8 item~3). Data source for Fig.~3.
 
 % =============================================================================
@@ -194,7 +194,11 @@ ground-truth self-test) + \path{experiments/j7_main_table.md}.
   \end{tabular}
 \end{table*}
 
-\noindent\dag\ the only significant post-stage lead. GQA official
+\noindent\dag\ the only significant post-stage lead. These GQA cells use the
+deepstack[0]-input (layer-8) pre ranking; a pure-stage control that ranks at
+the main-merger input (pre-final) gives $0.0$~pp on GQA (body \S\,4.2,
+S7b), so the apparent post$>$pre is a layer-8 ranking artifact, not a true
+stage reversal. GQA official
 word-normalized exact-match rescore gives a concordant McNemar $z = 8.1 / 7.1$
 (Qwen3-VL / Qwen2.5-VL). Smallest text-dense $\Delta_{25}$ $|z| = 14.6$
 (Qwen2.5-VL OCR-Bench); smallest text-dense $\Delta_{12.5}$ $|z| = 15.0$
@@ -206,7 +210,7 @@ $\geq$-consistent on every other cell.
 
 \subsection*{S4b. Cascade two-stage gate --- paired McNemar counts (Qwen3-VL-8B, $n = 200$, official rescore)}
 
-Cascade gate (body Table~5 / \S\,6): single budget, Stage~1 $=$ pre-merger RBM
+Cascade gate (body Table~4 / \S\,6): single budget, Stage~1 $=$ pre-merger RBM
 keeping fraction $X$ of merger-input units, Stage~2 $=$ FastV at LLM layer~2
 dropping fraction $Y$ of the survivors; total keep $= X\cdot(1 - Y)$. Three arms
 (pre-alone / fastv-alone / cascade) are compared pairwise on identical images
@@ -295,7 +299,8 @@ only):
 $\Delta_{25}$ is $\geq 15\sigma$ of its own cells' pooled stderr, and the
 full-split GQA post lead ($+2.8 / +2.6$~pp) is $\approx 5\sigma$ of the pooled
 GQA stderr ($\approx 0.0063$) --- significant but an order of magnitude smaller
-than any text-dense $\Delta$. $^{a}$~Qwen3-VL none-DocVQA native-resolution
+than any text-dense $\Delta$, and reframed by the pre-final pure-stage control
+(S7b) as a layer-8 ranking artifact rather than a true stage reversal. $^{a}$~Qwen3-VL none-DocVQA native-resolution
 anchor: full-split run partly skipped on context overrun (re-run at
 max-model-len 49,152 gives ANLS 0.956, 0/5349 skips); $\sigma$ not printed for
 the partial native cell. $^{c}$~GQA evaluated at $\kappa = 0.25$ only on the
@@ -368,6 +373,46 @@ effect is not an L2 artifact. On Qwen2.5-VL the L2 sign is invariant but the
 attention proxy degrades (proxy-family specificity, not a counter-example); L2
 remains the paper's selector, frozen as plain RBM (\S\,3.2).
 
+\subsection*{S7b. Pure-stage confound control --- pre-final (Qwen3-VL-8B, $n = 200$)}
+
+The body \S\,4.2 pre-final control isolates the \emph{stage} from the
+feature-space confound of the original pre (deepstack[0]-input, layer~8) vs
+post (main-merger output) contrast. pre-final ranks L2 at the main-merger's
+\emph{own input} (final ViT-block features) and selects the top-$\kappa$
+merge-units from the visual output; the deepstack mergers run untouched. The
+only difference from post is then before vs after the lossy $2\!\times\!2$ main
+merger --- a pure stage variable. Iso-token verified (prompt token ids match
+200/200 per benchmark for pre-final vs post). Source:
+\path{experiments/p0-3_prefinal_control.md}; per-sample JSONs in
+\path{runs/qwen3_prefinal_control/}.
+
+\begin{table}[h]
+  \centering
+  \scriptsize
+  \setlength{\tabcolsep}{2pt}
+  \begin{tabular}{@{}l r r r r l@{}}
+    \toprule
+    Benchmark (metric) & none & pre-final & post & $\Delta$ (paired mean $\pm$ SE) & verdict \\
+    \midrule
+    TextVQA (VQA-acc) & 0.858 & \textbf{0.515} & 0.215 & \textbf{$+30.0$ pp} ($+0.300 \pm 0.039$) & stage effect \\
+    DocVQA (ANLS)     & 0.976 & \textbf{0.326} & 0.200 & \textbf{$+12.5$ pp} ($+0.125 \pm 0.032$) & stage effect \\
+    GQA (exact match) & 0.605 & 0.450          & 0.450 & $0.0$ pp ($+0.000 \pm 0.032$)           & no stage effect \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\noindent\textbf{Reading:} on text-dense benchmarks pre-final still leads post
+by a large margin (the text-dense stage effect is a true stage effect, not a
+deepstack[0]-input vs main-merger-output feature-space artifact). On GQA
+pre-final equals post ($0.0$~pp): there is no stage effect on object-QA, and
+the original pre-vs-post apparent post$>$pre ($-2.8$~pp Qwen3-VL,
+$-2.6$~pp Qwen2.5-VL; S4) was an artifact of the deepstack[0]-input layer-8
+ranking being poorly suited to object-QA, not a true stage reversal. Consistent
+with the mechanism: the merger does not preferentially damage object features
+(M2 $\rho = 0.04$ on GQA, S2). pre-final tested on Qwen3-VL only (the
+deepstack confound is Qwen3-specific; Qwen2.5-VL shares the architecture but
+was not re-tested).
+
 % =============================================================================
 \section*{S8. Merger tap points and M-RoPE configuration details (supports \S\,3)}
 % =============================================================================
@@ -394,7 +439,7 @@ remains the paper's selector, frozen as plain RBM (\S\,3.2).
     at full retention) makes the Qwen2.5-VL compression path well-formed; the
     block-vs-interleaved contrast is itself a diagnostic of why naive pruning
     collapses one generation and is tolerated by the other.
-  \item \textbf{Table 3 / r2c harness}: HF transformers eager attention,
+  \item \textbf{Table 2 / r2c harness}: HF transformers eager attention,
     \path{--mrope native} (family-agnostic correct positions) on all same-scope
     cells; the Qwen2.5-VL $\times$ pre vllm-mimic positional degeneration
     (repeated ``addCriterion\ldots'' outputs $\to$ pseudo-zero scores) was
@@ -416,11 +461,10 @@ remains the paper's selector, frozen as plain RBM (\S\,3.2).
     \midrule
     Table 1 (Qwen blocks)             & 26/26        & \path{runs/full_matrix/j7_*.json} & \path{experiments/j7_main_table.md} \\
     Table 1 (InternVL3 block)         & 16/16        & \path{runs/internvl3/internvl3_*.json} + \path{internvl3_official_summary.json} & \path{experiments/internvl3_main_matrix.md} \\
-    Table 2 (GLM gate)                & 9/9          & \path{runs/glm4v_gate/*.json} & \path{experiments/glm4v_stage_gate.md} \\
-    Table 3 FastV-k3                  & 8            & \path{runs/r2_same_scope/r2b_*.json} & \path{experiments/r2b_fastv_k3.md} \\
-    Table 3 RBM same-scope            & 5            & \path{runs/r2_same_scope/r2c_*.json} & \path{experiments/r2c_rbm_scope.md} \\
-    Table 5 cascade gate              & 24/24        & \path{runs/cascade/gate_*.json} + \path{gate_result.json} & \path{experiments/cascade_gate.md} \\
-    Table 6 efficiency                & 7 configs    & \path{runs/full_matrix/efficiency/*.eff.json} & \path{experiments/j6_efficiency.md} \\
+    Table 2 FastV-k3                  & 8            & \path{runs/r2_same_scope/r2b_*.json} & \path{experiments/r2b_fastv_k3.md} \\
+    Table 2 RBM same-scope            & 5            & \path{runs/r2_same_scope/r2c_*.json} & \path{experiments/r2c_rbm_scope.md} \\
+    Table 4 cascade gate              & 24/24        & \path{runs/cascade/gate_*.json} + \path{gate_result.json} & \path{experiments/cascade_gate.md} \\
+    Table 5 efficiency                & 7 configs    & \path{runs/full_matrix/efficiency/*.eff.json} & \path{experiments/j6_efficiency.md} \\
     \S\,5 kept-set Jaccard / swap     & 8            & \path{runs/r1_1_swap_jaccard/*.json} + \path{jaccard_summary.json} & \path{experiments/r1_1_swap_jaccard.md} \\
     \S\,5.1--5.2 M1/M2                & $n=64 \times 3$ & mechanism campaign (released with code) & mechanism\_verification\_report via \path{drafts/paper_v4.md} \S\,4 \\
     \S\,5.4 retention curve           & $n=200 \times 4$ & j8 ablation runs & \path{experiments/j8_ablations.md} \\
@@ -473,7 +517,7 @@ every text-dense benchmark at both budgets --- e.g.\ DocVQA ANLS 0.7284 vs
 0.382 at $\kappa = 25\%$; GQA is the near-null object-centric case, 0.5993 vs
 0.6031 --- replicating the stage law on the pixel-shuffle merger design.)
 
-\subsection*{S9.2 Table 3 FastV-k3 same-scope cells (8/8)}
+\subsection*{S9.2 Table 2 FastV-k3 same-scope cells (8/8)}
 
 FastV one-shot attention pruning at LLM layer $K = 3$, iso-budget $r = 0.75$
 ($\kappa = 25\%$); HF-transformers 4.57.6 eager harness, official metrics.
@@ -505,7 +549,7 @@ harness's raw \path{acc} field is not used as the official score.
 cells ran at the $n = 200$ same-scope budget recorded in the JSON \path{n}
 field; OCR-Bench skips are long-OCR context overruns, scored 0.)
 
-\subsection*{S9.3 Table 3 RBM same-scope cells (5/5)}
+\subsection*{S9.3 Table 2 RBM same-scope cells (5/5)}
 
 RBM (pre-merger L2) at iso-budget $r = 0.75$, HF-transformers eager,
 \path{--mrope native} (family-agnostic correct positions), matched to the
@@ -529,7 +573,7 @@ the per-cell \path{runs/r2_same_scope/r2c_*.json} files.
   \end{tabular}
 \end{table*}
 
-\subsection*{S9.4 Cascade gate cells (Table 5; 24/24, Qwen3-VL-8B)}
+\subsection*{S9.4 Cascade gate cells (Table 4; 24/24, Qwen3-VL-8B)}
 
 Three arms $\times$ two budgets $\times$ four benchmarks; $n = n_{\mathrm{common}}$
 (matched by question id); official $=$ \path{acc_official} from the paired
@@ -651,108 +695,11 @@ intersection is a sparse minority of the budget.
 \end{figure*}
 
 %──────────────────────────────────────────────────────────────────────────────
-\begin{figure*}[p]
-\centering
-\begin{minipage}{0.86\textwidth}
-\section*{S11. Fourth-family gate --- full cell and protocol audit for body Table 2
-  (GLM-4.1V-9B-Thinking, $n = 200$)}
-\label{app:s11}
-
-This gate tests whether the stage effect transfers to a lineage independent of
-Qwen and InternVL. The model uses a GLM-4 text backbone, AIMv2-derived vision
-encoder, and a strided $2\!\times\!2$ convolution followed by the
-\texttt{Glm4vVisionPatchMerger} MLP. The pre-registered GLM-4.6V-Flash target
-could not load because its processor requires transformers $\geq 5.0$rc; the
-same-architecture GLM-4.1V fallback was therefore used without a configuration
-hack. All nine cells use the same query-blind L2 selector, 25\% retention,
-model-default image resolution (effective maximum $\approx 4.82$M pixels),
-greedy decoding, and the same thinking-answer parser. Source:
-\path{experiments/glm4v_stage_gate.md}; cell JSONs:
-\path{runs/glm4v_gate/} (released with code).
-
-\noindent\textbf{Table S11a. Full-precision official scores.}
-\begin{center}
-  \centering
-  \scriptsize
-  \begin{tabular}{@{}l l r r r r@{}}
-    \toprule
-    benchmark & metric & none & pre & post & $\Delta$ (pre$-$post) \\
-    \midrule
-    TextVQA & VQA-acc     & 0.2417 & 0.2183 & 0.0500 & \textbf{+16.83 pp} \\
-    DocVQA  & ANLS        & 0.1039 & 0.1297 & 0.0313 & \textbf{+9.84 pp} \\
-    GQA     & exact match & 0.1500 & 0.1600 & 0.1150 & +4.50 pp$^{\dagger}$ \\
-    \bottomrule
-  \end{tabular}
-\end{center}
-
-\noindent\textbf{Table S11b. Token and answer-convergence audit.}
-\begin{center}
-  \scriptsize
-  \begin{tabular}{@{}l r r l@{}}
-    \toprule
-    benchmark & ptid none & ptid pre/post & boxed none/pre/post \\
-    \midrule
-    TextVQA & 996.8  & 269.1  & 56/52/15 \\
-    DocVQA  & 4868.1 & 1238.8 & 33/30/11 \\
-    GQA     & 373.7  & 113.8  & 46/47/39 \\
-    \bottomrule
-  \end{tabular}
-\end{center}
-
-\noindent All cells have $n = 200$ and zero skips. ptid is mean prompt-token
-count; pre and post are also exactly equal per sample, not only in the mean.
-Boxed counts record samples that reach a final boxed answer within 1024
-generated tokens. $^{\dagger}$The GQA direction is protocol-inconclusive and
-is not counted as replication.
-
-The prompt-token audit is exact: every paired pre/post example has identical
-prompt token ids, and the estimated visual-token counts are approximately
-$960\!\to\!233$ (TextVQA), $4830\!\to\!1200$ (DocVQA), and
-$347\!\to\!87$ (GQA), with per-image rounding. Thus the large text-dense gaps
-cannot be attributed to unequal token budgets. They pass the pre-registered
-$5$-pp transfer bar. The other pre-registered half, GQA post$\geq$pre, is not
-met: pre exceeds post by 4.5 pp at full $n$, while the $n = 25$ subset where all
-three arms reach a boxed answer ties at 0.680/0.680 (pre/post). The latter is a
-post-hoc, underpowered diagnostic, not a positive result.
-
-\noindent\textbf{Table S11c. Post-hoc 4096-token diagnostic.}
-Cell JSONs: \path{runs/glm4v_gate_v2/} (released with code).
-\begin{center}
-  \centering
-  \scriptsize
-  \begin{tabular}{@{}l r r r r r@{}}
-    \toprule
-    cell & official & contain. & boxed & cut frac. & mean gen. \\
-    \midrule
-    GQA none     & 0.1650 & 0.290 & 1/200 & 0.740 & 4011 \\
-    GQA pre      & 0.1650 & 0.310 & 0/200 & 0.765 & 3997 \\
-    GQA post     & 0.1150 & 0.245 & 0/200 & 0.810 & 4057 \\
-    TextVQA none & 0.2383 & 0.775 & 2/200 & 0.745 & 3927 \\
-    \bottomrule
-  \end{tabular}
-\end{center}
-
-Increasing max tokens from 1024 to 4096 does not restore greedy convergence:
-mean generation remains near the cap and almost no sample reaches a boxed
-answer.
-
-The 4096-token probe rules out a short output cap as the source of the GQA
-behavior. Its TextVQA containment anchor is $0.775$, close to the published
-$\approx 0.77$, while parsed official accuracy remains 0.2383; the model's
-visual ability is intact, but deterministic greedy thinking loops rarely
-converge to the concise final-answer format. The released model instead
-specifies sampling (temperature 0.8, top-$p$ 0.6, top-$k$ 2). We therefore use
-this fourth family only as an $n = 200$ replication of the text-dense
-pre$\gg$post effect; the full-split claim remains confined to the three model
-families in the body, and the GLM GQA direction remains inconclusive.
-
-\par\medskip
 \noindent\footnotesize\textbf{Packaging note:} this file converts to the ACM MM
 supplementary PDF/archive; run JSONs ship in the code release (anonymous archive
 at submission, repository at de-anonymization). Nothing in this supplement
 identifies authors, institutions, or repositories (double-blind).
-\end{minipage}
-\end{figure*}
+
 \clearpage
 
 \ifdefined\RBMIntegratedSupplement

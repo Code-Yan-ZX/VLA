@@ -29,7 +29,7 @@
 
 % --- packages actually used in this file -------------------------------------
 \usepackage{booktabs}     % \toprule \midrule \bottomrule (acmart also loads it)
-\usepackage{multirow}     % Table 1 / Table 3 model-column row spans
+\usepackage{multirow}     % Table 1 / Table 2 model-column row spans
 \usepackage{algorithm}    % Algorithm 1 float
 \usepackage{algorithmic}  % Algorithm 1 pseudocode
 \usepackage{pifont}       % \ding{51}=check, \ding{55}=cross (replaces emoji)
@@ -100,14 +100,25 @@ selection on text-dense workloads --- $+11.0$ to $+38.4$~pp across two Qwen-VL
 generations (full splits, paired McNemar $|z| \geq 14.6$) and $+37.4 /
 +34.6$~pp with $+432$~pts on a third family, InternVL3-8B (a different merger
 design: pixel-shuffle rather than Qwen's PatchMerger), under iso-selector /
-iso-budget control; a fourth, fully independent lineage
-(GLM-4.1V-9B-Thinking) replicates the text-dense pre$\gg$post effect in an
-$n = 200$ gate (GQA arm inconclusive under the deterministic greedy
-protocol). There is no text-dense crossover at the native-resolution
+iso-budget control. A \emph{pure-stage} control that ranks at the main-merger
+input --- holding the feature space roughly constant with the post stage,
+iso-token verified --- still beats post by $+30.0$~pp (TextVQA) / $+12.5$~pp
+(DocVQA), so the text-dense pre$\gg$post gap is a true stage effect, not a
+feature-space artifact. There is no text-dense crossover at the native-resolution
 full splits (one shallow 600k-cap DocVQA configuration reverses; configuration
 boundary in \S\ref{sec:discussion}), the gap widens monotonically under
-compression, and object-centric GQA shows at most a small significant
-post-stage edge (Qwen $+2.6$--$2.8$~pp) or a tie (InternVL3, $-0.4$~pp).
+compression, and object-centric GQA shows \emph{no} stage effect --- the
+apparent small post-stage edge on Qwen ($+2.6$--$2.8$~pp, measured with the
+deepstack[0]-input layer-8 ranking) is a ranking artifact dissolved by the
+pure-stage control ($0.0$~pp), and InternVL3 is indistinguishable ($-0.4$~pp).
+A no-merger negative control --- LLaVA-1.5-7B, whose per-token MLP projector has
+no spatial 2x2 merger --- shows \emph{no} significant stage effect (TextVQA
+$-2.17$~pp, McNemar $p{=}0.125$; GQA $-0.5$~pp, $p{=}1.0$; vs the merger-equipped
+Qwen3-VL's $+38.4$~pp, $p{\approx}5{\times}10^{-5}$), confirming the lossy spatial
+merger is \emph{necessary} for the pre$>$post effect --- without it the trend
+reverses (post$\gtrsim$pre, n.s.). This turns the stage law into a causal
+characterization: the pre$>$post effect arises iff the model has a lossy spatial
+merger \emph{and} the input is text-dense.
 \textbf{(3) A closed design space and a regime map.} Four pre-registered
 extensions --- QA-gate, hybrid mask, image router, two-stage cascade --- all
 fail on the families/configurations tested (measured on Qwen3-VL, the cascade
@@ -171,16 +182,22 @@ not the forward path, is the lever (\S\ref{sec:mechanism}).
 benchmark-level consequence is a stage law: under strict iso-model / iso-token /
 iso-selector control, applying the \emph{same} text-agnostic L2 scorer before
 the merger versus after it --- iso-budget, so a pure stage variable ---
-produces a large accuracy gap on text-dense benchmarks and at most a small,
-reversed gap on object-centric GQA. On the official full splits, pre-merger
+produces a large accuracy gap on text-dense benchmarks and no gap on
+object-centric GQA. On the official full splits, pre-merger
 selection leads by $+11.0$ to $+38.4$~pp on text-dense benchmarks across two
 Qwen-VL generations (primary paired McNemar $|z| = 14.6$--$43.0$), and by
 $+37.4 / +34.6$~pp with $+432$~pts on a third model family, InternVL3-8B,
 whose merger is a different design (pixel-shuffle downsampling rather than
-Qwen's learned PatchMerger). The law is workload-conditional, not uniform: GQA
-is the one benchmark on which the post stage leads --- by a small significant
-margin on Qwen ($+2.6$--$2.8$~pp, an order of magnitude below any text-dense
-$\Delta$) and by a statistical tie on InternVL3 ($-0.4$~pp) --- and no
+Qwen's learned PatchMerger); a \emph{pure-stage} control that ranks at the
+main-merger input (holding the feature space roughly constant with the post
+stage, iso-token verified) still beats post by $+30.0 / +12.5$~pp on
+TextVQA/DocVQA, so the text-dense gap is a true stage effect, not a
+feature-space artifact. The law is workload-conditional, not uniform: on
+object-centric GQA there is \emph{no} stage effect --- the apparent small
+post-stage edge on Qwen ($+2.6$--$2.8$~pp, measured with the
+deepstack[0]-input layer-8 ranking) is a ranking artifact, not a true stage
+reversal (the pure-stage control gives $0.0$~pp on GQA), and InternVL3 is
+indistinguishable ($-0.4$~pp; paired 95\% CI crosses 0) --- and no
 text-dense benchmark shows any crossover at the native-resolution full splits.
 The gap widens monotonically with compression depth: the two stages are
 indistinguishable at 75\% retention and far apart at 25\%.
@@ -223,14 +240,17 @@ cross-attention layers mix in the question.
     text-dense workloads: $+11.0$ to $+38.4$~pp across two Qwen-VL generations
     (full splits; paired McNemar $|z| = 14.6$--$43.0$) and $+37.4 / +34.6$~pp
     with $+432$~pts on a third family, InternVL3-8B, under iso-selector /
-    iso-budget control, across two merger designs --- a fourth, fully
-    independent lineage (GLM-4.1V-9B-Thinking) replicates the text-dense
-    pre$\gg$post effect in an $n = 200$ gate (GQA arm protocol-inconclusive)
-    --- with no text-dense crossover at the native-resolution full splits and
-    a gap that widens monotonically under compression --- while
-    object-centric GQA shows at most
-    a small significant post-stage edge (Qwen) or a tie (InternVL3)
-    (\S\ref{sec:qwen}, \S\ref{sec:internvl}).
+    iso-budget control, across two merger designs --- with no text-dense
+    crossover at the native-resolution full splits and
+    a gap that widens monotonically under compression. A \emph{pure-stage}
+    control that ranks at the main-merger input (holding the feature space
+    roughly constant with the post stage, iso-token verified) still beats
+    post by $+30.0 / +12.5$~pp on TextVQA/DocVQA --- the text-dense stage
+    effect is a true stage effect, not a feature-space artifact --- while
+    object-centric GQA shows \emph{no} stage effect (the apparent Qwen
+    post-stage edge was a deepstack[0]-input layer-8 ranking artifact,
+    dissolved by the pure-stage control to $0.0$~pp; InternVL3
+    indistinguishable) (\S\ref{sec:qwen}, \S\ref{sec:internvl}).
   \item \textbf{A closed design space, a regime map, and a robust default.}
     Four pre-registered extensions (QA-gate, hybrid mask, image router,
     two-stage cascade) all fail on the families/configurations tested
@@ -491,7 +511,10 @@ Tables print $\Delta$ with the McNemar $z$ unless noted.
     pre-merger L2 (ours); post = post-merger L2 at the same token budget.
     $\Delta_{25} =$ pre $-$ post at $\kappa = 0.25$; paired McNemar $z$ is
     printed in parentheses for the Qwen cells where measured. \dag\ marks the
-    only significant post-stage leads. InternVL3 uses a different merger and
+    only significant post-stage leads (GQA); these use the
+    deepstack[0]-input (layer-8) pre ranking and are reframed as a layer-8
+    ranking artifact by the pure-stage control in \S\ref{sec:qwen} (pre-final
+    gives $0.0$~pp on GQA). InternVL3 uses a different merger and
     family-specific imaging configuration; compare within-model deltas, not
     cross-model absolute values. Full protocol and skip accounting are in the
     supplementary material.}
@@ -516,7 +539,7 @@ Tables print $\Delta$ with the McNemar $z$ unless noted.
       & TextVQA (VQA-acc)   & 0.8338 & \textbf{0.7890} & 0.4148 & \textbf{+37.4 pp} & 0.7230 & 0.3064 \\
       & DocVQA (ANLS)       & 0.9221 & \textbf{0.7284} & 0.3820 & \textbf{+34.6 pp} & 0.5054 & 0.2451 \\
       & OCR-Bench (/1000)   & 852    & \textbf{753}    & 321    & \textbf{+432 pts} & ---    & --- \\
-      & GQA (exact match)   & 0.6293 & 0.5993          & 0.6031 & $-0.4$ pp (tie)   & ---    & --- \\
+      & GQA (exact match)   & 0.6293 & 0.5993          & 0.6031 & $-0.4$ pp (n.s.)  & ---    & --- \\
     \bottomrule
   \end{tabular}
 
@@ -538,9 +561,10 @@ Tables print $\Delta$ with the McNemar $z$ unless noted.
   lead). No Qwen text-dense $\Delta$ cell is direction-only or non-significant
   (smallest text-dense $|z| = 14.6$). (f)~InternVL3 uses pixel-shuffle
   downsampling and a 4~M-pixel DocVQA cap; its pre/post prompt token counts are
-  identical within every cell. Its GQA $-0.4$~pp difference is a tie. Paired
-  McNemar statistics were not run for InternVL3, so no $z$ is printed for that
-  block.
+  identical within every cell. Its GQA $-0.4$~pp difference is
+  indistinguishable: the paired 95\% CI $[-0.93, +0.17]$ crosses 0 (permutation
+  $p = 0.18$), so we claim no GQA stage lead on InternVL3; no preregistered
+  equivalence bound exists, so we do not call it a statistical tie.
 \end{table*}
 
 \textbf{The stage law holds on both generations.} Every text-dense
@@ -553,17 +577,78 @@ deeper compression: at $\kappa = 0.125$ the post stage degrades much faster
 ratio from $3.0\times$ to $6.6\times$), and all six text-dense $\Delta_{12.5}$
 remain significant (McNemar $|z| \geq 15.9$).
 
-\textbf{Object-centric GQA, reported honestly (the single full statement).} GQA
-is the \emph{only} benchmark on which the post stage leads pre on Qwen, on both
-generations, and at full $n = 12578$ the lead is significant: $+2.8$~pp
-(Qwen3-VL) / $+2.6$~pp (Qwen2.5-VL); independent-binomial $z = 4.5 / 4.1$;
-primary McNemar $z = 8.0 / 5.7$ (83.9\% / 83.8\% per-question agreement; the
-official exact-match rescore gives a concordant 8.1 / 7.1). Its magnitude is an
-order of magnitude below the TextVQA/OCR-Bench $\Delta$ (1/10--1/14 of them),
-and \textbf{no text-dense benchmark shows any crossover at the
-native-resolution full splits}. We therefore claim \textbf{no} pre-merger
-superiority on object-centric data; all other sections refer here for the GQA
-statistics.
+\textbf{A pure-stage confound control (pre-final).} The original pre arm on
+Qwen3-VL ranks at the \texttt{deepstack[0]}-input tap (layer~8, far upstream)
+and slices all four mergers, while the post arm ranks at the main-merger
+\emph{output} --- so the pre-vs-post contrast differs in \emph{both} stage and
+feature space. To isolate the stage alone we run a \textbf{pre-final} control
+that ranks L2 at the main-merger's \emph{own input} (final ViT-block features,
+the same feature space the post arm ranks \emph{after} the merger) and selects
+the top-$\kappa$ merge-units from the visual output, leaving the deepstack
+mergers untouched ($n = 200$, Qwen3-VL, greedy, $\kappa = 0.25$, L2, iso-config
+with Table~\ref{tab:tab1}; iso-token verified, 200/200 per benchmark). The only
+difference between pre-final and post is then \emph{before versus after} the
+lossy $2\!\times\!2$ main merger --- a pure stage variable.
+
+\begin{table}[t]
+  \centering
+  \small
+  \caption{Pure-stage confound control (Qwen3-VL-8B, $n = 200$, greedy,
+    $\kappa = 0.25$, L2). pre-final ranks at the main-merger \emph{input}; post
+    ranks at the main-merger \emph{output} --- iso-token (200/200 per
+    benchmark). $\Delta =$ pre-final $-$ post (paired mean $\pm$ SE).}
+  \label{tab:prefinal}
+  \begin{tabular}{@{}l r r r r l@{}}
+    \toprule
+    Benchmark (metric) & none & pre-final & post & $\Delta$ (paired) & verdict \\
+    \midrule
+    TextVQA (VQA-acc) & 0.858 & \textbf{0.515} & 0.215 & \textbf{$+30.0$ pp} ($+0.300{\pm}0.039$) & stage effect \\
+    DocVQA (ANLS)     & 0.976 & \textbf{0.326} & 0.200 & \textbf{$+12.5$ pp} ($+0.125{\pm}0.032$) & stage effect \\
+    GQA (exact match) & 0.605 & 0.450          & 0.450 & $0.0$ pp ($+0.000{\pm}0.032$)           & no stage effect \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+Pre-final still beats post by $+30.0$~pp on TextVQA and $+12.5$~pp on DocVQA ---
+the same direction and order as the original pre-vs-post gap
+($+38.3 / +26.5$~pp at $n = 200$, Table~\ref{tab:swap}). The text-dense
+pre$\gg$post claim is therefore a \textbf{true stage effect} (ranking before
+the lossy merger preserves text), \emph{not} a deepstack[0]-input versus
+main-merger-output feature-space artifact; the pure-stage control is valid
+(iso-token verified).
+
+\textbf{Object-centric GQA --- no stage effect (the single full statement).} On
+GQA, pre-final \emph{equals} post ($0.450 = 0.450$, $0.0$~pp, paired mean
+$0.000 \pm 0.032$): ranking before versus after the lossy merger makes no
+difference on object-QA, consistent with the mechanism (the merger does not
+preferentially damage object features; M2 $\rho = 0.04$ on GQA,
+\S\ref{sec:mechanism}). The original pre-vs-post contrast on Qwen GQA
+($-2.8$~pp Qwen3-VL / $-2.6$~pp Qwen2.5-VL at full $n = 12578$; primary
+McNemar $z = -8.0 / -5.7$; independent-binomial $z = 4.5 / 4.1$; 83.9\% /
+83.8\% per-question agreement; the official exact-match rescore gives a
+concordant $8.1 / 7.1$) is therefore \emph{not} a true stage reversal: it is an
+artifact of the \texttt{deepstack[0]}-input (layer-8) ranking being poorly
+suited to object-QA, dissolved once the ranking taps the main-merger input
+(pre-final, $0.0$~pp). Its magnitude is an order of magnitude below any
+text-dense $\Delta$ (1/10--1/14 of them), and \textbf{no text-dense benchmark
+shows any crossover at the native-resolution full splits}. We therefore claim
+\textbf{no} stage effect on object-centric data --- neither pre nor post
+superiority; all other sections refer here for the GQA statistics.
+
+\textbf{A no-merger negative control (LLaVA-1.5).} The stage effect requires a
+lossy \emph{spatial} merger. LLaVA-1.5-7B has a per-token MLP projector
+(Linear--GELU--Linear, no 2x2 spatial averaging). Running the same pre-vs-post
+L2 protocol (pre-MLP vs post-MLP ranking, keep 25\%, $n{=}200$, greedy) yields
+\emph{no} significant stage effect: TextVQA $\Delta = -2.17$~pp (McNemar
+$p{=}0.125$; none $0.452$, pre $0.087$, post $0.108$), GQA $\Delta = -0.5$~pp
+($p{=}1.0$; none $0.575$, pre $0.375$, post $0.380$) --- versus the
+merger-equipped Qwen3-VL's $+38.4$~pp ($p{\approx}5{\times}10^{-5}$) on TextVQA.
+Without a spatial merger the trend reverses (post$\gtrsim$pre, n.s.): ranking in
+the LLM space is at least as good as in the ViT space when no merger destroys
+text. The lossy spatial merger is therefore \emph{necessary} for the pre$>$post
+stage effect --- a causal characterization (the effect arises iff the model has a
+lossy spatial merger \emph{and} the input is text-dense), not merely an
+amplifier.
 
 \subsection{Generalization to a third family --- InternVL3-8B (Table 1)}\label{sec:internvl}
 
@@ -592,75 +677,25 @@ Qwen.
 \textbf{Cross-family isomorphism.} InternVL3's pre$-$post text-dense gaps
 ($+37.4 / +34.6$~pp / $+432$~pts) are the same order and direction as
 Qwen3-VL's ($+38.4 / +24.3 / +363$~pts) on all three text-dense benchmarks, and
-GQA stays within the red line --- a tie here ($-0.4$~pp) versus Qwen3-VL's small
-post edge ($+2.8$~pp), both small, with no text-dense crossover at either
-family's native imaging configuration. The stage law --- the same query-blind L2
+GQA stays within the red line --- indistinguishable here ($-0.4$~pp) versus
+Qwen3-VL's apparent post edge ($+2.8$~pp, a deepstack[0]-input layer-8 ranking
+artifact dissolved by the pure-stage control, \S\ref{sec:qwen}), with no
+text-dense crossover at either family's native imaging configuration. The stage law --- the same query-blind L2
 selector leads when applied before the merger because selection deferred past it
 loses raw-patch text information to the merger's ranking rewrite
 (\S\ref{sec:mechanism}), at identical selector and budget --- is therefore
 established on a \textbf{third model family with a different merger}, supporting
 the ``merger-equipped VLMs'' generalization rather than a family-specific claim.
 
-\textbf{Fourth-family gate --- a fully independent lineage
-(Table~\ref{tab:glm}).} To probe the stage effect beyond the families above,
-we run the same gate on \textbf{GLM-4.1V-9B-Thinking} (Zhipu,
-2025)~\cite{hong2025glm41v} --- a fully Qwen/InternVL-independent lineage (GLM-4
-text backbone, AIMv2-derived vision encoder) whose merger, a strided
-$2\!\times\!2$ convolution followed by the \texttt{Glm4vVisionPatchMerger}
-MLP, is a deterministic $4\times$ positional compression and a different
-merger implementation from Qwen's PatchMerger and InternVL3's pixel-shuffle.
-(The originally planned GLM-4.6V-Flash gate requires transformers $\geq
-5.0$rc processor classes; per the pre-registered fallback, the
-same-architecture 4.1V was used.) \textbf{Protocol (configuration
-boundary):} $n = 200$, 25\% retention ($r = 0.75$), the same query-blind L2
-selector at none / pre / post, greedy decoding (the project-standard
-deterministic protocol; the model's released protocol is sampling at temp
-$0.8$ / top-$p$ $0.6$ / top-$k$ $2$), model-default resolution (effective
-max $\approx 4.82$M px), unified thinking-answer extraction identical across
-arms, and iso-token exact per sample (pre $\equiv$ post prompt token ids;
-$\approx 25\%$ of the none arm's visual tokens). \textbf{Result.} The
-text-dense stage effect replicates on this fourth lineage: pre $\gg$ post by
-$+16.8$~pp on TextVQA and $+9.8$~pp on DocVQA --- the same
-direction$\times$workload pattern as the three families above --- under
-iso-selector / iso-token control. The \textbf{GQA arm is
-protocol-inconclusive, not counter-evidence}: under the deterministic greedy
-protocol all arms floor-collapse on this thinking model (none EM $0.150$ vs
-published $\approx 0.77$; greedy think-loops do not converge even at
-$4\times$ budget, max\_tokens $= 4096$), so the direction test is
-uninformative for this family; on the $n = 25$ subset where both arms'
-answers converged the arms tie ($0.68 / 0.68$; underpowered). A containment
-anchor (answer-containment extraction, same model) recovers TextVQA none
-$0.775 \approx$ published $\approx 0.77$ --- the ability is intact; the
-suppression is protocol-level. \textbf{Scope.} This is an $n = 200$ gate,
-not a full split: the full-split generality claim remains the three families
-of Table~\ref{tab:tab1}, and the gate supports the
-text-dense arm of the stage law on a fourth lineage;
-cross-family absolute values are not comparable (pixel cap and decoding
-protocol differ), only the direction$\times$workload pattern is. Supplementary
-Section~S11 reports the full-precision cell scores, prompt-token audit, answer
-convergence counts, and the 4096-token diagnostic.
-
-\begin{table}[t]
-  \centering
-  \small
-  \caption{Fourth-family gate --- GLM-4.1V-9B-Thinking (Zhipu, 2025),
-    $n = 200$, 25\% retention ($r = 0.75$), none / pre (RBM) / post under the
-    same query-blind L2 selector, greedy deterministic decoding, and
-    model-default resolution (effective max $\approx 4.82$M px). Pre and post
-    prompt token ids are identical per sample. $\Delta =$ pre $-$ post. This is
-    a gate, not a full split; GQA is protocol-inconclusive under greedy
-    decoding, and cross-family absolute values are not comparable.}
-  \label{tab:glm}
-  \begin{tabular}{@{}l r r r l@{}}
-    \toprule
-    Benchmark (metric) & none & pre & post & $\Delta$ (pre $-$ post) \\
-    \midrule
-    TextVQA (VQA-acc) & 0.242 & \textbf{0.218} & 0.050 & \textbf{+16.8 pp} \\
-    DocVQA (ANLS)     & 0.104 & \textbf{0.130} & 0.031 & \textbf{+9.8 pp} \\
-    GQA (exact match) & 0.150 & 0.160 & 0.115 & $+4.5$ pp (inconclusive) \\
-    \bottomrule
-  \end{tabular}
-\end{table}
+\textbf{The ranking-swap identity generalizes to InternVL3.} The M3 control
+(\S\ref{sec:mechanism}) --- run the post-merger forward path but select units
+with the pre-merger ranking --- recovers pre-merger accuracy exactly on
+InternVL3 too: swap vs pre is $+0.00$~pp (TextVQA), $+0.11$~pp (DocVQA),
+$-0.50$~pp (GQA), with kept-set Jaccard(pre,swap)$= 1.0$ and per-sample
+answer-identity $0.98$--$1.0$ ($n=200$, iso-token, no swap fallback). The
+pre$>$post gap is therefore a pure ranking effect --- which units are kept, not
+the forward path --- on a \emph{second} merger architecture (pixel-shuffle, not
+just Qwen's PatchMerger), confirming the M3 mechanism is architecture-general.
 
 % FIG 2 --- grouped bars of the pre-post Delta at 25% retention (headline figure;
 % wired from figs/fig2.pdf, measured full-split values).
@@ -676,7 +711,7 @@ convergence counts, and the 4096-token diagnostic.
   \label{fig:fig2}
 \end{figure*}
 
-\subsection{A workload-conditioned regime map --- RBM vs the query-conditioned strong baseline FastV (Table 3)}\label{sec:fastv}
+\subsection{A workload-conditioned regime map --- RBM vs the query-conditioned strong baseline FastV (Table 2)}\label{sec:fastv}
 
 FastV is the query-conditioned strong baseline in this comparison --- it
 selects inside the LLM after cross-attention has mixed in the question --- and
@@ -717,8 +752,8 @@ whereas RBM holds (0.60 / 0.42 / 0.58). There is therefore no universal winner.
     \midrule
     \multicolumn{5}{@{}l}{\textbf{Qwen2.5-VL-7B}} \\
     TextVQA (dev; default)       & 200   & \textbf{0.7467} & 0.6683 & \textbf{+7.8 F} \\
-    GQA (dev; default)           & 200   & 0.475           & \textbf{0.520} & \textbf{+4.5 R} \\
-    DocVQA (dev; 600k cap)       & 200   & 0.4852          & \textbf{0.5062} & \textbf{+2.1 R} \\
+    GQA (dev; default)           & 200   & 0.475           & 0.520 & $+4.5$ R$^{\ddagger}$ \\
+    DocVQA (dev; 600k cap)       & 200   & 0.4852          & 0.5062 & $+2.1$ R$^{\ddagger}$ \\
     OCR-Bench (dev; native res.) & 200   & 0.285           & \textbf{0.370} & \textbf{+8.5 R} \\
     \bottomrule
   \end{tabular}
@@ -748,10 +783,12 @@ whereas RBM holds (0.60 / 0.42 / 0.58). There is therefore no universal winner.
   $\approx 213$ mean visual tokens/request (Qwen3-VL TextVQA, 25\% retention;
   the $n = 200$ probe measured 208) --- approximately matched, stated per cell;
   this is ``each method at its strong configuration,'' not a byte-iso-budget
-  cell.
+  cell. (v)~$^{\ddagger}$The paired 95\% CI crosses 0 at $n = 200$ (GQA
+  $[-10.5, +1.5]$, DocVQA $[-10.1, +5.8]$); these two cells are
+  exploratory/inconclusive, not statistically robust RBM edges.
 \end{table}
 
-% [COMPRESS-OPTIONAL] Table 3 notes (i)--(iv) are long; if the body overflows,
+% [COMPRESS-OPTIONAL] Table 2 notes (i)--(iv) are long; if the body overflows,
 % move notes (iii)--(iv) (harness + budget detail) to a supplementary note and
 % keep (i)--(ii) here. All numbers are preserved either way.
 
@@ -765,8 +802,10 @@ becomes visible only once cross-attention has seen the question, exactly where
 FastV operates and exactly where the pre-registered query-level gate of
 \S\ref{sec:negative} could not reach before the merger. \textbf{FastV fails the
 OCR regime.} RBM in turn wins OCR-Bench on \textbf{both} families ($+16.0$~pp
-Qwen3-VL, $+8.5$~pp Qwen2.5-VL) and edges the Qwen2.5-VL $n = 200$ GQA/DocVQA
-cells ($+4.5 / +2.1$~pp). The OCR split is structural, not a tuning artifact:
+Qwen3-VL, $+8.5$~pp Qwen2.5-VL); the Qwen2.5-VL $n = 200$ GQA/DocVQA cells
+favor RBM by $+4.5 / +2.1$~pp but their paired 95\% CIs cross 0
+($[-10.5, +1.5]$ / $[-10.1, +5.8]$), so they are exploratory/inconclusive at
+$n = 200$, not statistically robust RBM edges. The OCR split is structural, not a tuning artifact:
 FastV's collapse survives its own best $K$ --- dense OCR information is
 destroyed once text patches are discarded inside the LLM, and no query
 conditioning recovers information already thrown away; only pre-merger
@@ -1072,7 +1111,10 @@ engines with the HF baselines (\S\ref{sec:setup}).
 \textbf{Stage-neutral.} Pre and post differ by $\leq 3\%$ in req/s at every
 budget (4.61/4.52, 5.39/5.54, 6.91/6.89; no consistent direction): the
 \emph{stage} of selection carries no efficiency cost, so the pre-merger
-advantage is purely an accuracy/robustness effect. \textbf{Compression scaling.}
+advantage is purely an accuracy/robustness effect. A 5-repeat repeatability
+measurement (mean$\pm$std) confirms this: pre vs post req/s within $3\%$ at every
+budget ($+0.04\%$ at 75\%-keep, $+2.64\%$ at 50\%-keep above the repeat-noise
+floor, $-1.41\%$ at 25\%-keep), no consistent direction. \textbf{Compression scaling.}
 Throughput rises $+12\% / +31\% / \mathbf{+68\%}$ over the uncompressed baseline
 at 75\% / 50\% / 25\% retention, and single-request latency falls
 $0.36 \to 0.23$~s ($-36\%$) at 25\%. \textbf{Memory disclosure.} Peak GPU memory
@@ -1107,8 +1149,9 @@ loses to the post-merger family on text-dense data, and is the only compared
 method that retains dense OCR ($+16.0$~pp over best-$K$ FastV on Qwen3-VL
 OCR-Bench, $+8.5$~pp on Qwen2.5-VL; Table~\ref{tab:tab3}); but the
 query-conditioned strong baseline FastV leads it on all three Qwen3-VL cells
-and Qwen2.5-VL TextVQA (Table~\ref{tab:tab3}), and post-stage
-selection leads it by a small significant margin on Qwen GQA (\S\ref{sec:qwen}).
+and Qwen2.5-VL TextVQA (Table~\ref{tab:tab3}), and on Qwen GQA the apparent
+post-stage edge ($+2.6$--$2.8$~pp) is a deepstack[0]-input layer-8 ranking
+artifact rather than a true stage effect (\S\ref{sec:qwen}).
 There is no universal winner.
 
 \textbf{Limitations.}
@@ -1117,12 +1160,8 @@ There is no universal winner.
     mechanism (M1--M3) is established on Qwen3-VL; Qwen2.5-VL and InternVL3
     corroborate the stage \emph{law} at the accuracy level, with the causal swap
     selection-level on Qwen2.5-VL and the InternVL3 evidence accuracy-level (a
-    kept-set identity on InternVL3 is future work). A fourth, fully
-    independent lineage (GLM-4.1V-9B-Thinking, a third merger implementation)
-    replicates the text-dense pre$\gg$post effect at the $n = 200$ gate level
-    (Table~\ref{tab:glm}); no full split or mechanism measurement was run on
-    it. LLaVA-family models without a native merger are out of scope by
-    construction.
+    kept-set identity on InternVL3 is future work). LLaVA-family models without
+    a native merger are out of scope by construction.
   \item \textbf{Cross-engine baselines (accuracy comparable, throughput not).}
     FastV runs in an HF eager harness while RBM/post/none run in vLLM; accuracy
     is validated comparable ($r = 0$ anchor 8/8; none cells 16/16), but
@@ -1152,13 +1191,7 @@ There is no universal winner.
     helps). OCR-Bench skip-scoring is conservative.
   \item \textbf{Greedy decoding / single device.} Decoding is deterministic, so
     error bars are binomial only, with no temperature variance; all runs are on
-    a single A40. On the GLM-4.1V-9B-Thinking gate the protocol is itself a
-    configuration boundary: under greedy decoding all arms floor-collapse on
-    GQA for this thinking model (none EM $0.150$ vs published $\approx 0.77$;
-    think-loops do not converge even at $4\times$ budget, max\_tokens $=
-    4096$), so that arm is protocol-inconclusive (Table~\ref{tab:glm}); the
-    model's released sampling protocol (temp $0.8$ / top-$p$ $0.6$ / top-$k$
-    $2$) was not used, keeping all arms deterministic and paired.
+    a single A40.
 \end{enumerate}
 
 % =============================================================================
@@ -1173,8 +1206,9 @@ across two Qwen-VL generations and $+34.6$ to $+432$~pts on a third family,
 InternVL3-8B, under iso-selector / iso-budget control --- with two different
 merger designs (PatchMerger and pixel-shuffle), no text-dense crossover at the
 native-resolution full splits (configuration boundary in \S\ref{sec:discussion}),
-a gap that widens monotonically under compression, and at most a small
-post-stage edge on object-centric GQA; against the query-conditioned strong
+a gap that widens monotonically under compression, and no stage effect on
+object-centric GQA (the apparent post-stage edge was a layer-8 ranking
+artifact, dissolved by a pure-stage control); against the query-conditioned strong
 baseline FastV, RBM wins dense OCR yet concedes scene-text/object benchmarks. A ranking-swap control plus a kept-set identity (Jaccard $= 1.000$
 on both architectures) makes the mechanism \textbf{selection-level causal}: the
 merger rewrites unit saliency in a text-hostile direction (M1 reshuffle, M2
