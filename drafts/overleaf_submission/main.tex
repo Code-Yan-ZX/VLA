@@ -361,36 +361,11 @@ fixed:
     only in Table~\ref{tab:tab3}.
 \end{itemize}
 
-% FIG 1 --- real qualitative case-level comparison (Qwen3-VL-8B-Instruct, 3
-% examples x 3 methods; wired from figs/fig1.pdf, no proxy).
-\begin{figure*}[t]
+% FIG 1 --- frontispiece: one OCRBench example, three zones, 7.0x3.6 inches
+egin{figure*}[t]
   \centering
-  \includegraphics[width=\textwidth]{figs/fig1.pdf}
-  \caption{\textbf{Selected cases where RBM preserves text that baselines miss.}
-    Three cases where \textbf{Qwen3-VL-8B-Instruct} under greedy decoding at
-    $\kappa = 25\%$ visual-token retention produces the correct answer under
-    our pre-merger RBM selector while at least two displayed baselines
-    (FastV, Post-L2) fail. Every row of an example is evaluated on the
-    \emph{identical} final visual-token count ($N_{\text{ptid}}$; 218, 175,
-    219 for the three rows). The red box marks the answer-bearing region in
-    the source image; the tinted blocks are the pre-merger RBM retained units
-    (FastV and Post-L2 retained-token indices were not stored in the source
-    runs, so the pre-merger mask is shown for visual reference only; the
-    contrast is in the \emph{answer}, not in the overlay). Answers are
-    generation-truncated (max\_tokens = 32, greedy). \emph{Top}: TextVQA
-    34863, "does it say happy birthday?" --- RBM~\checkmark, FastV/Post-L2
-    read the LED scoreboard as `no'. \emph{Middle}: DocVQA 52297, "What are
-    the dates for the conference?" --- RBM~\checkmark, FastV drops the day
-    to `July 1996', Post-L2 corrupts the year to `July 1972'. \emph{Bottom}:
-    OCRBench ocr0804, "value for CIRCULATION DATES?" --- RBM~\checkmark,
-    FastV drops the year, Post-L2 reads a different date. We do not claim
-    RBM is universally better; on text-dense workloads (TextVQA, DocVQA,
-    OCRBench) the pre-merger selector protects small/dense text that the
-    2$\times$2 merger would otherwise average into background, while on
-    object/scene workloads (e.g.\ GQA) post-merger selection can win. The
-    pool sizes from which these three cases were drawn (all constrained to
-    matched $\kappa$ and same-image pairing) are 24, 37, and 9 respectively
-    for TextVQA, DocVQA, and OCRBench.}
+  \includegraphics[width=	extwidth]{figs/fig1.pdf}
+  \caption{	extbf{Rank before the native merger preserves answer-bearing text that later selection can no longer recover.} A single OCRBench example (	exttt{ocr0422}, airport information board; Q: \emph{which counter is boarding?}; GT: 	exttt{A105-108}) under Qwen3-VL-8B-Instruct, greedy decoding, 25\% final visual-token retention; all three arms share the identical final token count of 69. \emph{Input} (left): the real image with one red evidence box around the 	exttt{A105-108 \dots boarding} region. \emph{Where to rank} (middle): the controlled stage contrast --- 	extbf{RBM (ours)} ranks the raw 2$	imes units \emph{before} the native merger, then keeps 25\%, then runs the unmodified native merger (amber); 	extbf{Post-L2} runs the native merger first, then ranks the merged tokens, then keeps 25\% (blue). The only emphasised phrase is \emph{rank before information is mixed}. \emph{Evidence} (right): two identically cropped evidence zooms with the method's real retained-token mask overlaid as square pixel blocks; RBM reads 	exttt{A105-108} and is marked Correct; Post-L2 cannot recover the answer and is marked Incorrect. 	extbf{FastV-k3} appears only as one compact third line: 	exttt{no counter boarding} --- Incorrect. Ground truth is printed once: 	exttt{A105-108}. Footer: 	exttt{25\% retained \,|\, identical final token count: 69} plus the small context anchor 	exttt{OCRBench: RBM +16.0 pp vs FastV-k3}. The retained-token masks for Post-L2 and FastV-k3 were not stored in the source runs, so the pre-merger RBM mask is shown for visual reference in all three evidence rows; the contrast is in the \emph{answer}, not in the overlay. The example was selected from the 9 strict three-arm flips in 	exttt{drafts/figures/camera\_ready/contact\_sheet\_manifest.json} where RBM is correct and both FastV-k3 and Post-L2 are wrong. We do not claim RBM is universally better; it preserves text on text-dense workloads while FastV remains stronger on several TextVQA/DocVQA settings.}
   \label{fig:fig1}
 \end{figure*}
 

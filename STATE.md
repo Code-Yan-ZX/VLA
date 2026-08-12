@@ -19,5 +19,5 @@
 - 投稿前/claim 推翻/凭据/单次 >6 GPU·h 升级 user；GPU 单卡 A40 串行。
 - 双门 NO-GO 落地后方法维持 plain RBM；§6 引用待 user OK。
 - 任务书交付齐：experiments/cvpr2026_token_compression_audit.md（新颖性）+ deferred_rbm_gate.md（Stage A）+ rbm_ot_gate.md（Stage B）+ DECISIONS/STATE 更新；以 Code-Yan-ZX 身份 commit+push（无 AI 署名）。
-- Fig.1 改为 TextVQA+DocVQA+OCRBench 真实定性对比 → 服务器闭环完成（drafts/figures/qualitative_fig1/）：3 例（TextVQA 34863/DocVQA 52297/OCRBench ocr0804）ptid 一致（218/175/219），RBM 全对/FastV+Post-L2 全错；池 24/37/9；mask 仅 RBM 存（已注）；drafts/figs/fig1.{pdf,png} 已替换。
+- Fig.1 改为 frontispiece：单例 OCRBench ocr0422（机场信息牌，GT A105-108，ptid=69），3 区域（Input/Where to rank/Evidence），7.0×3.6 inch；候选 a_balanced/b_visual/c_minimal 渲染于 drafts/figures/frontispiece_fig1/candidates/；选 b_visual 为终版；validator 20/20 门过；旧版备份为 previous_pipeline_fig1.pdf；overleaf caption 重写、§6 不宣通用 SOTA。
 - User 2026-08-12 否决三例 contact-sheet 作为首页图；改为单案例旗舰图：沿用原 Overleaf pipeline 流向/配色，以 OCRBench ocr0422（备选 ocr0804）串起 input→rank stage→真实局部 mask/答案；缺 FastV/Post mask 必须单例补捕获，禁复用 RBM mask。任务书见 `drafts/figures/CLAUDE_CODE_PROMPT_FIG1_QUALITATIVE.md`。

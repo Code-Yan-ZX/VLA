@@ -1,0 +1,108 @@
+{
+  "n_checks": 20,
+  "n_passed": 20,
+  "n_failed": 0,
+  "checks": [
+    {
+      "name": "manifest_exists",
+      "ok": true,
+      "detail": "/media/disk2/YZX/research/vla/drafts/figures/frontispiece_fig1/data/manifest.json"
+    },
+    {
+      "name": "source_image_exists",
+      "ok": true,
+      "detail": "/media/disk2/YZX/research/vla/drafts/figures/frontispiece_fig1/data/ocr0422_source.jpg"
+    },
+    {
+      "name": "mask_exists",
+      "ok": true,
+      "detail": "/media/disk2/YZX/research/vla/drafts/figures/frontispiece_fig1/data/rbm_mask.npz"
+    },
+    {
+      "name": "mask_has_keep",
+      "ok": true,
+      "detail": "['keep', 'kept_indices', 'unit_grid_hw', 'n_units_full', 'n_units_kept']"
+    },
+    {
+      "name": "mask_shape_match",
+      "ok": true,
+      "detail": "keep=(16, 16), expected=(16,16), unit_grid=(13,16)"
+    },
+    {
+      "name": "mask_kept_count",
+      "ok": true,
+      "detail": "kept=54, expected=54 (full=216)"
+    },
+    {
+      "name": "ptid_match",
+      "ok": true,
+      "detail": "ptids=[69, 69, 69]"
+    },
+    {
+      "name": "rbm_correct",
+      "ok": true,
+      "detail": "rbm correct=True"
+    },
+    {
+      "name": "two_wrong_baselines",
+      "ok": true,
+      "detail": "wrong=2"
+    },
+    {
+      "name": "gt_present",
+      "ok": true,
+      "detail": "['A105-108']"
+    },
+    {
+      "name": "answer_present_rbm",
+      "ok": true,
+      "detail": "answer='Based on the information displayed on th'"
+    },
+    {
+      "name": "answer_present_post",
+      "ok": true,
+      "detail": "answer='Based on the information visible in the '"
+    },
+    {
+      "name": "answer_present_fastv",
+      "ok": true,
+      "detail": "answer='Based on the information in the image, *'"
+    },
+    {
+      "name": "evidence_box_in_bounds",
+      "ok": true,
+      "detail": "ev=[59, 111, 531, 259], image=(591,370)"
+    },
+    {
+      "name": "evidence_shorter_side_80px",
+      "ok": true,
+      "detail": "shorter=148"
+    },
+    {
+      "name": "pdf_exists",
+      "ok": true,
+      "detail": "/media/disk2/YZX/research/vla/drafts/figs/fig1.pdf"
+    },
+    {
+      "name": "png_exists",
+      "ok": true,
+      "detail": "/media/disk2/YZX/research/vla/drafts/figs/fig1.png"
+    },
+    {
+      "name": "pdf_nonblank",
+      "ok": true,
+      "detail": "size=560089"
+    },
+    {
+      "name": "png_nonblank",
+      "ok": true,
+      "detail": "size=677802"
+    },
+    {
+      "name": "provenance_exists",
+      "ok": true,
+      "detail": ""
+    }
+  ],
+  "errors": []
+}
