@@ -28,22 +28,33 @@ with mp.open() as f:
 img_path = DATA_DIR / M["image"]
 check("source_image_exists", img_path.exists(), str(img_path))
 
-# 2. mask exists
-mask_path = DATA_DIR / "rbm_mask.npz"
-check("mask_exists", mask_path.exists(), str(mask_path))
-if mask_path.exists():
-    npz = np.load(mask_path)
-    check("mask_has_keep", "keep" in npz.files, str(npz.files))
-    gw, gh = int(npz["unit_grid_hw"][0]), int(npz["unit_grid_hw"][1])
+# 2. per-method masks exist and are distinct (no mask reuse across methods)
+masks_loaded = {}
+for m in M["methods"]:
+    p = DATA_DIR / m["mask"]
+    check(f"mask_exists_{m['key']}", p.exists(), str(p))
+    if not p.exists():
+        continue
+    npz = np.load(p)
+    check(f"mask_has_keep_{m['key']}", "keep" in npz.files, str(npz.files))
     side_dim = int(np.sqrt(npz["keep"].size))
-    # keep is reshaped to (side, side) square grid for rendering
-    check("mask_shape_match", npz["keep"].shape == (side_dim, side_dim),
-          f"keep={npz['keep'].shape}, expected=({side_dim},{side_dim}), unit_grid=({gw},{gh})")
+    check(f"mask_shape_match_{m['key']}",
+          npz["keep"].shape == (side_dim, side_dim),
+          f"keep={npz['keep'].shape}, expected=({side_dim},{side_dim})")
     n_kept = int(npz["keep"].sum())
     n_full = int(npz["n_units_full"])
     n_expected = round(n_full * M["keep_ratio"])
-    check("mask_kept_count", n_kept == n_expected,
+    check(f"mask_kept_count_{m['key']}", n_kept == n_expected,
           f"kept={n_kept}, expected={n_expected} (full={n_full})")
+    masks_loaded[m["key"]] = npz["keep"]
+
+# 2b. methods must NOT all share the same mask
+if len(masks_loaded) >= 2:
+    keys = list(masks_loaded.keys())
+    all_same = all(np.array_equal(masks_loaded[keys[0]], masks_loaded[k])
+                   for k in keys[1:])
+    check("masks_are_method_specific", not all_same,
+          "two or more methods share an identical mask (reused)")
 
 # 3. all methods same ptid
 ptids = [m["ptid"] for m in M["methods"]]

@@ -1,0 +1,32 @@
+{
+  "model": "Qwen/Qwen3-VL-8B-Instruct",
+  "decoding": "greedy, max_tokens=32",
+  "seed": "default (0)",
+  "keep_ratio": 0.25,
+  "processor": "Qwen3-VL native (2x2 merger)",
+  "package_versions": {
+    "vllm": "0.19.0"
+  },
+  "data_sources": {
+    "pre_RBM": "runs/cascade/gate_pre25_ocrbench.json (pre-merger L2 ranking, kept_per_image recorded in source run)",
+    "post_L2": "scripts/capture_frontispiece_masks.py --mode post --r-post 0.25 (re-captured 2026-08-12: kept_per_image was not stored in the original gate_post25_ocrbench.json run; this single-sample re-run verified ptid=69, answer, and OCRBench correctness are bit-identical to the source)",
+    "fastv_k3": "scripts/capture_frontispiece_masks.py --mode fastv --r 0.75 --fastv-k 3 (re-captured 2026-08-12: kept indices were not stored in the original locked_fst3_ocrbench_n200.json run; this single-sample re-run verified ptid=69 and OCRBench correctness match the source)"
+  },
+  "answers": {
+    "RBM": "Based on the information displayed on the sign in the image, the counter that is currently **boarding** is **A105-108**.",
+    "Post-L2": "Based on the information visible in the image, we can determine which counter is boarding by examining the display.\n\nThe image shows a section of an airport or train station",
+    "FastV-k3": "Based on the information in the image, **no counter is currently boarding**.\n\nHere's why:\n\n1.  **The Display Shows \"Cancelled\"**: The"
+  },
+  "correctness": {
+    "RBM": true,
+    "Post-L2": false,
+    "FastV-k3": false
+  },
+  "ptid": 69,
+  "ground_truth": "A105-108",
+  "sha256_source_image": "6898342c98c69638af0f462d8be72a03225acc6ff22302c8d9cc3124039a960f",
+  "limitations": [
+    "Post-L2 and FastV-k3 retained-token indices were re-captured via a single-sample re-run (scripts/capture_frontispiece_masks.py) because the original 200-sample runs did not store kept_per_image for post-merger and fastv modes. ptid, answer (post-L2: byte-equal prefix), and OCRBench correctness were re-verified to match the source runs.",
+    "Evidence box was manually annotated; verified to contain the A105-108 region."
+  ]
+}

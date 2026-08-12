@@ -30,14 +30,20 @@ with (DATA_DIR / "manifest.json").open() as f:
 img = Image.open(DATA_DIR / M["image"]).convert("RGB")
 img_w, img_h = img.size
 arr = np.array(img)
-mask_npz = np.load(DATA_DIR / M["methods"][0]["mask"])
-keep = mask_npz["keep"]
-side = int(mask_npz["unit_grid_hw"][0])
-ev = M["evidence_bbox_source_px"]
+
+# Load each method's own mask (Post-L2 and FastV-k3 were re-captured
+# 2026-08-12; do not reuse the RBM mask for the other methods).
+masks = {}
+sides = {}
+for m in M["methods"]:
+    npz = np.load(DATA_DIR / m["mask"])
+    masks[m["key"]] = npz["keep"]
+    sides[m["key"]] = int(np.sqrt(npz["keep"].size))
 
 rbm = M["methods"][0]
 post = M["methods"][1]
 fastv = M["methods"][2]
+ev = M["evidence_bbox_source_px"]
 
 
 def make_overlay(img_arr, keep_mask, side_grid, color=(0.91, 0.64, 0.05, 0.45)):
@@ -138,10 +144,11 @@ def render(candidate: str, out_path: Path):
     # crop evidence region
     ev_crop = arr[ev[1]:ev[3], ev[0]:ev[2]]
 
-    # two zoom panels: RBM (left) and Post-L2 (right)
+    # two zoom panels: RBM (left) and Post-L2 (right); each uses its OWN mask
+    # (Post-L2 mask was re-captured 2026-08-12; not reused from RBM)
     # RBM zoom
     ax3_rbm = ax3.inset_axes([0.0, 0.55, 0.48, 0.38])
-    ax3_rbm.imshow(make_overlay(ev_crop, keep, side))
+    ax3_rbm.imshow(make_overlay(ev_crop, masks["rbm"], sides["rbm"]))
     ax3_rbm.set_xticks([]); ax3_rbm.set_yticks([])
     for sp in ax3_rbm.spines.values():
         sp.set_edgecolor(C_AMBER); sp.set_linewidth(1.5)
@@ -154,7 +161,7 @@ def render(candidate: str, out_path: Path):
 
     # Post-L2 zoom
     ax3_post = ax3.inset_axes([0.52, 0.55, 0.48, 0.38])
-    ax3_post.imshow(make_overlay(ev_crop, keep, side))
+    ax3_post.imshow(make_overlay(ev_crop, masks["post"], sides["post"]))
     ax3_post.set_xticks([]); ax3_post.set_yticks([])
     for sp in ax3_post.spines.values():
         sp.set_edgecolor(C_BLUE); sp.set_linewidth(1.5)

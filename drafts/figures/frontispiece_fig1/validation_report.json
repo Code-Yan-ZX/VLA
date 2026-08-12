@@ -1,6 +1,6 @@
 {
-  "n_checks": 20,
-  "n_passed": 20,
+  "n_checks": 29,
+  "n_passed": 29,
   "n_failed": 0,
   "checks": [
     {
@@ -14,24 +14,69 @@
       "detail": "/media/disk2/YZX/research/vla/drafts/figures/frontispiece_fig1/data/ocr0422_source.jpg"
     },
     {
-      "name": "mask_exists",
+      "name": "mask_exists_rbm",
       "ok": true,
       "detail": "/media/disk2/YZX/research/vla/drafts/figures/frontispiece_fig1/data/rbm_mask.npz"
     },
     {
-      "name": "mask_has_keep",
+      "name": "mask_has_keep_rbm",
       "ok": true,
       "detail": "['keep', 'kept_indices', 'unit_grid_hw', 'n_units_full', 'n_units_kept']"
     },
     {
-      "name": "mask_shape_match",
+      "name": "mask_shape_match_rbm",
       "ok": true,
-      "detail": "keep=(16, 16), expected=(16,16), unit_grid=(13,16)"
+      "detail": "keep=(16, 16), expected=(16,16)"
     },
     {
-      "name": "mask_kept_count",
+      "name": "mask_kept_count_rbm",
       "ok": true,
       "detail": "kept=54, expected=54 (full=216)"
+    },
+    {
+      "name": "mask_exists_post",
+      "ok": true,
+      "detail": "/media/disk2/YZX/research/vla/drafts/figures/frontispiece_fig1/data/post_l2_mask.npz"
+    },
+    {
+      "name": "mask_has_keep_post",
+      "ok": true,
+      "detail": "['keep', 'kept_indices', 'unit_grid_hw', 'n_units_full', 'n_units_kept']"
+    },
+    {
+      "name": "mask_shape_match_post",
+      "ok": true,
+      "detail": "keep=(16, 16), expected=(16,16)"
+    },
+    {
+      "name": "mask_kept_count_post",
+      "ok": true,
+      "detail": "kept=54, expected=54 (full=216)"
+    },
+    {
+      "name": "mask_exists_fastv",
+      "ok": true,
+      "detail": "/media/disk2/YZX/research/vla/drafts/figures/frontispiece_fig1/data/fastv_k3_mask.npz"
+    },
+    {
+      "name": "mask_has_keep_fastv",
+      "ok": true,
+      "detail": "['keep', 'kept_indices', 'unit_grid_hw', 'n_units_full', 'n_units_kept']"
+    },
+    {
+      "name": "mask_shape_match_fastv",
+      "ok": true,
+      "detail": "keep=(16, 16), expected=(16,16)"
+    },
+    {
+      "name": "mask_kept_count_fastv",
+      "ok": true,
+      "detail": "kept=54, expected=54 (full=216)"
+    },
+    {
+      "name": "masks_are_method_specific",
+      "ok": true,
+      "detail": "two or more methods share an identical mask (reused)"
     },
     {
       "name": "ptid_match",
@@ -91,12 +136,12 @@
     {
       "name": "pdf_nonblank",
       "ok": true,
-      "detail": "size=560089"
+      "detail": "size=561634"
     },
     {
       "name": "png_nonblank",
       "ok": true,
-      "detail": "size=677802"
+      "detail": "size=697743"
     },
     {
       "name": "provenance_exists",
