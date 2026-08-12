@@ -1,13 +1,11 @@
 #!/usr/bin/env python3
-"""Render FIG:2 — three-family pre-minus-post deltas (25% retention, full split).
+"""Render FIG:2 — forest plot of pre-minus-post deltas and paired 95% CIs.
 
 Canonical data: drafts/figures/real_data_pipeline/data/fig2_values.json
 Spec: drafts/figs_spec_for_user.md (FIG:2 L16-26; palette/canvas L64-80; FIG:2 prompt L98-106)
 
-Layout: 1x4 small-multiple grouped-bar panels (TextVQA -> DocVQA -> OCRBench -> GQA),
-independent y axes per panel (OCRBench pts NEVER shares an axis with pp), dark-gray
-y=0 reference line in every panel, single shared legend above, signed value labels
-with units, ACM double-column width 7.09 in. matplotlib only; deterministic.
+OCRBench's /1000-point delta is divided by 10 so every row uses percentage
+points. Confidence intervals are loaded from the audited paired-metric report.
 """
 import argparse
 import json
@@ -24,7 +22,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 PIPELINE_DIR = Path(__file__).resolve().parents[1]
-REPO_ROOT = PIPELINE_DIR.parents[3]
+REPO_ROOT = PIPELINE_DIR.parents[2]
 
 EXPECTED_MODELS = ["Qwen3-VL-8B", "Qwen2.5-VL-7B", "InternVL3-8B"]
 EXPECTED_PANELS = ["TextVQA", "DocVQA", "OCRBench", "GQA"]
@@ -139,65 +137,70 @@ def render(data: dict, outdir: Path) -> None:
         "figure.dpi": 150,
     })
 
-    fig, axes = plt.subplots(1, 4, figsize=(7.09, 2.8))
-    fig.subplots_adjust(left=0.052, right=0.988, top=0.735, bottom=0.135, wspace=0.205)
+    stats_path = REPO_ROOT / "experiments" / "paired_metric_statistics.json"
+    with open(stats_path, "r", encoding="utf-8") as fh:
+        stats = json.load(fh)["stage_law_table1"]
+    stat_keys = ["qwen3vl", "qwen2vl", "internvl3"]
+    bench_keys = ["textvqa", "docvqa", "ocrbench", "gqa"]
 
-    benches = data["benchmarks"]
-    values = data["values"]
-    x = [0.0, 1.0, 2.0]
-    bar_w = 0.74
-    letters = "(a)", "(b)", "(c)", "(d)"
-    tick_sets = {
-        "TextVQA": [0, 15, 30, 45],
-        "DocVQA": [0, 10, 20, 30, 40],
-        "OCRBench": [0, 120, 240, 360, 480],
-        "GQA": [-3, -2, -1, 0],
-    }
+    fig, ax = plt.subplots(figsize=(7.09, 3.35))
+    fig.subplots_adjust(left=0.17, right=0.985, top=0.80, bottom=0.23)
+    ax.axvspan(-7, 0, color="#f4f4f1", zorder=0)
+    ax.axvspan(0, 50, color="#fff8eb", zorder=0)
+    ax.axvline(0, color=ZERO_GRAY, linewidth=1.1, zorder=2)
+    ax.xaxis.grid(True, color=GRID_GRAY, linewidth=0.55, zorder=1)
+    ax.set_axisbelow(True)
 
-    for ax, bench, letter in zip(axes, EXPECTED_PANELS, letters):
-        meta = benches[bench]
-        unit = meta["unit"]
-        lo, hi = meta["suggested_y_range"]
-        span = hi - lo
+    centers = [3.0, 2.0, 1.0, 0.0]
+    offsets = [0.22, 0.0, -0.22]
+    for mi, (model, skey) in enumerate(zip(EXPECTED_MODELS, stat_keys)):
+        xs, ys, loerr, hierr = [], [], [], []
+        for center, bench, bkey in zip(centers, EXPECTED_PANELS, bench_keys):
+            cell = stats[skey]["benchmarks"][bkey]["pre_vs_post"]
+            xval = cell["mean_delta_pp"]
+            lo, hi = cell["ci95_pp"]
+            # Canonical figure JSON stores OCRBench on /1000 scale; paired
+            # statistics already express the same delta on a 0--100 scale.
+            if bench != "OCRBench":
+                plotted = data["values"][model][bench]
+                if abs(plotted - xval) > 0.15:
+                    raise RuntimeError("figure/statistics mismatch: {} {}".format(model, bench))
+            xs.append(xval); ys.append(center + offsets[mi])
+            loerr.append(xval - lo); hierr.append(hi - xval)
+        ax.errorbar(xs, ys, xerr=[loerr, hierr], fmt="o",
+                    color=COLORS[model], ecolor=COLORS[model],
+                    elinewidth=1.25, capsize=2.2, markersize=5.2,
+                    markeredgecolor=darken(COLORS[model]), markeredgewidth=0.7,
+                    label=model, zorder=4)
+        for xval, yval in zip(xs, ys):
+            ax.text(xval + (0.7 if xval >= 0 else -0.7), yval,
+                    "{:+.1f}".format(xval).replace("-", MINUS),
+                    ha="left" if xval >= 0 else "right", va="center",
+                    fontsize=6.8, color=darken(COLORS[model]), zorder=5)
 
-        for i, model in enumerate(EXPECTED_MODELS):
-            v = values[model][bench]
-            ax.bar(x[i], v, width=bar_w, color=COLORS[model],
-                   edgecolor=darken(COLORS[model]), linewidth=0.7, zorder=3)
-            # signed value label: above positive bars, below negative bars
-            if v >= 0:
-                ax.text(x[i], v + 0.018 * span, signed(v, unit),
-                        ha="center", va="bottom", fontsize=7, color=INK, zorder=5)
-            else:
-                ax.text(x[i], v - 0.018 * span, signed(v, unit),
-                        ha="center", va="top", fontsize=7, color=INK, zorder=5)
+    ax.set_xlim(-7, 50)
+    ax.set_ylim(-0.45, 3.45)
+    ax.set_yticks(centers)
+    ax.set_yticklabels(["TextVQA", "DocVQA", "OCRBench", "GQA"],
+                       fontsize=8.5, fontweight="bold")
+    ax.set_xticks([-5, 0, 10, 20, 30, 40, 50])
+    ax.set_xlabel("RBM pre-merger minus post-merger score (percentage points)")
+    ax.tick_params(axis="both", colors=INK, length=2.5)
+    for side in ("top", "right", "left"):
+        ax.spines[side].set_visible(False)
+    ax.text(-5.8, 3.38, "post better", fontsize=7, color=AXIS_GRAY,
+            ha="left", va="bottom")
+    ax.text(1.0, 3.38, "RBM better", fontsize=7, color="#9a6500",
+            ha="left", va="bottom")
 
-        ax.set_ylim(lo, hi)
-        ax.set_yticks(tick_sets[bench])
-        ax.tick_params(axis="y", labelsize=7, length=2.5, colors=INK, pad=2)
-        ax.xaxis.set_visible(False)
-        ax.yaxis.grid(True, color=GRID_GRAY, linewidth=0.5, zorder=0)
-        ax.set_axisbelow(True)
-        for side in ("top", "right"):
-            ax.spines[side].set_visible(False)
-        ax.axhline(0.0, color=ZERO_GRAY, linewidth=0.9, zorder=4)  # y=0 reference
-
-        title_unit = "pts" if unit == "pts" else "pp"
-        ax.set_title("{} (Δ {})".format(bench, title_unit),
-                     fontsize=9, fontweight="bold", color=INK, pad=5)
-        ax.text(0.0, 1.04, letter, transform=ax.transAxes,
-                fontsize=8, fontweight="bold", va="bottom", ha="left", color=INK)
-
-    # single shared legend above the panels (inside the fixed canvas)
-    handles = [plt.Rectangle((0, 0), 1, 1, fc=COLORS[m], ec=darken(COLORS[m]), lw=0.7)
-               for m in EXPECTED_MODELS]
-    fig.legend(handles, EXPECTED_MODELS, loc="center",
-               bbox_to_anchor=(0.5, 0.895), ncol=3, frameon=False,
-               fontsize=7.5, handlelength=1.3, handletextpad=0.5, columnspacing=1.6)
-
-    fig.text(0.5, 0.035,
-             "Δ = pre {} post; 25% retained; full split".format(MINUS),
-             ha="center", fontsize=7, color=INK)
+    handles, labels = ax.get_legend_handles_labels()
+    fig.legend(handles, labels, loc="center", bbox_to_anchor=(0.5, 0.925),
+               ncol=3, frameon=False, fontsize=7.5, handlelength=1.8,
+               columnspacing=1.6)
+    fig.text(0.5, 0.04,
+             "25% retention, official full splits; points are paired means, "
+             "whiskers are paired-bootstrap 95% CIs",
+             ha="center", fontsize=7, color=AXIS_GRAY)
 
     outdir.mkdir(parents=True, exist_ok=True)
     pdf_path = outdir / "fig2.pdf"

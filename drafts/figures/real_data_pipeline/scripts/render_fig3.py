@@ -4,9 +4,8 @@
 Canonical data: drafts/figures/real_data_pipeline/data/fig3_values.json
 Spec: drafts/figs_spec_for_user.md (FIG:3 L28-39; palette/canvas L64-80; FIG:3 prompt L108-116)
 
-Layout: 2x2 small multiples; columns = TextVQA / DocVQA (headers above), rows =
-Qwen3-VL-8B / Qwen2.5-VL-7B (labels outside left margin); x = visual-token retention
-{75, 50, 25}% left->right (deeper compression); shared y = pre - post (pp) over
+Layout: 1x2 small multiples; columns = TextVQA / DocVQA, lines = model; x =
+visual-token retention {75, 50, 25}% left->right; shared y = pre - post (pp) over
 [-5, 42]; dark-gray y=0 reference line; signed value labels on the 25% endpoints;
 negative DocVQA points plotted below zero (never clipped). No confidence bands
 (none available per spec). ACM double-column width 7.09 in. Deterministic.
@@ -26,7 +25,7 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 PIPELINE_DIR = Path(__file__).resolve().parents[1]
-REPO_ROOT = PIPELINE_DIR.parents[3]
+REPO_ROOT = PIPELINE_DIR.parents[2]
 
 EXPECTED_MODELS = ["Qwen3-VL-8B", "Qwen2.5-VL-7B"]
 EXPECTED_BENCHES = ["TextVQA", "DocVQA"]
@@ -143,71 +142,61 @@ def render(data: dict, outdir: Path) -> None:
         "figure.dpi": 150,
     })
 
-    fig, axes = plt.subplots(2, 2, figsize=(7.09, 4.6), sharex=True, sharey=True)
-    fig.subplots_adjust(left=0.098, right=0.978, top=0.845, bottom=0.125,
-                        wspace=0.085, hspace=0.16)
+    fig, axes = plt.subplots(1, 2, figsize=(7.09, 2.8), sharex=True, sharey=True)
+    fig.subplots_adjust(left=0.075, right=0.985, top=0.76, bottom=0.22,
+                        wspace=0.10)
 
     values = data["values"]
     x = [0.0, 1.0, 2.0]
-    letters = [["(a)", "(b)"], ["(c)", "(d)"]]
+    letters = ["(a)", "(b)"]
 
-    for i, model in enumerate(EXPECTED_MODELS):
-        color = ROW_COLOR[model]
-        for j, bench in enumerate(EXPECTED_BENCHES):
-            ax = axes[i][j]
+    for j, bench in enumerate(EXPECTED_BENCHES):
+        ax = axes[j]
+        ax.axvspan(1.5, 2.45, color="#fff8eb", zorder=0)
+        for i, model in enumerate(EXPECTED_MODELS):
+            color = ROW_COLOR[model]
             y = values[model][bench]["delta_pp"]
             ax.plot(x, y, color=color, linewidth=1.8, marker="o", markersize=4.6,
                     markerfacecolor=color, markeredgecolor=color,
-                    markeredgewidth=0.7, zorder=3, clip_on=False)
-            # signed label on the 25% endpoint (rightmost) only
-            ax.annotate(signed1(y[-1]), xy=(x[-1], y[-1]),
-                        xytext=(6.0, 0.0), textcoords="offset points",
-                        ha="left", va="center", fontsize=7, fontweight="bold",
-                        color=color, zorder=5, clip_on=False)
+                    markeredgewidth=0.7, zorder=3, clip_on=False,
+                    label=model if j == 0 else None)
+            for xi, yi in zip(x, y):
+                dy = 5 if i == 0 or yi < 0 else -8
+                ax.annotate(signed1(yi), xy=(xi, yi), xytext=(0, dy),
+                            textcoords="offset points", ha="center",
+                            va="bottom" if dy > 0 else "top", fontsize=6.5,
+                            color=color, zorder=5)
 
-            ax.set_ylim(*Y_RANGE)
-            ax.set_xlim(-0.22, 2.62)
-            ax.set_yticks(Y_TICKS)
-            ax.set_xticks(x)
-            ax.tick_params(axis="both", labelsize=7, length=2.5, colors=INK, pad=2)
-            ax.yaxis.grid(True, color=GRID_GRAY, linewidth=0.5, zorder=0)
-            ax.set_axisbelow(True)
-            for side in ("top", "right"):
-                ax.spines[side].set_visible(False)
-            ax.axhline(0.0, color=ZERO_GRAY, linewidth=0.9, zorder=4)  # y=0 reference
-            ax.text(0.014, 0.962, letters[i][j], transform=ax.transAxes,
-                    fontsize=8, fontweight="bold", va="top", color=INK)
-            if i == 0:  # column headers above the top row only
-                ax.set_title(bench, fontsize=9.5, fontweight="bold", color=INK, pad=7)
-            if j == 1:  # tick labels on left column only
-                ax.tick_params(axis="y", labelleft=False)
-            if i == 0:
-                ax.tick_params(axis="x", labelbottom=False)
-            else:
-                ax.set_xticklabels(["{}%".format(k) for k in data["keep_ratios_pct"]])
+        ax.set_ylim(-6.0, Y_RANGE[1])
+        ax.set_xlim(-0.22, 2.25)
+        ax.set_yticks(Y_TICKS)
+        ax.set_xticks(x)
+        ax.set_xticklabels(["{}%".format(k) for k in data["keep_ratios_pct"]])
+        ax.tick_params(axis="both", labelsize=7, length=2.5, colors=INK, pad=2)
+        ax.yaxis.grid(True, color=GRID_GRAY, linewidth=0.5, zorder=0)
+        ax.set_axisbelow(True)
+        for side in ("top", "right"):
+            ax.spines[side].set_visible(False)
+        ax.axhline(0.0, color=ZERO_GRAY, linewidth=0.9, zorder=2)
+        ax.text(0.014, 0.962, letters[j], transform=ax.transAxes,
+                fontsize=8, fontweight="bold", va="top", color=INK)
+        ax.set_title(bench, fontsize=9.5, fontweight="bold", color=INK, pad=7)
 
     # single shared legend (model color), top center
     handles = [plt.Line2D([0], [0], color=ROW_COLOR[m], linewidth=1.8, marker="o",
                           markersize=4.6, markerfacecolor=ROW_COLOR[m],
                           markeredgecolor=ROW_COLOR[m]) for m in EXPECTED_MODELS]
     fig.legend(handles, EXPECTED_MODELS, loc="center",
-               bbox_to_anchor=(0.5, 0.962), ncol=2, frameon=False,
+               bbox_to_anchor=(0.5, 0.90), ncol=2, frameon=False,
                fontsize=7.5, handlelength=1.6, handletextpad=0.5, columnspacing=1.8)
 
-    # row labels outside the left margin
-    row_y = [0.685, 0.305]
-    for model, yc in zip(EXPECTED_MODELS, row_y):
-        fig.text(0.045, yc, model, rotation=90, ha="center", va="center",
-                 fontsize=8, fontweight="bold", color=ROW_COLOR[model])
-
-    # shared y-axis label
-    fig.text(0.0145, 0.495, "pre {} post (pp)".format(MINUS), rotation=90,
+    fig.text(0.0145, 0.49, "pre {} post (pp)".format(MINUS), rotation=90,
              ha="center", va="center", fontsize=8, color=INK)
 
-    fig.text(0.535, 0.060, "Visual-token retention", ha="center", fontsize=8, color=INK)
-    fig.text(0.535, 0.031, "deeper compression  →", ha="center", fontsize=7, color=AXIS_GRAY)
-    fig.text(0.535, 0.006, "n = {} per benchmark".format(data["n_per_benchmark"]),
-             ha="center", fontsize=7, color=AXIS_GRAY)
+    fig.text(0.535, 0.105, "Visual-token retention  (deeper compression  →)",
+             ha="center", fontsize=8, color=INK)
+    fig.text(0.535, 0.045, "n = {} per benchmark; shaded region = deepest tested compression".format(
+             data["n_per_benchmark"]), ha="center", fontsize=7, color=AXIS_GRAY)
 
     outdir.mkdir(parents=True, exist_ok=True)
     pdf_path = outdir / "fig3.pdf"

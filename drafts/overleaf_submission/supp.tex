@@ -418,9 +418,8 @@ was not re-tested).
 % =============================================================================
 
 \begin{itemize}
-  \item \textbf{Qwen3-VL-8B}: first-invoked merger $=$
-    \path{deepstack_merger_list[0]} (\path{deepstack_visual_indexes}
-    $= [8, 16, 24]$), so unit scores are computed on \textbf{ViT block-8 outputs}
+  \item \textbf{Qwen3-VL-8B}: the first deepstack merger has index 0 and the
+    visual indexes are $[8,16,24]$, so unit scores use \textbf{ViT block-8 outputs}
     (intermediate depth); the single resulting mask is shared by all mergers,
     including the main merger that consumes the final-block output. Runner
     diagnostic \path{mask_computed_at} $=$ \texttt{'deepstack\_0'} on every
@@ -662,6 +661,8 @@ intersection is a sparse minority of the budget.
     $\rho\!=\!0.314$). Sparse scene; the four-state map shows RBM-only (amber)
     concentrated on object boundaries while post-only (hatched) scatters over
     flat regions the merger smoothed.}
+  \Description{A four-state spatial comparison highlights units retained only
+  before the merger, only after it, by both stages, or by neither stage.}
   \label{fig:cmp_df}
 \end{figure*}
 
@@ -671,6 +672,8 @@ intersection is a sparse minority of the budget.
   \caption{Sample \texttt{img69} ($N\!=\!6820$, $k\!=\!1705$, $J\!=\!0.348$,
     $\rho\!=\!0.477$). Highest overlap of the four; the merger preserves more of
     the pre-ranking here, yet two-thirds of the kept set still differs.}
+  \Description{A spatial comparison on sample img69 shows substantial but
+  incomplete overlap between pre-merger and post-merger retained units.}
   \label{fig:cmp_69}
 \end{figure*}
 
@@ -681,6 +684,8 @@ intersection is a sparse minority of the budget.
     $\rho\!=\!0.300$). Textured outdoor scene with a wall edge; the lowest
     overlap --- the merger's lossy aggregation most strongly reorders the
     high-frequency edge vs.\ texture units.}
+  \Description{A textured outdoor scene shows different pre-merger and
+  post-merger selections, especially around high-frequency edges.}
   \label{fig:cmp_72}
 \end{figure*}
 
@@ -691,6 +696,8 @@ intersection is a sparse minority of the budget.
     $\rho\!=\!0.396$). Waterscape with horizon; RBM-only units track the water
     surface detail that the post-merger L2 demotes in favour of merged sky
     blocks.}
+  \Description{A waterscape comparison shows pre-merger-only selections along
+  surface detail and post-merger selections in smoother sky regions.}
   \label{fig:cmp_74}
 \end{figure*}
 

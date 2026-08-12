@@ -1,7 +1,7 @@
 # STATE.md - 当前项目状态（主窗口维护，保持 ≤30 行）
 
 > 项目：VLM 视觉 token 压缩 · 目标：Rank-Before-Merge -> ACM MM'27
-> 最近更新：2026-08-12 · **Fig.1 frontispiece 三 mask 现均为 method-specific 真实 per-sample kept indices（Post-L2/FastV-k3 单例重捕于 2026-08-12）。**
+> 最近更新：2026-08-12 · **Overleaf 权威稿已完成投稿级重构：8 页正文 + 1 页参考文献，后接补充材料；仅待作者及官方投稿元数据。**
 
 ## ★ 服务器任务书终判：双门均 NO-GO（2026-08-10）
 - **Deferred RBM (rho=1,K=3) 零代码臂**：n=64×4 dev gate -- 锚点 ≡ plain RBM bit-identical，ptid 64/64×3+58/58 全等；cond1（四基准 ≥max(RBM,fst3)−1pp）textvqa/docvqa FAIL → **NO-GO**，不进入 n=200。GPU 0.75h。
@@ -22,3 +22,7 @@
 - Fig.1 改为 frontispiece：单例 OCRBench ocr0422（机场信息牌，GT A105-108，ptid=69），3 区域（Input/Where to rank/Evidence），7.0×3.6 inch；候选 a_balanced/b_visual/c_minimal 渲染于 drafts/figures/frontispiece_fig1/candidates/；选 b_visual 为终版；validator 2026-08-12 扩展为 29/29（fail-closed 检 method-specific mask）；旧版备份为 previous_pipeline_fig1.pdf；overleaf caption 重写、§6 不宣通用 SOTA。
 - 2026-08-12：Post-L2/FastV-k3 源 200-sample run 未存 per-sample kept indices（仅 pre 存了），原 frontispiece 三方法共用 RBM mask（违反 task spec「Do not reuse the RBM mask for other methods and do not derive masks from image pixels」）。scripts/capture_frontispiece_masks.py 单例重捕：--mode post --r-post 0.25 与 --mode fastv --r 0.75 --fastv-k 3，ptid=69 + answer-prefix + OCRBench correctness 全等；mask 差异 RBM∩Post=18 RBM∩FastV=14 Post∩FastV=15（皆 < 54，distinct 真实）；PDF SHA 同；overleaf 同步。GPU 0.4 min，未升级。
 - User 2026-08-12 否决三例 contact-sheet 作为首页图；改为单案例旗舰图：沿用原 Overleaf pipeline 流向/配色，以 OCRBench ocr0422（备选 ocr0804）串起 input→rank stage→真实局部 mask/答案；缺 FastV/Post mask 必须单例补捕获，禁复用 RBM mask。任务书见 `drafts/figures/CLAUDE_CODE_PROMPT_FIG1_QUALITATIVE.md`。
+- 2026-08-12 投稿稿收口：摘要约 230 词；Fig.2 改为三模型×四基准 paired-95%CI forest plot；Fig.3 改为双模型共享 TextVQA/DocVQA retention 曲线；删除重复正文表、压缩负结果/局限/结论；统计主口径=20k paired bootstrap + paired sign-flip，McNemar 仅补充二值结果。
+- Claim 全面按证据范围收紧：不宣 universal/SOTA/architecture-general/necessity/fixed point；GQA 写 no detected pure-stage difference；三模型=两 architecture families；四扩展=prespecified bounded negatives。
+- `latexmk` 成功：总 18 页（body 1--8、refs 8--9、supp 10--18）；无 undefined cite/ref、无 overfull、主图及补充图均有 Description；最终本地 PDF=`drafts/overleaf_submission/main.pdf`（不入 git）。
+- 下一步仅人工项：核验 ACM MM'27 官方日期/地点/模板元数据；保持匿名投稿时不填作者，camera-ready 再填作者/单位/DOI/ISBN；实际上传/投稿须 user 确认。

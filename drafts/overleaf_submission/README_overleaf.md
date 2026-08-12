@@ -16,10 +16,10 @@
 |------|------|
 | `main.tex` | main paper plus appended S1--S11 supplement |
 | `supp.tex` | dual-mode supplementary source (included by `main.tex` or compiled alone) |
-| `references.bib` | 20 verified entries |
-| `figs/fig1.pdf` | FIG 1 — measured method figure (Qwen3-VL-8B merger L2, sample df7282e1) |
-| `figs/fig2.pdf` | FIG 2 — pre−post Δ bar chart, 3 families × 4 benchmarks |
-| `figs/fig3.pdf` | FIG 3 — retention curves (n=200) |
+| `references.bib` | verified bibliography used by the paper |
+| `figs/fig1.pdf` | FIG 1 — method-specific measured masks on one OCRBench case |
+| `figs/fig2.pdf` | FIG 2 — paired pre−post forest plot with 95% CIs |
+| `figs/fig3.pdf` | FIG 3 — shared-panel retention-vs-gap curves (n=200) |
 | `figs/compare_df7282e1.pdf` | S10 qualitative compare, sample df7282e1 |
 | `figs/compare_img69.pdf` | S10 compare, WeChat-img-69 (alias of `微信图片_…69_123`) |
 | `figs/compare_img72.pdf` | S10 compare, WeChat-img-72 |
@@ -51,7 +51,18 @@ There are **no** `../` parent-relative paths — verified by
 
 - `acmart.cls` is **not** bundled; Overleaf provides it natively (TeX Live
   ≥ 2020). If compiling locally, install `texlive-publishers`.
-- `figs/fig1.pdf` is the **measured** version (real Qwen3-VL-8B merger L2 on
-  sample df7282e1), not the earlier layout proxy.
+- The compiled review paper uses 8 pages for the body and 1 page for references;
+  the integrated supplementary material follows after a forced page break.
+- `figs/fig1.pdf` uses method-specific measured masks; no mask is reused across
+  RBM, post-merger L2, and FastV.
 - The paper is double-blind: no author/institution/repo identifiers appear in
   either `.tex` or the figure captions.
+
+## Submission-time fields
+
+Before submission, verify the official ACM MM 2027 call and replace the
+provisional `\acmConference` date/location in `main.tex`. Keep `anonymous` review
+mode and the anonymous author block for double-blind review. For the
+camera-ready version, remove `anonymous`, replace the author/affiliation stub,
+and insert the DOI/ISBN/copyright metadata supplied by ACM. The actual upload
+and submission require human confirmation.
