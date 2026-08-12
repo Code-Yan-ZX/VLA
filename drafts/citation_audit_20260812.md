@@ -5,6 +5,10 @@ Scope: citation-key integrity, claim-to-source fit, bibliography metadata, and
 2026 novelty coverage. This audit does not edit `main.tex`, because that file
 already has concurrent user changes.
 
+Status after editorial pass: all high-priority findings below are resolved in
+commit `c93d29b`. The final manuscript cites 23 works; compilation reports no
+undefined citations. The findings are retained as an audit trail.
+
 ## Executive verdict
 
 - BibTeX integrity passes: 19 unique cited keys, 0 missing keys, 19 rendered
