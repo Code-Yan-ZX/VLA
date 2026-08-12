@@ -1,0 +1,79 @@
+{
+  "model": "Qwen/Qwen3-VL-8B-Instruct",
+  "revision": "resolved at run time",
+  "keep_ratio": 0.25,
+  "decoding": "greedy",
+  "max_tokens": 32,
+  "benchmark": "OCRBench",
+  "id": "ocr0422",
+  "image": "ocr0422_source.jpg",
+  "image_size_wh": [
+    591,
+    370
+  ],
+  "question": "which counter is boarding?",
+  "ground_truth": [
+    "A105-108"
+  ],
+  "ptid": 69,
+  "evidence_bbox_source_px": [
+    59,
+    111,
+    531,
+    259
+  ],
+  "unit_grid_hw": [
+    13,
+    16
+  ],
+  "n_units_full": 216,
+  "n_units_kept": 54,
+  "selection_rule": "RBM correct AND both FastV-k3 and Post-L2 wrong AND same final ptid=69",
+  "candidate_pool": "9 strict three-arm flips from contact_sheet_manifest.json",
+  "methods": [
+    {
+      "key": "rbm",
+      "label": "RBM (ours)",
+      "answer": "Based on the information displayed on the sign in the image, the counter that is currently **boarding** is **A105-108**.",
+      "correct": true,
+      "ptid": 69,
+      "mask": "rbm_mask.npz",
+      "mask_key": "keep",
+      "capture_source": "runs/cascade/gate_pre25_ocrbench.json (kept_per_image)",
+      "stage": "pre-merger L2 ranking",
+      "short_answer": "Based on the information display...",
+      "display_answer": "A105-108"
+    },
+    {
+      "key": "post",
+      "label": "Post-L2",
+      "answer": "Based on the information visible in the image, we can determine which counter is boarding by examining the display.\n\nThe image shows a section of an airport or train station",
+      "correct": false,
+      "ptid": 69,
+      "mask": "post_l2_mask.npz",
+      "mask_key": "keep",
+      "capture_source": "scripts/capture_frontispiece_masks.py (re-run, --mode post --r-post 0.25, verified ptid+answer+correctness match gate_post25_ocrbench.json)",
+      "stage": "post-merger L2 ranking",
+      "short_answer": "Based on the information visible...",
+      "display_answer": "not recovered"
+    },
+    {
+      "key": "fastv",
+      "label": "FastV-k3",
+      "answer": "Based on the information in the image, **no counter is currently boarding**.\n\nHere's why:\n\n1.  **The Display Shows \"Cancelled\"**: The",
+      "correct": false,
+      "ptid": 69,
+      "mask": "fastv_k3_mask.npz",
+      "mask_key": "keep",
+      "capture_source": "scripts/capture_frontispiece_masks.py (re-run, --mode fastv --r 0.75 --fastv-k 3, verified ptid+correctness match locked_fst3_ocrbench_n200.json)",
+      "stage": "FastV layer-K query-conditioned",
+      "short_answer": "Based on the information in the ...",
+      "display_answer": "no counter boarding"
+    }
+  ],
+  "source_runs": {
+    "pre": "runs/cascade/gate_pre25_ocrbench.json",
+    "post": "runs/cascade/gate_post25_ocrbench.json",
+    "fastv": "runs/rankbridge/locked_fst3_ocrbench_n200.json"
+  }
+}
