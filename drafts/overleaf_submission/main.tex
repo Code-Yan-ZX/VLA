@@ -286,21 +286,21 @@ fixed:
 \begin{figure*}[t]
   \centering
   \includegraphics[width=\textwidth]{figs/fig1.pdf}
-  \caption{\textbf{Rank-Before-Merge (RBM) changes the selection stage while keeping the native VLM path intact.}
-  On one OCRBench airport-board example (ground truth: \texttt{A105-108}),
-  the left panel shows the query and answer-bearing input region. The central
-  panel contrasts RBM, which ranks raw $2\!\times\!2$ units before native
-  merging, with a post-merger control that ranks already mixed tokens at the
-  same $\kappa=25\%$ budget. The ranking summary and measured RBM result at
-  right show that the counter identifier is retained and answered correctly;
-  Post-L2 and FastV-k3 fail on this case. The final stack emphasizes that RBM
-  is a stage change inserted into the existing ViT--merger--LLM pipeline, not
-  a second learned module. This example illustrates the OCR-heavy regime
-  rather than a universal ordering.}
-  \Description{A code-drawn VLM framework diagram shows an airport-board input,
-  pre-merger RBM ranking versus post-merger ranking at equal retention, a
-  ranking summary, a correct A105-108 result, and the accumulated ViT, RBM,
-  merger, and LLM stages.}
+  \caption{\textbf{Saliency should be measured before information mixing.}
+  The left panel shows an OCR-sensitive airport-board region for the query
+  ``which counter is boarding?'' (ground truth: \texttt{A105-108}). The insight
+  panel isolates the ordering difference: FastV-style selection first merges
+  local visual units and then ranks them, whereas Rank-Before-Merge (RBM)
+  ranks raw $2\!\times\!2$ units before the native merger. The two method
+  branches are otherwise symmetric and use the same budget,
+  $\kappa=25\%$. On this measured OCRBench case, FastV retains the wrong
+  counter (\texttt{A115-126}), while RBM retains the answer-bearing units and
+  returns \texttt{A105-108}.}
+  \Description{A minimalist vector overview has four labeled regions: Problem,
+  Insight, Method, and Evidence. It compares Merge-then-Rank with
+  Rank-then-Merge, shows symmetric orange RBM and blue FastV-style branches at
+  kappa 25 percent, and reports the incorrect A115-126 versus correct A105-108
+  answers on an airport information board.}
   \label{fig:fig1}
 \end{figure*}
 
