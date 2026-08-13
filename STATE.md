@@ -14,6 +14,12 @@
 - GLM 集成因 think loop blocker 全撤；stage law 保留 Qwen3-VL/Qwen2.5-VL/InternVL3 三族 full-split 证据。
 - 创新不宣 RBM beats/SOTA；RBM=鲁棒 OCR/text-dense 默认，FastV=query-conditioned 强 baseline。
 
+## ★ Direction A/B 升级 scorer（2026-08-13，training-free）
+- **freq scorer（B）α=1,β=0.6**：textvqa +1.2pp@25%/+0.5@50%（official）；docvqa@0.5 +0.6pp；但 docvqa/ocrbench/gqa@0.75 −1.6..−2.2pp。text-dense+高压缩受益。
+- **adaptive router（A）ACCEPTANCE FAIL**（2 轮已尽）：τ_hf=0.08 全 PRE ≡ RBM（text 0 回归 ✓ 但 GQA +0.00 < +1pp ✗）；τ=0.13 flip GQA→POST 致 TextVQA −7pp 超限。GQA/TextVQA hf 分布重叠，无全局 τ 两全。如实记录。
+- **combined ≈ freq-alone**（τ=0.08 router no-op）；ChartQA 加入（combined @25% 0.195 > RBM 0.170/FastV 0.180）。
+- 交付：experiments/{freq_aware,adaptive_stage,combined}/results.json+grid.json + experiments/freq_adaptive.md；代码 freq selector + adaptive mode 已入 runner（dry-check 全过）。
+
 ## ★ 红线与下一步
 - 不宣 RBM beats/SOTA；不事后调参 RBM-OT/Deferred。
 - 投稿前/claim 推翻/凭据/单次 >6 GPU·h 升级 user；GPU 单卡 A40 串行。

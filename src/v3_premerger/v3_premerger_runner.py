@@ -347,19 +347,72 @@ SCORERS = {
 def _score_tokens(hs, selector: str):
     """hs: [n_tok, ctx] -> importance score [n_tok].  (post-merger path.)
 
-    l2/attn as documented above. edge/var are PRE-merger selectors (they score
-    the 2x2 merge-unit's internal structure); a post-merger token is already a
-    single averaged vector with NO within-unit structure, so edge/var fall back
-    to L2 here (the established baseline). The D2 selector experiment runs
-    --mode pre, which routes through _score_units where edge/var are computed
-    properly on the [num_units, 4, ctx] tensor."""
-    if selector == "l2" or selector in ("edge", "var"):
+    l2/attn as documented above. edge/var/freq are PRE-merger selectors (they
+    score the 2x2 merge-unit's internal structure); a post-merger token is
+    already a single averaged vector with NO within-unit structure, so
+    edge/var/freq fall back to L2 here (the established baseline). The D2
+    selector experiments run --mode pre, which routes through _score_units
+    where edge/var/freq are computed properly on the [num_units, 4, ctx] tensor."""
+    if selector == "l2" or selector in ("edge", "var", "freq"):
         return hs.float().norm(dim=-1)
     f = hs.float()                                     # [n_tok, ctx]
     return (f - f.mean(dim=0, keepdim=True)).norm(dim=-1)
 
 
-def _score_units(feats, selector: str):
+_HF_VAR_MODES = {"mean", "mean1sd", "mean2sd"}
+
+
+def _unit_workload_stats(f_feats: torch.Tensor,
+                         var_mode: str = "mean") -> dict:
+    """Direction A workload detector on ONE image's merge-unit features
+    [units, unit=4, ctx] -- computed from the merger INPUT only (no query).
+    Returns scale-free stats (bf16/float/LN invariant):
+
+      hf_ratio   : high-frequency ratio = fraction of units whose within-unit
+                   variance EXCEEDS a scale-free baseline on the image's OWN
+                   within-unit variance distribution. var_mode (the baseline):
+                     mean    : frac(v > mean_v)     -- always ~0.5, weak
+                     mean1sd : frac(v > mean_v + 1*sd_v) -- heavy tail; the
+                               mechanism-aligned proxy (text strokes = extreme
+                               within-unit variance outliers)
+                     mean2sd : frac(v > mean_v + 2*sd_v) -- extreme tail.
+                   Text-dense images -> bigger tail fraction; object/scene
+                   images -> smaller.
+      l2_entropy : Shannon entropy (nats) of the distribution of unit L2 norms
+                   over a fixed 20-bin histogram; ∈ [0, ln 20≈2.996]. A flat
+                   (uniform-attention) distribution -> high entropy; a peaked
+                   (few dominant units) distribution -> low entropy.
+    """
+    f = f_feats.float()
+    n = f.shape[0]
+    if n == 0:
+        return {"hf_ratio": 0.0, "l2_entropy": 0.0,
+                "mean_var": 0.0, "mean_l2": 0.0}
+    v = f.var(dim=1, unbiased=False).mean(dim=-1)         # [units]
+    l2s = f.norm(dim=-1).mean(dim=-1)                     # [units]
+    mu_v = v.mean()
+    if var_mode == "mean1sd":
+        thr_v = mu_v + 1.0 * v.std()
+    elif var_mode == "mean2sd":
+        thr_v = mu_v + 2.0 * v.std()
+    else:                                                 # "mean" (default)
+        thr_v = mu_v
+    hf = (v > thr_v).float().mean().item() \
+        if (mu_v.item() > 0 or thr_v.item() > 0) else 0.0
+    bins = 20
+    if l2s.numel() > 1 and l2s.max().item() > l2s.min().item():
+        hist = torch.histc(l2s, bins=bins)
+    else:                                                 # degenerate -> flat
+        hist = torch.ones(bins, device=l2s.device, dtype=l2s.dtype)
+    p = hist.clamp_min(1e-9)
+    p = p / p.sum()
+    ent = -(p * p.log()).sum().item()                     # nats
+    return {"hf_ratio": round(hf, 5), "l2_entropy": round(ent, 5),
+            "mean_var": round(float(mu_v), 6),
+            "mean_l2": round(float(l2s.mean()), 4)}
+
+
+def _score_units(feats, selector: str, alpha: float = 1.0, beta: float = 1.0):
     """feats: [num_units, unit=4, ctx] -> importance score [num_units].  (pre-)
 
     All selectors are computed on the SAME pre-merger feature tensor L2 uses:
@@ -381,10 +434,34 @@ def _score_units(feats, selector: str):
       var  : within-unit feature variance across the 4 patches, averaged over
              feature dims: var(unit) = mean_d Var_d(4 patches) ==
              (1/ctx) * trace(4-patch feature covariance). Direction-agnostic
-             complement to "edge"; high variance = averaging loses information."""
+             complement to "edge"; high variance = averaging loses information.
+      freq : FREQUENCY-AWARE blend (M2-aware scorer, Direction B): linear mix
+             score = alpha*z(l2) + beta*z(var), where z(.) is the per-image
+             Z-SCORE (mean-0, std-1 across the image's units) of each term.
+             Raw-scale mixing is numerically meaningless: mean(unit L2)~O(12)
+             vs mean(within-unit var)~O(0.04) on Qwen3-VL features (measured
+             in scripts/adapt_discriminator_probe.py), a ~300:1 gap that makes
+             beta*d(var) negligible for the whole alpha,beta grid {0.5,1,2}.
+             Z-scoring both components puts them on ONE scale so alpha/beta are
+             genuine trade-off knobs (alpha=1,beta=0 == plain l2; alpha=0,
+             beta=1 == plain var), still ranking on the SAME [num_units,4,ctx]
+             tensor as l2, PRE-merger only (POST falls back to L2 in
+             _score_tokens). """
     f = feats.float()
+
+    def _z(x):
+        # per-image standardization; constant vectors -> 0 (top-k rank-safe)
+        s = x.std()
+        if s.item() == 0.0:
+            return torch.zeros_like(x)
+        return (x - x.mean()) / s
+
     if selector == "l2":
         return f.norm(dim=-1).mean(dim=-1)
+    if selector == "freq":
+        l2 = f.norm(dim=-1).mean(dim=-1)               # [num_units] magnitude
+        v = f.var(dim=1, unbiased=False).mean(dim=-1)  # [num_units] high-freq energy
+        return alpha * _z(l2) + beta * _z(v)
     if selector == "var":
         # unbiased=False (population var): the ddof is a global scalar that does
         # NOT affect top-k ranking (rank-preserving); population var is faster
@@ -634,7 +711,8 @@ def parse_args():
     # --dry-check (which validates hook setup on dummy modules without a GPU).
     # main() enforces their presence when not dry-checking.
     ap.add_argument("--mode", required=False, default=None,
-                    choices=["none", "post", "pre", "pre-final", "hybrid"])
+                    choices=["none", "post", "pre", "pre-final", "hybrid",
+                             "adaptive"])
     ap.add_argument("--r", type=float, default=0.0,
                     help="prune ratio; k_i = round(full_i*(1-r)). "
                          "{0.5,0.75,0.875} -> keep {50,25,12.5}% of merge-units.")
@@ -664,7 +742,7 @@ def parse_args():
     ap.add_argument("--n", type=int, default=200)
     ap.add_argument("--max-tokens", type=int, default=32)
     ap.add_argument("--selector", default="l2",
-                    choices=["l2", "attn", "edge", "var"],
+                    choices=["l2", "attn", "edge", "var", "freq"],
                     help="l2 = L2-norm selector (default, original behavior); "
                          "attn = global-centroid-distance saliency proxy -- a "
                          "DIFFERENT selector for stage-effect robustness; "
@@ -673,8 +751,38 @@ def parse_args():
                          "PRE-merger / D2 mechanism-derived selector); "
                          "var = within-unit feature variance across the 4 "
                          "patches (omnidirectional merger-loss proxy; PRE-merger "
-                         "/ D2). edge/var fall back to L2 in POST mode (a merged "
-                         "token has no within-unit structure).")
+                         "/ D2); freq = FREQUENCY-AWARE blend (Direction B): "
+                         "score = alpha*l2(unit) + beta*var(unit) -- linear mix "
+                         "that exploits the M2 mechanism (merger weakens high-"
+                         "frequency/text-stroke units) by up-weighting within-unit "
+                         "variance via beta. edge/var/freq fall back to L2 in "
+                         "POST mode (a merged token has no within-unit structure).")
+    ap.add_argument("--alpha", type=float, default=1.0,
+                    help="Direction B freq scorer: weight on the L2-norm term, "
+                         "score = alpha*l2(unit) + beta*var(unit). Default 1.0. "
+                         "Grid-searched as alpha x beta in {0.5,1.0,2.0}^2.")
+    ap.add_argument("--beta", type=float, default=1.0,
+                    help="Direction B freq scorer: weight on the within-unit "
+                         "variance term (high-frequency/text-stroke proxy), "
+                         "score = alpha*l2(unit) + beta*var(unit). Default 1.0. "
+                         "Grid-searched as alpha x beta in {0.5,1.0,2.0}^2.")
+    ap.add_argument("--tau-hf", type=float, default=0.3,
+                    help="Direction A adaptive stage: high-frequent ratio "
+                         "threshold. Image routes to PRE if hf_ratio > tau_hf "
+                         "OR l2_entropy > tau_ent. Default 0.3.")
+    ap.add_argument("--tau-ent", type=float, default=2.0,
+                    help="Direction A adaptive stage: per-image L2-entropy "
+                         "(nats, 20-bin histogram) threshold. Image routes to "
+                         "PRE if hf_ratio > tau_hf OR l2_entropy > tau_ent. "
+                         "Default 2.0 (max ~ln 20 = 2.996).")
+    ap.add_argument("--hf-var-mode", default="mean",
+                    choices=["mean", "mean1sd", "mean2sd"],
+                    help="Direction A adaptive stage: baseline for the"
+                         " high-frequency-ratio term. mean (default): frac of"
+                         " units with within-var > image mean (~0.5, weak);"
+                         " mean1sd: tail above mean+1sd (text strokes OUTLIER"
+                         " proxy, calibrated to separate text v. scene);"
+                         " mean2sd: extreme tail.")
     ap.add_argument("--visionzip-style", action="store_true",
                     help="Dominant + context token paradigm (VisionZip proxy). "
                          "Instead of pruning all non-dominant units, merge them "
@@ -2015,6 +2123,55 @@ def attach_kept_indices(kept_log, samples, per_sample, model_id: str,
     diag["kept_total"] = len(log)
 
 
+def attach_adaptive_workload(workload_log, samples, per_sample, model_id: str,
+                             max_pixels: int, diag):
+    """Direction A diagnostic: FIFO-attach per-image stage + workload stats to
+    per_sample[i]["stage"]/["workload"]. Alignment contract identical to
+    attach_kept_indices: entry 0 = warmup (dropped); per-image unit counts
+    recomputed offline with the SAME processor vLLM uses. Best-effort."""
+    log = workload_log[1:]                     # drop warmup entry
+    full_units = [None] * len(samples)
+    try:
+        from PIL import Image
+        from transformers import AutoProcessor
+        proc = AutoProcessor.from_pretrained(model_id)
+        for i, smp in enumerate(samples):
+            kw = {}
+            if max_pixels and max_pixels > 0:
+                kw["max_pixels"] = max_pixels
+            g = proc.image_processor(Image.open(smp.image),
+                                     return_tensors="pt", **kw)["image_grid_thw"]
+            full_units[i] = int(g[0].prod()) // 4
+    except Exception as e:
+        print(f"[adaptive] offline grid recompute failed "
+              f"({type(e).__name__}: {str(e)[:160]}); stage NOT attached",
+              file=sys.stderr, flush=True)
+        diag["adaptive_attached"] = 0
+        return
+    ptr = 0
+    attached = 0
+    n_pre = n_post = 0
+    for i, smp in enumerate(samples):
+        if i >= len(per_sample):
+            break
+        if (ptr < len(log) and full_units[i] is not None
+                and log[ptr].get("f") == full_units[i]):
+            per_sample[i]["stage"] = log[ptr]["stage"]
+            per_sample[i]["workload"] = {
+                "hf_ratio": log[ptr]["hf_ratio"],
+                "l2_entropy": log[ptr]["l2_entropy"],
+                "mean_var": log[ptr]["mean_var"],
+                "mean_l2": log[ptr]["mean_l2"]}
+            n_pre += log[ptr]["stage"] == "pre"
+            n_post += log[ptr]["stage"] == "post"
+            ptr += 1
+            attached += 1
+    diag["adaptive_attached"] = attached
+    diag["adaptive_total"] = len(log)
+    diag["adaptive"]["n_pre"] = int(n_pre)
+    diag["adaptive"]["n_post"] = int(n_post)
+
+
 # --------------------------------------------------------------------------- #
 # (C) PRE-merger: forward_pre_hooks on the 4 mergers + visual (to capture
 # grid_thw) + replace _process_image_input to split by pruned counts.
@@ -2024,7 +2181,10 @@ class PreMergerPruner:
                  visionzip_style: bool = False, visionzip_dom_ratio: float = 0.7,
                  mask_ranking: str = "stage",
                  qa_lambda: float = 0.0, qa_state=None,
-                 save_kept: bool = False):
+                 save_kept: bool = False,
+                 alpha: float = 1.0, beta: float = 1.0,
+                 adaptive: bool = False, tau_hf: float = 0.3, tau_ent: float = 2.0,
+                 hf_var_mode: str = "mean"):
         self.r = r
         self.sm = spatial_merge_size
         self.unit = spatial_merge_size ** 2          # 4
@@ -2036,6 +2196,14 @@ class PreMergerPruner:
         self.qa_state = qa_state                      # J5: from _qa_precompute
         self.save_kept = save_kept                    # R1-1: log kept unit sets
         self.kept_log = []                            # R1-1: per-image entries
+        self.alpha = alpha                            # Direction B freq scorer
+        self.beta = beta                              # Direction B freq scorer
+        self.adaptive = adaptive                      # Direction A stage router
+        self.tau_hf = tau_hf                          # high-freq-ratio threshold
+        self.tau_ent = tau_ent                        # L2-entropy threshold
+        self.hf_var_mode = hf_var_mode                # within-var baseline mode
+        self.stage_decisions = []                     # A: per-image "pre"/"post"
+        self.workload_log = []                        # A: per-image stats (diag)
         self.full_units = None                        # list[int] per image
         self.k_units = None                           # list[int] per image
         self._mask = None                             # cached token mask
@@ -2100,7 +2268,8 @@ class PreMergerPruner:
                 where = f"swap:post-ranking@{tag}"
             else:
                 feats = hs.reshape(num_units, self.unit, ctx)
-                scores = _score_units(feats, self.selector)        # [num_units]
+                scores = _score_units(feats, self.selector,
+                                      self.alpha, self.beta)   # [num_units]
                 where = tag
                 # ---- J5 QA-pre: blend query-similarity into the pre ranking ----
                 # Only entered when qa_lambda>0 (λ=0 => bit-identical plain RBM).
@@ -2111,7 +2280,36 @@ class PreMergerPruner:
             keep = torch.zeros(num_units, dtype=torch.bool,
                                device=hs.device)
             off = 0
+            self.stage_decisions = []          # Direction A: per-image stage
             for f, k in zip(self.full_units, self.k_units):
+                if self.adaptive:
+                    # ---- Direction A workload detector (merger-input only) ----
+                    # Per-image decision rule (task spec):
+                    #   high-freq ratio > tau_hf  OR  L2 entropy > tau_ent
+                    #       -> PRE stage (rank-before-merge = RBM)
+                    #   otherwise                   -> POST stage (merge-then-
+                    #                                 rank = FastV, applied at
+                    #                                 _process_image_input)
+                    # The PRE ranking below uses the CURRENT selector (l2 for
+                    # the stage-isolation run; freq for the combined run).
+                    stats = _unit_workload_stats(
+                        feats[off:off + f], self.hf_var_mode)
+                    stage = ("pre" if (stats["hf_ratio"] > self.tau_hf
+                                       or stats["l2_entropy"] > self.tau_ent)
+                             else "post")
+                    self.stage_decisions.append(
+                        {"stage": stage, "f": int(f),
+                         "k": int(min(k, f)), "stats": stats})
+                    self.workload_log.append(
+                        {"f": int(f), "k": int(min(k, f)), "stage": stage,
+                         **stats})
+                    # POST images keep ALL units pre-merge; the merged output is
+                    # post-pruned at _process_image_input (iso-budget: k tokens
+                    # per image either way).
+                    if stage == "post":
+                        keep[off:off + f] = True
+                        off += f
+                        continue
                 s_i = scores[off:off + f]
                 idx = torch.topk(s_i, min(k, f)).indices   # k<=f: never over-ask
                 keep[off + idx] = True
@@ -2246,6 +2444,121 @@ class PreMergerPruner:
             print(f"[qa] blend fallback ({type(e).__name__}: {str(e)[:120]}); "
                   f"using plain selector ranking", file=sys.stderr, flush=True)
             return base_scores
+
+
+def setup_adaptive(model, r: float, selector: str = "l2", family: str = "qwen3vl",
+                   tau_hf: float = 0.3, tau_ent: float = 2.0,
+                   alpha: float = 1.0, beta: float = 1.0,
+                   hf_var_mode: str = "mean"):
+    """Direction A: per-image workload detector (merger-input only, no query)
+    routes each image to the PRE stage (rank-before-merge, RBM) or POST stage
+    (merge-then-rank, FastV). iso-budget: both branches keep k=round(f*(1-r))
+    merged tokens per image.
+
+    Implementation (self-contained, qwen3vl-only):
+      * visual.forward pre_hook captures grid_thw; ALL mergers (main + deep-
+        stack) are wrapped so the FIRST call computes per-image workload stats
+        (hf_ratio, L2 entropy) from the merger INPUT -> per-image stage.
+        PRE images: keep top-k units pre-merge (merger runs on k units).
+        POST images: keep ALL units pre-merge (merger runs on f units) so the
+        exact FastV "rank merged tokens" count contract remains available.
+        The SAME cached mask is applied by every merger, so the deepstack cat
+        never sees a seq mismatch (unit-equivalence: a kept unit's merged token
+        is identical whether the merger runs on the full input or survivors).
+      * _process_image_input is REPLACED (like setup_pre_merger) to split the
+        merged output by the PER-IMAGE ACTUAL sizes (PRE->k, POST->f), then
+        for POST images L2-rank the f merged tokens and keep top-k (FastV);
+        PRE splits are left at their already-pruned k tokens. All within one
+        call, using the stage_decisions populated by this call's visual pass
+        -> no cross-call FIFO, no warmup alignment hazard.
+    """
+    if family != "qwen3vl":
+        raise SystemExit(f"adaptive: family={family} not supported "
+                         f"(Direction A built on the qwen3vl pre-merger "
+                         f"machinery).")
+    visual = model.visual
+    sm = visual.spatial_merge_size
+    unit = sm ** 2
+    pruner = PreMergerPruner(r, sm, selector, mask_ranking="stage",
+                             alpha=alpha, beta=beta,
+                             adaptive=True, tau_hf=tau_hf, tau_ent=tau_ent,
+                             hf_var_mode=hf_var_mode)
+    pruner.diag["adaptive"] = {"n_pre": 0, "n_post": 0}
+    pruner.diag["mode"] = "adaptive"
+
+    # (1) visual.forward pre_hook: capture grid_thw -> plan k_units.
+    def _visual_prehook(module, args, kwargs):
+        grid_thw = kwargs.get("grid_thw")
+        if grid_thw is None and len(args) >= 2:
+            grid_thw = args[1]
+        if grid_thw is not None:
+            pruner.begin_pass(grid_thw)
+        return None
+    handle_v = visual.register_forward_pre_hook(_visual_prehook, with_kwargs=True)
+    handles = [handle_v]
+
+    # (2) wrap ALL mergers (main + deepstack): first call computes mask+stages.
+    visual.merger._premerger_tag = "main"
+    targets = [visual.merger] + list(visual.deepstack_merger_list)
+    for i, m in enumerate(targets[1:], start=1):
+        m._premerger_tag = f"deepstack_{i - 1}"
+    for m in targets:
+        orig = _wrap_merger_forward(m, pruner)
+        pruner.merger_origs[m._premerger_tag] = orig
+        handles.append(orig)
+
+    # (3) replace _process_image_input: per-image split by ACTUAL sizes, then
+    #     FastV L2-post-prune for POST images only.
+    _orig_pii = model._process_image_input
+
+    def _patched_pii(image_input):
+        grid_thw = image_input["image_grid_thw"]
+        assert grid_thw.ndim == 2
+        if image_input["type"] == "image_embeds":
+            image_embeds = image_input["image_embeds"].type(visual.dtype)
+        else:
+            pixel_values = image_input["pixel_values"].type(visual.dtype)
+            image_embeds = visual(pixel_values, grid_thw=grid_thw)
+        if r == 0.0:
+            sizes = (grid_thw.prod(-1) // unit).tolist()
+            return image_embeds.split(sizes)
+        f_list = (grid_thw.prod(-1) // unit).tolist()
+        k_list = pruner.k_units
+        stages = list(pruner.stage_decisions)          # this call's image order
+        if len(stages) != len(f_list):
+            # Defensive: stage info unavailable/unbalanced -> mirror setup_pre
+            # so the run never crashes; flag the fallback in diag.
+            pruner.diag["adaptive_fallback"] = \
+                pruner.diag.get("adaptive_fallback", 0) + 1
+            sizes = [min(max(1, int(round(f * (1 - r)))), f) for f in f_list]
+            return image_embeds.split(sizes)
+        sizes = []
+        for rec, f in zip(stages, f_list):
+            if rec["stage"] == "post":
+                sizes.append(f)                        # merged on full units
+            else:
+                sizes.append(min(max(1, int(round(f * (1 - r)))), f))
+        splits = image_embeds.split(sizes)
+        out = []
+        for s, rec in zip(splits, stages):
+            if rec["stage"] == "post":
+                pruner.diag["adaptive"]["n_post"] += 1
+                n = int(s.shape[0])
+                k = max(1, int(round(n * (1.0 - r))))
+                idx = torch.topk(_score_tokens(s, "l2"), k).indices.sort().values
+                out.append(s.index_select(0, idx).contiguous())
+            else:
+                pruner.diag["adaptive"]["n_pre"] += 1
+                out.append(s)                         # already k tokens
+        pruner.stage_decisions = []                   # consumed; per-call list
+        if len(pruner.diag.get("nk", []) or []) < 8:
+            pruner.diag.setdefault("nk", []).append(
+                (int(splits[0].shape[0]) if splits else 0,
+                 int(out[0].shape[0]) if out else 0))
+        return tuple(out)
+
+    model._process_image_input = _patched_pii
+    return pruner, handles
 
 
 def _wrap_merger_forward(merger, pruner: "PreMergerPruner"):
@@ -2407,7 +2720,11 @@ def setup_pre_merger(model, r: float, selector: str = "l2", family: str = "qwen3
                       visionzip_style: bool = False, visionzip_dom_ratio: float = 0.7,
                       mask_ranking: str = "stage",
                       qa_lambda: float = 0.0, qa_state=None,
-                      save_kept: bool = False):
+                      save_kept: bool = False,
+                      alpha: float = 1.0, beta: float = 1.0,
+                      adaptive: bool = False, tau_hf: float = 0.3,
+                      tau_ent: float = 2.0,
+                      hf_var_mode: str = "mean"):
     if mask_ranking == "swap" and visionzip_style:
         raise SystemExit("--mask-ranking swap is not supported with "
                          "--visionzip-style (dominant-only standard path only).")
@@ -2416,7 +2733,10 @@ def setup_pre_merger(model, r: float, selector: str = "l2", family: str = "qwen3
     pruner = PreMergerPruner(r, sm, selector, visionzip_style, visionzip_dom_ratio,
                              mask_ranking=mask_ranking,
                              qa_lambda=qa_lambda, qa_state=qa_state,
-                             save_kept=save_kept)
+                             save_kept=save_kept,
+                             alpha=alpha, beta=beta,
+                             adaptive=adaptive, tau_hf=tau_hf, tau_ent=tau_ent,
+                             hf_var_mode=hf_var_mode)
 
     # (1) visual.forward pre_hook: capture grid_thw -> plan k_units.
     def _visual_prehook(module, args, kwargs):
@@ -3032,6 +3352,29 @@ def run_dry_check(family: str, selector: str = "l2"):
           f"(units {full_units}->{pruner.k_units}); selector={selector}; "
           f"mask computed once/cached")
 
+    # (c2) freq scorer (Direction B): alpha*z(l2) + beta*z(var) on the SAME feats.
+    feats_test = torch.randn(8, unit, 768)
+    ft = feats_test.float()
+    l2_t = ft.norm(dim=-1).mean(dim=-1)
+    v_t = ft.var(dim=1, unbiased=False).mean(dim=-1)
+
+    def _z(x):
+        s = x.std()
+        return torch.zeros_like(x) if s.item() == 0.0 else (x - x.mean()) / s
+
+    for alpha, beta in [(1.0, 1.0), (0.5, 2.0), (2.0, 0.5), (1.0, 0.0), (0.0, 1.0)]:
+        s_fq = _score_units(feats_test, "freq", alpha, beta)
+        want = alpha * _z(l2_t) + beta * _z(v_t)
+        assert torch.allclose(s_fq, want, atol=1e-5), (alpha, beta, s_fq - want)
+    # alpha=1/beta=0 preserves EXACT l2 ranking (z is rank-preserving)
+    assert torch.equal(_z(l2_t).sort().indices, l2_t.sort().indices)
+    # post-merger fallback (no within-unit structure -> L2)
+    tok_test = torch.randn(8, 768)
+    assert torch.allclose(_score_tokens(tok_test, "freq"), tok_test.norm(dim=-1))
+    print(f"[dry-check]   OK freq scorer: alpha*z(l2)+beta*z(var)={{a,b}} "
+          f"z-blends (alpha=1/beta=0 rank==l2, alpha=0/beta=1 rank==var; "
+          f"post falls back to L2)")
+
     # (d) post-merger prune (family-agnostic): wraps _process_image_input
     model2 = _DummyModel(family)
     called = {"n": 0}
@@ -3119,6 +3462,36 @@ def run_dry_check(family: str, selector: str = "l2"):
           f"by agreement+text-routed mask (consumed={diag5['consumed']}, "
           f"fallback={diag5['fallback_stage']}, edge_fallback={diag5['edge_fallback']}, "
           f"stats={state5['stats_log'][0]['jaccard_topk']})")
+
+    # (g2) DIRECTION A adaptive stage, qwen3vl only: workload detector routes
+    #      per-image (PRE/POST) from the FIRST merger input; _process_image_input
+    #      is replaced to split by per-image ACTUAL sizes (pre->k, post->f) and
+    #      post-prune POST splits (iso-budget k tokens/image both branches).
+    if family == "qwen3vl":
+        model6 = _DummyModel(family)
+        pruner6, handles6 = setup_adaptive(model6, 0.75, "l2", family,
+                                           tau_hf=0.3, tau_ent=2.0,
+                                           alpha=1.0, beta=1.0)
+        grid6 = torch.tensor([[1, 4, 8], [1, 4, 4]])   # [8,4] units, 2 images
+        pruner6.begin_pass(grid6)
+        seq6 = (8 + 4) * unit
+        full_hs6 = torch.randn(seq6, 1, 16)
+        # first wrapped merger computes mask + per-image stages
+        _ = model6.visual.merger(full_hs6)
+        assert len(pruner6.stage_decisions) == 2, pruner6.stage_decisions
+        stages = [d["stage"] for d in pruner6.stage_decisions]
+        assert all(st in ("pre", "post") for st in stages), stages
+        # per-image final size: pre->k (=round(f*0.25)), post->f; ISO-BUDGET
+        # k tokens/image under the FastV L2 prune (post f->k in the pii patch).
+        expect = [min(max(1, int(round(f * 0.25))), f) if st == "pre" else f
+                  for f, st in zip([8, 4], stages)]
+        assert len(pruner6.workload_log) == 2, pruner6.workload_log
+        for rec, f, st in zip(pruner6.workload_log, [8, 4], stages):
+            assert rec["f"] == f and rec["stage"] == st
+            assert "hf_ratio" in rec and "l2_entropy" in rec
+        print(f"[dry-check]   OK adaptive stage: stages={stages} "
+              f"adjusted per-image sizes={expect} "
+              f"(workload_log={len(pruner6.workload_log)} entries)")
 
     # (h) _hybrid_select unit test: agreement/routing/overflow branches, all
     #     keep exactly k on random inputs (text_frac in {0, 0.5, 1}).
@@ -3257,6 +3630,24 @@ def main():
                              "--mode hybrid (dominant-only standard path only)")
         if not 0.0 <= args.hybrid_text_frac <= 1.0:
             raise SystemExit("--hybrid-text-frac must be in [0,1]")
+    if args.mode == "adaptive":
+        # Direction A is defined for the CLEAN stage selector only: stage
+        # ranking, dominant-only, no query. Guard the other paths so they can
+        # never silently touch adaptive behavior.
+        if args.mask_ranking == "swap":
+            raise SystemExit("--mask-ranking swap is not applicable to "
+                             "--mode adaptive (adaptive routes PRE/POST per "
+                             "image with its own stage's ranking)")
+        if args.visionzip_style:
+            raise SystemExit("--visionzip-style is not supported with "
+                             "--mode adaptive (dominant-only standard path)")
+        if args.qa_lambda > 0.0:
+            raise SystemExit("--qa-lambda>0 is not supported with "
+                             "--mode adaptive (workload detector is query-free)")
+        if family != "qwen3vl":
+            raise SystemExit("adaptive: family must be qwen3vl "
+                             "(Direction A built on the qwen3vl pre-merger "
+                             "machinery)")
     # J5 QA-pre is defined for the STANDARD pre path only (stage ranking,
     # dominant-only). Guard the other paths so λ>0 can never silently touch
     # post/hybrid/swap/visionzip behavior. λ=0 is always allowed (no-op).
@@ -3405,6 +3796,15 @@ def main():
         diag, hybrid_state = setup_hybrid(model, r, args.selector, family,
                                           args.hybrid_text_frac,
                                           args.save_unit_scores)
+    elif args.mode == "adaptive":
+        # Direction A: per-image workload detector routes each image to the
+        # PRE stage (RBM rank-before-merge) or the POST stage (FastV
+        # merge-then-rank) -- iso-budget via per-image k.
+        pruner, _handles = setup_adaptive(model, r, args.selector, family,
+                                          tau_hf=args.tau_hf, tau_ent=args.tau_ent,
+                                          alpha=args.alpha, beta=args.beta,
+                                          hf_var_mode=args.hf_var_mode)
+        diag = pruner.diag
     elif args.mode == "pre":
         if family == "internvl3":
             # True rank-before-merge on the pixel-shuffle units (no QA/swap/
@@ -3436,7 +3836,8 @@ def main():
                                                  mask_ranking=args.mask_ranking,
                                                  qa_lambda=args.qa_lambda,
                                                  qa_state=qa_state,
-                                                 save_kept=args.save_unit_scores)
+                                                 save_kept=args.save_unit_scores,
+                                                 alpha=args.alpha, beta=args.beta)
             diag = pruner.diag
     elif args.mode == "pre-final":
         # P0-3 pure-stage confound control: rank at visual.merger's input
@@ -3584,6 +3985,14 @@ def main():
         elif swap_state is not None:
             attach_kept_indices(swap_state["kept_log"], samples, per_sample,
                                 model_id, args.max_pixels, diag)
+    if args.mode == "adaptive":
+        # Direction A: attach per-image stage + workload stats for analysis
+        # (entry 0 = warmup dropped). Also finalize the diag counters.
+        pruner.diag["tau_hf"] = args.tau_hf
+        pruner.diag["tau_ent"] = args.tau_ent
+        pruner.diag["hf_var_mode"] = args.hf_var_mode
+        attach_adaptive_workload(pruner.workload_log, samples, per_sample,
+                                 model_id, args.max_pixels, pruner.diag)
     if qa_state is not None and args.qa_lambda > 0.0:
         # J5 QA-pre: stamp qa_lambda on every sample (analysis) + best-effort
         # per-image mean qsim; expose the qsim bookkeeping counters.
@@ -3601,6 +4010,9 @@ def main():
         "visionzip_style": args.visionzip_style,
         "visionzip_dom_ratio": args.visionzip_dom_ratio,
         "selector": args.selector, "max_pixels": args.max_pixels,
+        "alpha": args.alpha, "beta": args.beta,
+        "tau_hf": args.tau_hf, "tau_ent": args.tau_ent,
+        "hf_var_mode": args.hf_var_mode,
         "seed": args.seed,
         "temperature": args.temperature, "top_p": args.top_p,
         "top_k": args.top_k, "decoding": "greedy" if args.temperature == 0.0 else "sampling",

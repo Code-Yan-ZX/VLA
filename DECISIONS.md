@@ -200,3 +200,16 @@
 - Page-budget decision: compress duplicated Introduction, negative-result, efficiency, discussion, and conclusion prose rather than alter ACM margins/font sizes. Final layout is 8 body pages plus one reference page, followed by the integrated supplement.
 - Submission metadata remains provisional: anonymous review mode stays enabled; ACM MM'27 date/location must be checked against the official CFP; author/affiliation and publisher DOI/ISBN belong to camera-ready metadata. Actual submission is a mandatory human-confirmation action.
 
+## 2026-08-13 — Direction A/B 升级 scorer：freq + 自适应阶段（training-free）
+**任务书**：RBM 升级 ①频率感知打分 freq = α·L2 + β·var（Direction B）②每图 workload 检测器 → PRE/POST 阶段路由（Direction A）。全程 training-free。
+**裁决（实现层）**：
+- freq selector 加入 `_score_units`（PRE-only；POST 回退 L2，与 var/edge 一致）。α/β 默认 1.0。**关键修正（探针校准 2026-08-13）**：raw-scale 混合在数学上不可行 —— Qwen3-VL 特征上 mean(unit L2)~O(12) vs mean(within-var)~O(0.04)，差 ~300:1，β 项对 α,β∈{0.5,1,2}² 相比 L2 完全可忽略 → 网格会塌缩成纯 L2、M2 无法被利用。故实现为 **score = α·z(l2) + β·z(var)**（z = 每图 z-score，两分量归一到同尺度），α/β 才成为真正的权衡旋钮。α=1,β=0 ≡ plain L2（rank 不变），α=0,β=1 ≡ plain var。探针脚本 scripts/adapt_discriminator_probe.py。
+- adaptive mode（qwen3vl-only）：首个 merger 输入（deepstack[0]=layer8 特征）算每图 hf_ratio + L2 熵（20-bin 直方图 nats）；`hf>τ_hf OR H>τ_ent → PRE`，否则 POST。POST 图 merge 全量 f units 后按 L2 top-k（FastV 语义），PRE 图 pre-slice 到 k → 两分支 iso-budget k=f(1-r)。`_process_image_input` 替换按每图实际 size split（pre→k, post→f），POST 图再 L2 prune。
+  - **τ_hf 校准（探针）**：hf_ratio 用 per-image mean 阈值时 TextVQA≈0.46 与 GQA≈0.48 无法区分（退化阈值）；用 **mean+1σ 尾占比**（var_mode=mean1sd）TextVQA≈0.142 vs GQA≈0.127 → 分开（文字图尾更长）。默认 var_mode=mean1sd。
+- 未归一化（非 z-score）是刻意选择：网格直接找 α:β 最优比，避免隐藏的 scale trick。
+- Dry-check 已含 freq blend 恒等 + adaptive stage 路由；n=8 smoke 待跑。
+- **协议修正（2026-08-13）**：eval/subsets/*.jsonl 的 question 字段**丢失** "Answer the question using a single word or phrase." 后缀 → Qwen3-VL 输出冗长句 → official exact-match 全 0。Direction A/B 全部 cell 改用 **full-split jsonl + n=500 头切片**（与 j7hf baselines 相同的文件+n），提示带后缀、答案可打分、与既有 FastV/Pyramid「阿里对照」可比。ChartQA 无 full split，用 chartqa_200（既有 SOTA-matrix 同源）。
+- **Bug fixed（2026-08-13）**：generic pre-mode dispatch 未把 --alpha/--beta 传入 PreMergerPruner → 前一轮 grid 9 个 cell 全部以静默 α=β=1.0 运行、结果 bit-identical（0.662）。已补传参并 smoke 验证 α≠β 产生差异（0.583 vs 0.667 @ n=12）。grid 重跑。
+- **Task-1 结果（freq@α=1,β=0.6，official）**：textvqa +1.2pp@25%/+0.5pp@50%；docvqa −1.6pp@25%/+0.6pp@50%；ocrbench −2.2pp@25%/0@50%；gqa −1.6pp@25%/+0.2pp@50%。→ 方差项在最 text-dense 且高压缩（TextVQA@25%）真正提升；粗压缩下 docvqa/ocrbench/gqa 受损。Mixed profile —— 如实记录，组合阶段会考察 freq+adaptive 是否 mitigate。
+- **Task-2 round-1 校准失误 + round-2 修正**：第一轮 τ_hf∈{0.15,0.30,0.50} 全部 > TextVQA 的 mean1sd hf_ratio≈0.142 → hf 项永不触发 → 纯熵路由把文字图 flip 到 POST → acc 暴跌（0.528/0.374 vs pre 0.68）。正确分隔带在 GQA≈0.127 与 TextVQA≈0.142 之间 → round-2 τ_hf∈{0.08,0.13,0.20}。机制本身工作（路由计数正确），是网格范围问题。
+- **Task-2 结论：acceptance FAIL，如实记录（2 轮搜索已尽）**。TextVQA 网格胜者 τ_hf=0.08 → 所有图全 PRE → adaptive ≡ RBM（textvqa/docvqa/ocrbench 0.00pp 回归 ✓，但 GQA +0.00pp < 要求的 +1pp ✗）。τ_hf=0.13（设计上该 flip GQA→POST）：TextVQA 51/320 flip → −7pp text（超 0.5pp 限），GQA 仅 22/243 flip → 0.428 < RBM 0.438。→ 无单一全局 τ 能满足「GQA≥+1pp 且 text≤0.5pp 回归」。结构原因：GQA 与 TextVQA 的 hf_ratio(mean1sd) 分布重叠（均值 0.127 vs 0.142，per-image spread 大），query-free 全局阈值无法分开。按任务停条件记录失败原因，不宣提升。
