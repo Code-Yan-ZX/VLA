@@ -3,6 +3,8 @@
 Date: 2026-08-13 · Model: Qwen3-VL-8B-Instruct (repo default qwen3vl) · 1×A40
 Training-free; strictly §3 iso-selector + iso-budget protocol.
 
+Summary (三表格 + 失败原因) — 见本文件首节；完整 log 见后文。
+
 ## Setup / calibration (probe: scripts/adapt_discriminator_probe.py, n=16/class)
 - raw-scale freq blend is numerically degenerate on Qwen3-VL features:
   mean(unit L2) ≈ 12 vs mean(within-unit var) ≈ 0.04 (≈300:1) → β·var is
