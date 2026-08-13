@@ -9,20 +9,22 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 
-ROOT = Path("/media/disk2/YZX/research/vla")
+ROOT = Path(__file__).resolve().parents[3]
 DATA_DIR = ROOT / "drafts/figures/frontispiece_fig1/data"
 CAND_DIR = ROOT / "drafts/figures/frontispiece_fig1/candidates"
-OUT_FIG = ROOT / "drafts/figs/fig1.pdf"
+OUT_FIG = ROOT / "drafts/overleaf_submission/figs/fig1.pdf"
 
-C_AMBER = "#E8A33D"
-C_BLUE = "#4A6FA5"
-C_GRAY = "#8A93A3"
-C_INK = "#0b0b0b"
-C_INK2 = "#52514e"
-C_INK3 = "#898781"
-C_RED = "#D03B3B"
-C_OK = "#e8f5e9"
-C_ERR = "#fde8e8"
+# Restrained editorial palette: terracotta for RBM, deep blue-green for
+# controls, and brick red only for the failure signal.
+C_AMBER = "#C86B43"
+C_BLUE = "#496B78"
+C_GRAY = "#86939A"
+C_INK = "#202628"
+C_INK2 = "#4D575B"
+C_INK3 = "#7D878A"
+C_RED = "#B94A43"
+C_OK = "#F5F0E8"
+C_ERR = "#F8EEEB"
 
 with (DATA_DIR / "manifest.json").open() as f:
     M = json.load(f)
@@ -80,21 +82,21 @@ def render(candidate: str, out_path: Path):
         show_labels = False
 
     fig = plt.figure(figsize=(7.0, 3.6), dpi=300)
-    gs = fig.add_gridspec(1, 3, left=0.03, right=0.98, top=0.90, bottom=0.10,
-                          width_ratios=widths, wspace=0.10)
+    gs = fig.add_gridspec(1, 3, left=0.035, right=0.975, top=0.88, bottom=0.11,
+                          width_ratios=[1.18, 1.40, 1.32], wspace=0.14)
 
     # --- Zone 1: Input ---
     ax1 = fig.add_subplot(gs[0, 0])
     ax1.imshow(arr)
     ax1.set_xticks([]); ax1.set_yticks([])
     for sp in ax1.spines.values():
-        sp.set_edgecolor(C_INK2); sp.set_linewidth(0.4)
+        sp.set_edgecolor("#C5CCCD"); sp.set_linewidth(0.7)
     ax1.add_patch(mpatches.Rectangle((ev[0], ev[1]), ev[2]-ev[0], ev[3]-ev[1],
                                       fill=False, edgecolor=C_RED, linewidth=1.5, zorder=5))
     if show_labels:
-        fig.text(ax1.get_position().x0, 0.93, "Input", fontsize=8, color=C_INK3,
+        fig.text(ax1.get_position().x0, 0.905, "INPUT", fontsize=7.2, color=C_INK3,
                  fontweight="bold", va="bottom")
-    fig.text(ax1.get_position().x0, 0.04, f'Q: {M["question"]}', fontsize=7, color=C_INK2)
+    fig.text(ax1.get_position().x0, 0.055, f'Q  {M["question"]}', fontsize=7.2, color=C_INK2)
 
     # --- Zone 2: Where to rank ---
     ax2 = fig.add_subplot(gs[0, 1])
@@ -103,33 +105,33 @@ def render(candidate: str, out_path: Path):
     for sp in ax2.spines.values():
         sp.set_visible(False)
     if show_labels:
-        fig.text(ax2.get_position().x0, 0.93, "Where to rank", fontsize=8, color=C_INK3,
+        fig.text(ax2.get_position().x0, 0.905, "ORDER OF OPERATIONS", fontsize=7.2, color=C_INK3,
                  fontweight="bold", va="bottom")
 
     def draw_lane(y_base, color, labels, lane_name):
-        bw, bh = 0.85, 0.42
+        bw, bh = 0.78, 0.42
         for i, label in enumerate(labels):
-            x = 0.15 + i * 1.0
+            x = 0.18 + i * 0.99
             rect = mpatches.FancyBboxPatch((x, y_base), bw, bh,
-                                            boxstyle="round,pad=0.02",
-                                            facecolor="white", edgecolor=color, linewidth=1.2)
+                                            boxstyle="round,pad=0.025,rounding_size=0.035",
+                                            facecolor="#FCFCFB", edgecolor=color, linewidth=1.05)
             ax2.add_patch(rect)
             ax2.text(x + bw/2, y_base + bh/2, label, ha="center", va="center",
-                      fontsize=7, color=color, fontweight="bold")
+                      fontsize=6.5, color=color, fontweight="bold", linespacing=1.0)
         # arrows
         for i in range(len(labels) - 1):
-            x_arr = 0.15 + (i + 1) * 1.0 - 0.08
+            x_arr = 0.18 + (i + 1) * 0.99 - 0.08
             ax2.annotate("", xy=(x_arr + 0.08, y_base + bh/2),
                          xytext=(x_arr, y_base + bh/2),
                          arrowprops=dict(arrowstyle="->", color=color, lw=1.2))
         # lane name
-        ax2.text(1.65, y_base + bh + 0.08, lane_name, ha="center", fontsize=8.5,
+        ax2.text(1.58, y_base + bh + 0.09, lane_name, ha="center", fontsize=8.1,
                  color=color, fontweight="bold")
 
-    draw_lane(1.4, C_AMBER, ["Rank\n2x2 units", "Keep 25%", "Native\nmerger"], "RBM (ours)")
-    draw_lane(0.3, C_BLUE,  ["Native\nmerger", "Rank\nmerged", "Keep 25%"], "Post-L2")
-    ax2.text(1.65, 0.05, "rank before information is mixed", ha="center",
-             fontsize=7, color=C_INK3, style="italic")
+    draw_lane(1.40, C_AMBER, ["Rank\n2x2", "Keep\n25%", "Merge"], "RBM (ours)")
+    draw_lane(0.30, C_BLUE,  ["Merge", "Rank", "Keep\n25%"], "Post-L2")
+    ax2.text(1.58, 0.05, "rank before information is mixed", ha="center",
+             fontsize=6.9, color=C_INK3, style="italic")
 
     # --- Zone 3: Evidence ---
     ax3 = fig.add_subplot(gs[0, 2])
@@ -138,55 +140,50 @@ def render(candidate: str, out_path: Path):
     for sp in ax3.spines.values():
         sp.set_visible(False)
     if show_labels:
-        fig.text(ax3.get_position().x0, 0.93, "Evidence", fontsize=8, color=C_INK3,
+        fig.text(ax3.get_position().x0, 0.905, "ANSWER-BEARING EVIDENCE", fontsize=7.2, color=C_INK3,
                  fontweight="bold", va="bottom")
 
     # crop evidence region
     ev_crop = arr[ev[1]:ev[3], ev[0]:ev[2]]
 
-    # two zoom panels: RBM (left) and Post-L2 (right); each uses its OWN mask
+    # Two vertically aligned zoom panels make the same evidence easy to compare.
     # (Post-L2 mask was re-captured 2026-08-12; not reused from RBM)
     # RBM zoom
-    ax3_rbm = ax3.inset_axes([0.0, 0.55, 0.48, 0.38])
+    ax3_rbm = ax3.inset_axes([0.0, 0.61, 1.0, 0.27])
     ax3_rbm.imshow(make_overlay(ev_crop, masks["rbm"], sides["rbm"]))
     ax3_rbm.set_xticks([]); ax3_rbm.set_yticks([])
     for sp in ax3_rbm.spines.values():
-        sp.set_edgecolor(C_AMBER); sp.set_linewidth(1.5)
-    ax3.text(0.24, 0.96, f"RBM: {rbm.get('display_answer', rbm['short_answer'])}", ha="center", fontsize=7,
+        sp.set_edgecolor(C_AMBER); sp.set_linewidth(1.25)
+    ax3.text(0.0, 0.92, f"RBM   {rbm.get('display_answer', rbm['short_answer'])}", ha="left", fontsize=7.1,
              color=C_AMBER, fontweight="bold", transform=ax3.transAxes)
-    ax3.text(0.24, 0.50, "Correct", ha="center", fontsize=7, color="#0a7a0a",
+    ax3.text(0.98, 0.92, "CORRECT", ha="right", fontsize=6.5, color=C_AMBER,
              transform=ax3.transAxes,
-             bbox=dict(boxstyle="round,pad=0.2", facecolor=C_OK,
-                       edgecolor="#0a7a0a", linewidth=0.5))
+             bbox=dict(boxstyle="round,pad=0.18", facecolor=C_OK,
+                       edgecolor=C_AMBER, linewidth=0.55))
 
     # Post-L2 zoom
-    ax3_post = ax3.inset_axes([0.52, 0.55, 0.48, 0.38])
+    ax3_post = ax3.inset_axes([0.0, 0.27, 1.0, 0.27])
     ax3_post.imshow(make_overlay(ev_crop, masks["post"], sides["post"]))
     ax3_post.set_xticks([]); ax3_post.set_yticks([])
     for sp in ax3_post.spines.values():
-        sp.set_edgecolor(C_BLUE); sp.set_linewidth(1.5)
-    ax3.text(0.76, 0.96, f"Post-L2: {post.get('display_answer', post['short_answer'])}", ha="center", fontsize=7,
+        sp.set_edgecolor(C_BLUE); sp.set_linewidth(1.25)
+    ax3.text(0.0, 0.58, "Post-L2", ha="left", fontsize=7.1,
              color=C_BLUE, fontweight="bold", transform=ax3.transAxes)
-    ax3.text(0.76, 0.50, "Incorrect", ha="center", fontsize=7, color=C_RED,
+    ax3.text(0.98, 0.58, "NOT RECOVERED", ha="right", fontsize=6.5, color=C_RED,
              transform=ax3.transAxes,
-             bbox=dict(boxstyle="round,pad=0.2", facecolor=C_ERR,
+             bbox=dict(boxstyle="round,pad=0.18", facecolor=C_ERR,
                        edgecolor=C_RED, linewidth=0.5))
 
     # GT
-    ax3.text(0.0, 0.42, "Ground truth: A105-108", fontsize=7.5, color=C_INK2,
+    ax3.text(0.0, 0.18, "GT  A105-108", fontsize=7.1, color=C_INK2,
              fontweight="bold", transform=ax3.transAxes)
     # FastV
-    ax3.text(0.0, 0.32, f"FastV-k3: {fastv.get('display_answer', fastv['short_answer'])}", fontsize=7,
+    ax3.text(0.0, 0.11, f"FastV-k3  {fastv.get('display_answer', fastv['short_answer'])}", fontsize=6.8,
              color=C_GRAY, transform=ax3.transAxes)
-    ax3.text(0.0, 0.24, "Incorrect", fontsize=7, color=C_RED,
-             transform=ax3.transAxes,
-             bbox=dict(boxstyle="round,pad=0.15", facecolor=C_ERR,
-                       edgecolor=C_RED, linewidth=0.5))
     # footer
-    ax3.text(0.0, 0.14, f"25% retained | identical final token count: {M['ptid']}",
-             fontsize=7, color=C_INK3, style="italic", transform=ax3.transAxes)
-    ax3.text(0.0, 0.06, "OCRBench: RBM +16.0 pp vs FastV-k3", fontsize=7,
-             color=C_AMBER, fontweight="bold", transform=ax3.transAxes)
+    ax3.text(0.0, 0.035,
+             f"25% retained | {M['ptid']} tokens   ·   OCRBench: +16.0 pp vs FastV-k3",
+             fontsize=5.7, color=C_INK3, style="italic", transform=ax3.transAxes)
 
     fig.savefig(out_path, bbox_inches="tight", facecolor="white", dpi=300)
     plt.close(fig)

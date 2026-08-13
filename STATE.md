@@ -1,7 +1,7 @@
 # STATE.md - 当前项目状态（主窗口维护，保持 ≤30 行）
 
 > 项目：VLM 视觉 token 压缩 · 目标：Rank-Before-Merge -> ACM MM'27
-> 最近更新：2026-08-12 · **Overleaf 权威稿已完成投稿级重构：8 页正文 + 1 页参考文献，后接补充材料；仅待作者及官方投稿元数据。**
+> 最近更新：2026-08-13 · **Overleaf 权威稿已完成投稿级重构：8 页正文 + 1 页参考文献，后接补充材料；仅待作者及官方投稿元数据。**
 
 ## ★ 服务器任务书终判：双门均 NO-GO（2026-08-10）
 - **Deferred RBM (rho=1,K=3) 零代码臂**：n=64×4 dev gate -- 锚点 ≡ plain RBM bit-identical，ptid 64/64×3+58/58 全等；cond1（四基准 ≥max(RBM,fst3)−1pp）textvqa/docvqa FAIL → **NO-GO**，不进入 n=200。GPU 0.75h。
@@ -20,6 +20,7 @@
 - 双门 NO-GO 落地后方法维持 plain RBM；§6 引用待 user OK。
 - 任务书交付齐：experiments/cvpr2026_token_compression_audit.md（新颖性）+ deferred_rbm_gate.md（Stage A）+ rbm_ot_gate.md（Stage B）+ DECISIONS/STATE 更新；以 Code-Yan-ZX 身份 commit+push（无 AI 署名）。
 - Fig.1 改为 frontispiece：单例 OCRBench ocr0422（机场信息牌，GT A105-108，ptid=69），3 区域（Input/Where to rank/Evidence），7.0×3.6 inch；候选 a_balanced/b_visual/c_minimal 渲染于 drafts/figures/frontispiece_fig1/candidates/；选 b_visual 为终版；validator 2026-08-12 扩展为 29/29（fail-closed 检 method-specific mask）；旧版备份为 previous_pipeline_fig1.pdf；overleaf caption 重写、§6 不宣通用 SOTA。
+- 2026-08-13：Fig.1 视觉修复：重排为 input/order/evidence 三栏，证据 crop 改上下对齐，配色改低饱和陶土橙+深青灰+砖红；修复长 footer 撑大 PDF 裁切框（最终 520.9×243.6 pt），主稿 18 页编译及 page-3 渲染通过。
 - 2026-08-12：Post-L2/FastV-k3 源 200-sample run 未存 per-sample kept indices（仅 pre 存了），原 frontispiece 三方法共用 RBM mask（违反 task spec「Do not reuse the RBM mask for other methods and do not derive masks from image pixels」）。scripts/capture_frontispiece_masks.py 单例重捕：--mode post --r-post 0.25 与 --mode fastv --r 0.75 --fastv-k 3，ptid=69 + answer-prefix + OCRBench correctness 全等；mask 差异 RBM∩Post=18 RBM∩FastV=14 Post∩FastV=15（皆 < 54，distinct 真实）；PDF SHA 同；overleaf 同步。GPU 0.4 min，未升级。
 - User 2026-08-12 否决三例 contact-sheet 作为首页图；改为单案例旗舰图：沿用原 Overleaf pipeline 流向/配色，以 OCRBench ocr0422（备选 ocr0804）串起 input→rank stage→真实局部 mask/答案；缺 FastV/Post mask 必须单例补捕获，禁复用 RBM mask。任务书见 `drafts/figures/CLAUDE_CODE_PROMPT_FIG1_QUALITATIVE.md`。
 - 2026-08-12 投稿稿收口：摘要约 230 词；Fig.2 改为三模型×四基准 paired-95%CI forest plot；Fig.3 改为双模型共享 TextVQA/DocVQA retention 曲线；删除重复正文表、压缩负结果/局限/结论；统计主口径=20k paired bootstrap + paired sign-flip，McNemar 仅补充二值结果。
