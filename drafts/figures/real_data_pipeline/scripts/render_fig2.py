@@ -28,8 +28,15 @@ EXPECTED_MODELS = ["Qwen3-VL-8B", "Qwen2.5-VL-7B", "InternVL3-8B"]
 EXPECTED_PANELS = ["TextVQA", "DocVQA", "OCRBench", "GQA"]
 EXPECTED_UNITS = {"TextVQA": "pp", "DocVQA": "pp", "OCRBench": "pts", "GQA": "pp"}
 
-COLORS = {"Qwen3-VL-8B": "#4C72B0", "Qwen2.5-VL-7B": "#DD8452", "InternVL3-8B": "#55A868"}
-INK, AXIS_GRAY, GRID_GRAY, ZERO_GRAY = "#222222", "#333333", "#D9D9D9", "#333333"
+# Muted editorial palette: steel blue, brick terracotta, and grey olive.
+# These colors remain distinct in grayscale while avoiding the saturated
+# default chart palette that makes the figure feel synthetic.
+COLORS = {
+    "Qwen3-VL-8B": "#3E5C76",
+    "Qwen2.5-VL-7B": "#B56552",
+    "InternVL3-8B": "#718B70",
+}
+INK, AXIS_GRAY, GRID_GRAY, ZERO_GRAY = "#2E3334", "#646B69", "#D6D5D0", "#3F4544"
 MINUS = "−"  # true minus sign
 
 
@@ -145,8 +152,8 @@ def render(data: dict, outdir: Path) -> None:
 
     fig, ax = plt.subplots(figsize=(7.09, 3.35))
     fig.subplots_adjust(left=0.17, right=0.985, top=0.80, bottom=0.23)
-    ax.axvspan(-7, 0, color="#f4f4f1", zorder=0)
-    ax.axvspan(0, 50, color="#fff8eb", zorder=0)
+    ax.axvspan(-7, 0, color="#F1F1EE", zorder=0)
+    ax.axvspan(0, 50, color="#F8F4EA", zorder=0)
     ax.axvline(0, color=ZERO_GRAY, linewidth=1.1, zorder=2)
     ax.xaxis.grid(True, color=GRID_GRAY, linewidth=0.55, zorder=1)
     ax.set_axisbelow(True)
@@ -190,7 +197,7 @@ def render(data: dict, outdir: Path) -> None:
         ax.spines[side].set_visible(False)
     ax.text(-5.8, 3.38, "post better", fontsize=7, color=AXIS_GRAY,
             ha="left", va="bottom")
-    ax.text(1.0, 3.38, "RBM better", fontsize=7, color="#9a6500",
+    ax.text(1.0, 3.38, "RBM better", fontsize=7, color="#8A5A45",
             ha="left", va="bottom")
 
     handles, labels = ax.get_legend_handles_labels()
