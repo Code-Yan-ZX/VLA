@@ -236,3 +236,13 @@
 - **引用策略**：文献库从 25 扩至 49 条，新增以 CVPR 2026 官方 CVF proceedings 为主；未正式发表的 2026 工作保持 `@misc`/arXiv 身份。所有条目均在 Related Work 中按方法类别实质性引用，不用 `\nocite` 凑数。
 - **页数纪律**：删除冗余 `url` 字段，保留作者、题名、venue、年份、页码、DOI/arXiv，使参考文献稳定为 2 页；最终 `main.pdf` 19 页（正文 8、参考文献 2、补充材料从第 11 页开始）。
 - **工具**：按公开仓库 `wp-a/nature-academic-search` 的 Codex skill 路径安装到 `C:\Users\C\.codex\skills\nature-academic-search`；skill 将从下一轮对话起可直接调用。
+
+## 2026-08-14 — S6：2026 论文模块缝合（目标=新政方法，当前 SOTA 以 iso-budget 现任=max(RBM pre, FastV post) 为准）
+**任务书（user）**：暂时不考虑论文；从最新 2026 论文缝合模块做创新实验，直到找出能达到当前 SOTA 的方法。
+**裁决（实现层）**：
+- **架构铁律**：patch_processor 占位符按 round(full·(1−r)) 缩放；pre 路径按 pruner.k_units 切分；单图请求下两者必须逐图相等。→ 改"选哪些 unit 而数量不变"（多样性）零风险；改"每图数量"（自适应预算）必须让占位符同步自适应。
+- **Phase 1（已实现+运行中）**：PRUNESID 式 importance+diversity 选择 `--diversity nms`（top-γk 候选池按重要性遍历，余弦>τ 抑制，补足恰 k；iso-token、默认 bit-identical）。qwen3vl pre only。Grid：τ∈{0.6,0.75,0.9}×γ∈{1.25,2.0} @ r=0.25 n=200 四基准。
+- **Phase 2（已实现，待 grid 后跑）**：E-AdaPrune 谱能量 / PRUNESID 动态压缩比 / AgilePruner erank 的自适应预算。离线链：`--budget-calib`（pre r=0.05 记录 per-image svd 谱,request order）→ scripts/stitch_budget_alloc.py（spectral τ/erank → iso-token per-image k,clamp[0.5,2]×base,hi⊆f,穷举验证）→ `--budget-file` + max-num-seqs=1（占位符与 keep-count 共用一个 cursor）。**
+- **AgilePruner 关键参考（全文已读）**：简单/集中证据图宜 attention 打分、复杂/分布特征图宜 diversity；自适应 τ_i = order_i × (erank_img/erank_avg × 0.01)（cap）;70 his per-image count 变体在 GQA/POPE/MME/MMBench 有增益。→ 若 Phase-1 近胜，Phase-3 用自适应 τ 升级 NMS。
+- 提交：fcca0b4（diversity 模块+dry-check）、80df159（budget machinery）、driver phases 提交。
+>>>>>>> S6: design note + decision record (PRUNESID diversity phase-1 live, E-AdaPrune budget phase-2 machinery ready)
