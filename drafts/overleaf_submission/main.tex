@@ -13,11 +13,10 @@
 %     markdown (work notes) are intentionally NOT typeset here.
 %
 %  FIGURES: three figures embedded from figs/ (all from measured data; no
-%   proxy / schematic / placeholder remains). fig1.pdf = measured Qwen3-VL-8B
-%   merger-input / merger-output L2 selection masks on one real image
-%   (df7282e1, 25% kept); fig2.pdf = measured full-split pre-post deltas
-%   (three families); fig3.pdf = measured n=200 retention-vs-gap curves. The
-%   three are wide landscape figures and use figure* + \textwidth.
+%   proxy / schematic / placeholder remains). fig1.pdf = two audited OCRBench
+%   cases with measured retained-unit masks for three selectors; fig2.pdf =
+%   measured full-split pre-post deltas (three families); fig3.pdf = measured
+%   Qwen3-VL merger mechanism diagnostics. All use figure* + \textwidth.
 %
 %  PAGE BUDGET (hard cap: <=8 pp body + <=2 pp refs). Compression points already
 %   applied are marked  % [COMPRESSED ...] ; further optional levers are marked
@@ -282,26 +281,24 @@ fixed:
     only in Table~\ref{tab:tab3}.
 \end{itemize}
 
-% FIG 1 --- frontispiece: stage-order intervention + two audited examples
+% FIG 1 --- two audited OCRBench examples with three measured selectors
 \begin{figure*}[t]
   \centering
   \includegraphics[width=\textwidth]{figs/fig1.pdf}
-  \caption{\textbf{Saliency should be measured before information mixing.}
-  The top strip isolates the controlled stage-order change: RBM ranks raw
-  $2\!\times\!2$ units before the native merger, whereas Post-L2 applies the
-  same L2 selector to merged rows at the same $\kappa=25\%$ budget. Two
-  regeneration-stable audited cases show exact native-grid kept indices over
-  unmodified inputs; vector check/cross markers give answer correctness. RBM
-  alone recovers the document date, whereas RBM and FastV-k3 both recover the
-  scene text. The Qwen3-VL-8B full-split anchor reports RBM minus Post-L2 on a
-  common 0--100 scale, with OCRBench divided by ten and GQA retained as the
-  scope boundary.}
-  \Description{A vector overview first compares Rank-then-Keep-then-Merge with
-  Merge-then-Rank-then-Keep at the same 25 percent budget. Below, two rows of
-  real images compare measured retained-unit masks for RBM, Post-L2, and
-  FastV-k3. Correct and incorrect answers are marked by vector checks and
-  crosses. A final Qwen3-VL-8B strip gives four full-split score changes on a
-  common zero-to-one-hundred scale, including a negative GQA boundary.}
+  \caption{\textbf{Three selectors retain different visual evidence.}
+  Two audited OCRBench cases compare RBM, Post-L2, and FastV-k3 at the same
+  $\kappa=25\%$ visual-token budget on Qwen3-VL-8B. Blue native-grid cells are
+  the visual units retained by each method; the underlying input remains
+  visible for direct spatial comparison. Vector checks and crosses report
+  answer correctness against the printed ground truth. In both examples, RBM
+  preserves the answer-bearing text and answers correctly, while Post-L2 and
+  FastV-k3 do not. These cases illustrate the selection behavior; aggregate
+  effects and uncertainty are reported in Figure~\ref{fig:fig2}.}
+  \Description{Two OCRBench image rows compare retained visual units for RBM,
+  Post-L2, and FastV-k3 at 25 percent retention. The first ground truth is
+  A105-108 and the second is OCTOBER 1999. Blue grid cells identify units kept
+  by each selector. RBM is correct in both rows, while Post-L2 and FastV-k3 are
+  incorrect, as indicated by vector check and cross marks.}
   \label{fig:fig1}
 \end{figure*}
 
@@ -817,21 +814,36 @@ remains the headline configuration (\S\ref{sec:discussion}).
 
 \textbf{Retention curve.} The stages are nearly indistinguishable at 75\%
 retention; their gap then widens monotonically through 25\% on both Qwen models
-(Figure~\ref{fig:fig3}; full values in Supplementary Table~S3, $n=200$).
+(full values in Supplementary Table~S3, $n=200$).
 
-% FIG 3 --- retention-vs-gap curves (compression-activated effect; wired from
-% figs/fig3.pdf, measured n=200 ablation values).
+\textbf{Merger mechanism.} Figure~\ref{fig:fig3} connects the stage effect to
+the native merger. Across four workloads, pre- and post-merger rankings share
+only moderate rank correlation and top-quartile overlap. Units rich in
+text-stroke edge energy are preferentially demoted after merging. Finally, a
+Qwen3-VL ranking-swap control keeps the selected unit set fixed
+(Jaccard $=1.000$) while restoring the pre-merger ordering, separating ranking
+damage from a change in token identity.
+
+% FIG 3 --- measured merger mechanism diagnostics and ranking-swap control.
 \begin{figure*}[t]
   \centering
   \includegraphics[width=\textwidth]{figs/fig3.pdf}
-  \caption{Retention-vs-gap curves ($n = 200$). Pre$-$post $\Delta$ at 75\% /
-    50\% / 25\% retention for TextVQA and DocVQA on Qwen3-VL-8B and
-    Qwen2.5-VL-7B. The stage effect is compression-activated: near zero under
-    shallow compression, widening monotonically with depth (the none baseline is
-    the $\Delta = 0$ reference; full number strings in Supplementary Table~S3).}
-  \Description{Two line panels show pre-minus-post score gaps at 75, 50, and
-  25 percent visual-token retention for two Qwen models. The gaps grow as
-  retention falls, with shallow DocVQA points slightly below zero.}
+  \caption{\textbf{What the native merger changes.}
+  \textbf{(a)} Pre/post L2 rankings are only moderately preserved, measured by
+  Spearman correlation and top-25\% kept-set Jaccard across DocVQA ($n=64$),
+  OCRBench ($n=199$), TextVQA ($n=64$), and GQA ($n=64$).
+  \textbf{(b)} Rank shifts are associated with text-stroke edge energy: units
+  with stronger high-frequency structure are demoted more after merging.
+  \textbf{(c)} In the Qwen3-VL ranking-swap control, post-merger features use
+  the pre-merger order while the kept set remains identical
+  (Jaccard $=1.000$), isolating ordering from token identity on $n=200$
+  TextVQA and DocVQA samples.}
+  \Description{Three mechanism panels analyze the native visual merger. The
+  first compares pre- and post-merger rank correlation and top-quartile set
+  overlap on four benchmarks. The second shows that text-stroke-rich units tend
+  to move downward in rank after merging. The third compares pre, post, and a
+  ranking-swap control on TextVQA and DocVQA; the swap preserves exactly the
+  same kept-unit set while restoring pre-merger ordering.}
   \label{fig:fig3}
 \end{figure*}
 

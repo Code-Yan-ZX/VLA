@@ -221,3 +221,9 @@
 - **图像/定量纪律**：只从原生网格 `kept_indices_*` 重建 mask，原图 100% 不透明，选中单元仅 0.14-alpha 蓝色覆盖；底栏只取 Qwen3-VL-8B、κ=25%、official full split 的 RBM−Post-L2，统一为 0–100 score scale：TextVQA +38.4、DocVQA +24.3、OCRBench +36.3（/1000 除 10）、GQA -2.8。保留绝对分数与 GQA 负值，禁用跨模型 `to` 范围或 universal-winner 暗示。
 - **范围**：Fig.3 mechanism candidate 保留；未接入主稿的 Fig.4 regime candidate 及 renderer 删除，Table 2 与正文 scope discussion 继续承担工作负载边界证据。
 - **验证**：bundle validator 46 checksum/6 cases/391 mechanism rows PASS；六组 kept indices 唯一、不越界、严格 25% 且等于相应 score top-k；`latexmk` PASS、无 undefined/overfull，page-3 视觉检查通过。正文仍 8 页；总页数 19 是参考文献增页后补充材料顺延。
+
+## 2026-08-14 | 主稿最终图件重新指定
+
+- **Figure 1**：按用户最终决定，直接采用 `fig2_rows1and2_combined.pdf`，不再使用 hybrid/frontispiece。命名为 “Three selectors retain different visual evidence”，仅陈述两个 audited OCRBench 个例、三种 selector 的真实 retained-unit mask 与答案正误，不宣称 regeneration-stable 或总体优势。
+- **Figure 3**：采用 `fig3_mechanism_candidate.pdf`，命名为 “What the native merger changes”。正文改为 pre/post rank preservation、text-stroke edge-energy demotion 与 kept-set-identical ranking-swap control；原 retention-curve 结论只引用 Supplementary Table S3。
+- **Figure 2**：paired-CI forest plot 保持不变。删除与新 Figure 1 不一致的旧 `fig1.svg`，主稿以三份 PDF 为唯一图源。
