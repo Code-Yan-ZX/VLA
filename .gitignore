@@ -58,3 +58,7 @@ logs/
 
 # ---- Local-only Claude settings ----
 .claude/settings.local.json
+
+# ---- S6 stitch experiment outputs (JSON data) ----
+experiments/sota_stitch/
+experiments/sota_stitch_*.log

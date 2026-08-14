@@ -477,6 +477,54 @@ def _score_units(feats, selector: str, alpha: float = 1.0, beta: float = 1.0):
     return (uf - uf.mean(dim=0, keepdim=True)).norm(dim=-1)
 
 
+def _select_nms_units(scores, feats, k, gamma: float = 1.5, tau: float = 0.75):
+    """S6 (PRUNESID-style) importance + diversity selection on ONE image's
+    pre-merger merge-units. ``scores``: [f] unit importance (any selector);
+    ``feats``: [f, unit=4, ctx] the SAME pre-merger tensor the selector used.
+    Returns local unit indices with EXACTLY ``k`` units (k <= f) -- iso-token
+    with plain top-k (placeholder contract untouched).
+
+    Two stages (PRUNESID's PSCA-group NMS, adapted to unit granularity):
+      1. candidate pool = top-(gamma*k) units BY IMPORTANCE (diversity slack).
+      2. walk the pool in importance order; KEEP a unit UNLESS its cosine
+         similarity (L2-normalized unit mean feature) to ANY already-kept
+         unit exceeds ``tau`` (intra-group suppression). Top up from the pool
+         by importance if suppression leaves fewer than k.
+    tau=1.0 => suppression never fires => returns plain top-k (rank-identical
+    to --diversity none, so the module is a strict optional layer). High-tau/
+    low-gamma preserves pure importance (OCR strokes are mutually dissimilar
+    in feature space and survive); low-tau spreads selection spatially.
+    """
+    f = scores.shape[0]
+    k = min(int(k), int(f))
+    if k <= 0:
+        return torch.empty(0, dtype=torch.long, device=scores.device)
+    if tau >= 1.0 or k >= f:
+        return torch.topk(scores, k).indices
+    pool_n = max(k, min(f, int(round(gamma * k))))
+    pool = torch.topk(scores, pool_n).indices
+    pool = pool[torch.argsort(scores[pool], descending=True)]  # importance order
+    X = feats[pool].mean(dim=1).float()                        # [pool_n, ctx]
+    X = X / X.norm(dim=-1, keepdim=True).clamp_min(1e-8)
+    S = X @ X.t()                                              # cosine matrix
+    keep, sel = [0], [pool[0]]
+    for u in range(1, int(pool_n)):
+        if len(sel) == k:
+            break
+        if float(S[u, keep].max()) > tau:
+            continue
+        keep.append(u)
+        sel.append(pool[u])
+    if len(sel) < k:                                            # top-up (pool >= k)
+        for u in range(int(pool_n)):
+            if len(sel) == k:
+                break
+            if u not in keep:
+                keep.append(u)
+                sel.append(pool[u])
+    return torch.stack(sel)
+
+
 # --------------------------------------------------------------------------- #
 # J5 query-aware (QA) pre-merger saliency helpers (notes/j5_qa_gate_design.md).
 #   qsim_i = max_{t in question tokens} cos( merger(unit_feat_i), embed(q_t) )
@@ -783,6 +831,29 @@ def parse_args():
                          " mean1sd: tail above mean+1sd (text strokes OUTLIER"
                          " proxy, calibrated to separate text v. scene);"
                          " mean2sd: extreme tail.")
+    ap.add_argument("--diversity", default="none", choices=["none", "nms"],
+                    help="S6 diversity-constrained selection (PRUNESID-style "
+                         "importance+diversity stitch). none (DEFAULT) = plain "
+                         "importance top-k, BIT-IDENTICAL to current RBM. nms = "
+                         "two-stage selection per image: (a) candidate pool = "
+                         "top-(div-gamma*k) units BY IMPORTANCE, then (b) walk "
+                         "the pool in importance order and suppress a candidate "
+                         "whose cosine similarity (unit mean feature, L2-"
+                         "normalized) to ANY already-kept unit exceeds div-tau "
+                         "(intra-group NMS), top-up from the pool by importance "
+                         "if fewer than k survive. Keeps EXACTLY k units per "
+                         "image (iso-token, placeholder contract untouched). "
+                         "--mode pre + stage ranking only (qwen3vl first).")
+    ap.add_argument("--div-gamma", type=float, default=1.5,
+                    help="S6 candidate-pool factor (default 1.5): the NMS walks "
+                         "the top-(div-gamma*k) units by importance. 1.0 = pure "
+                         "importance (no diversity slack); 2.0 = doubled pool.")
+    ap.add_argument("--div-tau", type=float, default=0.75,
+                    help="S6 NMS cosine-similarity suppression threshold "
+                         "(default 0.75): candidates with cosine > div-tau to "
+                         "any kept unit are suppressed (PRUNESID intra-group "
+                         "NMS). 1.0 = never suppress (== plain top-k). Lower = "
+                         "stronger spatial/semantic spread.")
     ap.add_argument("--visionzip-style", action="store_true",
                     help="Dominant + context token paradigm (VisionZip proxy). "
                          "Instead of pruning all non-dominant units, merge them "
@@ -2184,7 +2255,9 @@ class PreMergerPruner:
                  save_kept: bool = False,
                  alpha: float = 1.0, beta: float = 1.0,
                  adaptive: bool = False, tau_hf: float = 0.3, tau_ent: float = 2.0,
-                 hf_var_mode: str = "mean"):
+                 hf_var_mode: str = "mean",
+                 diversity: str = "none", div_gamma: float = 1.5,
+                 div_tau: float = 0.75):
         self.r = r
         self.sm = spatial_merge_size
         self.unit = spatial_merge_size ** 2          # 4
@@ -2202,6 +2275,9 @@ class PreMergerPruner:
         self.tau_hf = tau_hf                          # high-freq-ratio threshold
         self.tau_ent = tau_ent                        # L2-entropy threshold
         self.hf_var_mode = hf_var_mode                # within-var baseline mode
+        self.diversity = diversity                    # S6: "none" | "nms"
+        self.div_gamma = div_gamma                    # S6: candidate-pool factor
+        self.div_tau = div_tau                        # S6: NMS cosine threshold
         self.stage_decisions = []                     # A: per-image "pre"/"post"
         self.workload_log = []                        # A: per-image stats (diag)
         self.full_units = None                        # list[int] per image
@@ -2311,7 +2387,13 @@ class PreMergerPruner:
                         off += f
                         continue
                 s_i = scores[off:off + f]
-                idx = torch.topk(s_i, min(k, f)).indices   # k<=f: never over-ask
+                kk = min(k, f)                            # k<=f: never over-ask
+                if self.diversity == "nms" and kk < f:
+                    # S6 (PRUNESID stitch): importance-first + intra-group NMS.
+                    idx = _select_nms_units(s_i, feats[off:off + f], kk,
+                                            self.div_gamma, self.div_tau)
+                else:
+                    idx = torch.topk(s_i, kk).indices
                 keep[off + idx] = True
                 if self.save_kept:
                     # R1-1 diagnostic (measurement only): per-image kept unit
@@ -2724,7 +2806,9 @@ def setup_pre_merger(model, r: float, selector: str = "l2", family: str = "qwen3
                       alpha: float = 1.0, beta: float = 1.0,
                       adaptive: bool = False, tau_hf: float = 0.3,
                       tau_ent: float = 2.0,
-                      hf_var_mode: str = "mean"):
+                      hf_var_mode: str = "mean",
+                      diversity: str = "none", div_gamma: float = 1.5,
+                      div_tau: float = 0.75):
     if mask_ranking == "swap" and visionzip_style:
         raise SystemExit("--mask-ranking swap is not supported with "
                          "--visionzip-style (dominant-only standard path only).")
@@ -2736,7 +2820,9 @@ def setup_pre_merger(model, r: float, selector: str = "l2", family: str = "qwen3
                              save_kept=save_kept,
                              alpha=alpha, beta=beta,
                              adaptive=adaptive, tau_hf=tau_hf, tau_ent=tau_ent,
-                             hf_var_mode=hf_var_mode)
+                             hf_var_mode=hf_var_mode,
+                             diversity=diversity, div_gamma=div_gamma,
+                             div_tau=div_tau)
 
     # (1) visual.forward pre_hook: capture grid_thw -> plan k_units.
     def _visual_prehook(module, args, kwargs):
@@ -3352,6 +3438,34 @@ def run_dry_check(family: str, selector: str = "l2"):
           f"(units {full_units}->{pruner.k_units}); selector={selector}; "
           f"mask computed once/cached")
 
+    # (c3) S6 diversity-NMS selection: exactly-k, iso-token, tau=1 -> topk.
+    #      Stress: 3 units where two are near-duplicate feature vectors.
+    feats_dv = torch.zeros(3, 4, 8)
+    feats_dv[0, :, :] = torch.randn(4, 8)      # unit 0 = random
+    feats_dv[1] = feats_dv[0] + 1e-3           # near-duplicate of unit 0
+    feats_dv[2, :, :] = torch.randn(4, 8)      # unit 2 = random
+    s_dv = feats_dv.mean(dim=1).float().norm(dim=-1)          # importance ~ [..]
+    k_dv = 2
+    idx_tau1 = _select_nms_units(s_dv, feats_dv, k_dv, gamma=1.5, tau=1.0)
+    assert torch.equal(idx_tau1.sort().values,
+                       torch.topk(s_dv, 2).indices.sort().values), \
+        "tau=1.0 must reduce to plain top-k"
+    idx_lo = _select_nms_units(s_dv, feats_dv, k_dv, gamma=1.5, tau=0.2)
+    assert idx_lo.numel() == k_dv, f"diversity must keep exactly k (got {idx_lo})"
+    if idx_lo.sort().values.tolist() != torch.topk(s_dv, 2).indices.sort().values.tolist():
+        kept01 = (0 in idx_lo.tolist()) and (1 in idx_lo.tolist())
+        assert not kept01, "near-duplicates must not BOTH survive strong suppression"
+    # end-to-end through the pruner: k_units unchanged (iso-token), no NaN.
+    pruner_dv, _ = setup_pre_merger(model, 0.75, "l2", family,
+                                    diversity="nms", div_gamma=1.5, div_tau=0.75)
+    pruner_dv.begin_pass(grid_thw)
+    assert pruner_dv.k_units == [2, 1], pruner_dv.k_units
+    out_dv = pruner_dv.slice_input(hs, model.visual.merger)
+    assert out_dv.shape[0] == 12 and not torch.isnan(out_dv).any(), out_dv.shape
+    assert pruner_dv.div_gamma == 1.5 and pruner_dv.div_tau == 0.75
+    print("[dry-check]   OK diversity-NMS: exactly-k, tau=1==topk, duplicates "
+          "suppressed, end-to-end k_units unchanged")
+
     # (c2) freq scorer (Direction B): alpha*z(l2) + beta*z(var) on the SAME feats.
     feats_test = torch.randn(8, unit, 768)
     ft = feats_test.float()
@@ -3648,6 +3762,34 @@ def main():
             raise SystemExit("adaptive: family must be qwen3vl "
                              "(Direction A built on the qwen3vl pre-merger "
                              "machinery)")
+    # S6 diversity-constrained selection is defined for the CLEAN standard PRE
+    # path only (stage ranking, dominant-only, qwen3vl first). Guard the other
+    # paths so --diversity nms can never silently touch them. --diversity none
+    # (default) is always a no-op.
+    if args.diversity != "none":
+        if args.mode != "pre":
+            raise SystemExit("--diversity requires --mode pre (diversity-NMS "
+                             "operates on the PRE-merger merge-unit feats)")
+        if family != "qwen3vl":
+            raise SystemExit("--diversity: family must be qwen3vl (built on "
+                             "the qwen3vl pre-merger machinery; other families "
+                             "port after the gate)")
+        if args.mask_ranking != "stage":
+            raise SystemExit("--diversity is not supported with "
+                             "--mask-ranking swap (clean stage ranking only)")
+        if args.visionzip_style:
+            raise SystemExit("--diversity is not supported with "
+                             "--visionzip-style (dominant-only standard path)")
+        if args.qa_lambda > 0.0:
+            raise SystemExit("--diversity is not supported with --qa-lambda>0 "
+                             "(blend semantics undefined; run one or the other)")
+        if args.mode == "hybrid":
+            raise SystemExit("--diversity is not supported with "
+                             "--mode hybrid (hybrid IS a crossed-ranking mask)")
+        if not 0.0 < args.div_gamma <= 4.0:
+            raise SystemExit("--div-gamma must be in (0,4]")
+        if not 0.0 < args.div_tau <= 1.0:
+            raise SystemExit("--div-tau must be in (0,1]")
     # J5 QA-pre is defined for the STANDARD pre path only (stage ranking,
     # dominant-only). Guard the other paths so λ>0 can never silently touch
     # post/hybrid/swap/visionzip behavior. λ=0 is always allowed (no-op).
@@ -3837,7 +3979,10 @@ def main():
                                                  qa_lambda=args.qa_lambda,
                                                  qa_state=qa_state,
                                                  save_kept=args.save_unit_scores,
-                                                 alpha=args.alpha, beta=args.beta)
+                                                 alpha=args.alpha, beta=args.beta,
+                                                 diversity=args.diversity,
+                                                 div_gamma=args.div_gamma,
+                                                 div_tau=args.div_tau)
             diag = pruner.diag
     elif args.mode == "pre-final":
         # P0-3 pure-stage confound control: rank at visual.merger's input
