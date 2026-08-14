@@ -175,7 +175,7 @@ demotion, and a ranking-swap control identify the kept set as the causal lever
 (\S\ref{sec:mechanism}). Second, we establish a workload-conditioned stage law
 across three models and two merger designs under iso-selector and iso-budget
 control (\S\ref{sec:experiments}). Third, we derive the deliberately minimal
-RBM rule, map its trade-off against FastV, and show that four prespecified
+RBM rule, map its trade-off against FastV, and show that six prespecified
 extensions do not improve their stronger constituents (\S\ref{sec:fastv},
 \S\ref{sec:negative}).
 
@@ -323,7 +323,17 @@ merger-input features for pre-merger selection and on merger-output features for
 post-merger selection. A strong task- or query-aware scorer would confound
 \emph{scoring quality} with \emph{stage}; with an identical, saliency-free
 scorer, the only manipulated variable is the hook point. We freeze this as
-\textbf{plain RBM} and add no variant. \S\ref{sec:modes} reports that the law
+\textbf{plain RBM} and add no variant. \S\ref{sec:mechanism} additionally
+reports a mechanism-side probe: a \emph{variance-weighted} variant of the same
+query-blind scorer, $s_{\text{freq}}(u) = \alpha\,z{}\!\left(\|f_u\|_2\right) +
+\beta\,z{}\!\left(\mathrm{Var}_{u}\right)$ (both terms per-image standardized,
+so the ratio $\alpha{:}\beta$ is a genuine trade-off knob rather than an
+arbitrary scale), improves text-dense accuracy under aggressive compression
+($+1.2$~pp TextVQA at 25\% retention, $+0.5$~pp at 50\%) yet is not a general
+upgrade: it regresses $-1.6$ to $-2.2$~pp on DocVQA, OCR-Bench, and GQA at 25\%.
+We therefore treat it as corroborating evidence for \S\ref{sec:m2}'s text-stroke
+hypothesis rather than as a decoration of the frozen selector
+(\S\ref{sec:negative}e). \S\ref{sec:modes} reports that the law
 survives replacing L2 with a second scorer family (global-centroid attention) on
 Qwen3-VL, indicating the effect is not an L2 artifact. Unlike the merging
 lineage of \S\ref{sec:related}, RBM introduces no second learned merger and no
@@ -828,8 +838,8 @@ retention; their gap then widens monotonically through 25\% on both Qwen models
 \section{Negative Results --- Tested Extensions Do Not Compose}\label{sec:negative}
 % =============================================================================
 
-We prespecified four query-aware, regime-aware, or composite extensions and
-report all four as failures on Qwen3-VL-8B. \textbf{(a) Image-level routing:}
+We prespecified six query-aware, regime-aware, or composite extensions and
+report all six as failures on Qwen3-VL-8B. \textbf{(a) Image-level routing:}
 pre is at least as accurate as post on 84--97\% of images per benchmark; the
 best router scores below always-pre (0.484 vs 0.494) and far below the
 per-sample oracle (0.576). On pooled $N=774$, only ${\sim}27\%$ of the oracle
@@ -844,6 +854,22 @@ $\lambda=0.3/0.5/0.7$), so the prespecified rule selects $\lambda=0$.
 samples and two budgets, it misses the 0.5-pp Pareto margin in all eight cells,
 typically by 8--18~pp, and never significantly beats both arms. Complete gates,
 paired counts, and harness controls are in Supplementary~S4b/S9.3.
+\textbf{(e) A variance-weighted (frequency-aware) selector:} the mechanism-side
+probe of \S\ref{sec:selector} ($\alpha{=}1$, $\beta{=}0.6$, selected in two grid
+rounds on TextVQA-500 at 25\% retention) improves the text-dense cell
+($+1.2$~pp TextVQA$@25\%$, $+0.5$~pp at 50\%) but regresses $-1.6$ to
+$-2.2$~pp on DocVQA$@25\%$, OCR-Bench$@25\%$, and GQA$@25\%$; no candidate
+passes a no-regression gate across the four benchmarks, so we freeze the L2
+selector and treat the improvement as hypothesis support only.
+\textbf{(f) An adaptive PRE/POST stage router:} a query-blind workload detector
+on merger-input features (high-frequency tail ratio + L2-entropy) routes each
+image to the stage predicted to be stronger. Tuned on TextVQA it reduces to
+always-PRE --- statistically indistinguishable from plain RBM on every
+benchmark (TextVQA/DocVQA/OCR-Bench regression $= 0.0$~pp, but GQA gain
+$= +0.0$~pp, below the required $+1$~pp); raising the threshold to route
+scene images to POST collapses TextVQA by a further $7$~pp. The GQA and TextVQA
+workload signatures overlap at the unit level, so no single global threshold
+reconciles the two acceptance criteria.
 
 These results bound, rather than close, the tested design space: image-only
 signals cannot access the query-dependent oracle headroom, while cascading
@@ -904,7 +930,7 @@ grow under compression; a ranking-swap control attributes the Qwen3-VL gap to
 merger-induced rank changes. The resulting training-free method, RBM, is a
 robust OCR-oriented default rather than a universal winner: query-conditioned
 FastV remains stronger on several scene-text/object-centric settings. RBM adds
-no stage-specific serving cost, and four prespecified Qwen3-VL extensions fail
+no stage-specific serving cost, and six prespecified Qwen3-VL extensions fail
 to improve over their stronger constituents. Code will be released.
 
 % =============================================================================
