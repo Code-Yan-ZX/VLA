@@ -160,7 +160,20 @@ def acc_of(path: str) -> float | None:
         if bench == "gqa":
             return S.score_gqa_batch(preds, gts)["acc"]
         if bench == "ocrbench":
-            return sum(S.score_ocrbench(a, g) for a, g in zip(preds, gts)) / n
+            # OCRBench official "final score" needs per-sample question_type +
+            # category meta (mirrors freq_adaptive_driver's protocol).
+            meta = {}
+            for src in (REPO / "eval/full_splits/ocrbench.jsonl",
+                        REPO / "eval/subsets/ocrbench_200.jsonl"):
+                if src.exists():
+                    for line in open(src):
+                        o = json.loads(line)
+                        ex = o.get("extras") or {}
+                        meta.setdefault(str(o["id"]), (ex.get("question_type", ""),
+                                                       ex.get("category")))
+            items = [(a, g) + meta.get(str(p.get("id")), ("", ""))
+                     for a, g, p in zip(preds, gts, ps)]
+            return S.score_ocrbench_batch(items)["acc"]
         if bench == "chartqa":
             return sum(S.score_chartqa(a, g) for a, g in zip(preds, gts)) / n
     except Exception as e:
@@ -209,25 +222,37 @@ def phase_calib():
             "--budget-calib", str(calib_path)])
 
 
-def phase_budget(mode: str = "spectral", tau: float = 0.9, clamp: float = 0.5):
+def phase_budget(mode: str = "spectral", tau: float = 0.9, clamp: float = 0.5,
+                 div_tau: float | None = None):
     """Phase-2 eval: allocator -> per-image budgets (iso-token to r=0.25),
-    then pre + --budget-file runs on the 4 benches (max-num-seqs=1)."""
-    for bench in BENCHES_CORE:
-        calib_path = OUT / "sota_stitch" / f"calib_{bench}.json"
-        if not calib_path.exists():
-            log(f"MISSING {calib_path.name}; run phase calib first")
-            continue
-        bud_path = OUT / "sota_stitch" / \
-            f"budgets_{mode}_t{tau}_r0.25_{bench}.json"
-        subprocess.run(
-            [PYQ3, str(REPO / "scripts/stitch_budget_alloc.py"),
-             "--calib", str(calib_path), "--r", "0.25",
-             "--mode", mode, "--tau", str(tau), "--clamp", str(clamp),
-             "--out", str(bud_path)], check=True)
-        tag = f"pre_budget_{mode}t{tau}_{bench}_r0.25"
-        run_cell("pre", bench, 0.25, tag,
-                 extra_args=["--budget-file", str(bud_path),
-                             "--max-num-seqs", "1"])
+    then pre + --budget-file runs on the 4 benches (max-num-seqs=1). With
+    --div-tau>0, ALSO runs the combined cell (budget + diversity nms)."""
+    for is_comb in (False, True) if div_tau else (False,):
+        for bench in BENCHES_CORE:
+            calib_path = OUT / "sota_stitch" / f"calib_{bench}.json"
+            if not calib_path.exists():
+                log(f"MISSING {calib_path.name}; run phase calib first")
+                continue
+            bud_path = OUT / "sota_stitch" / \
+                f"budgets_{mode}_t{tau}_r0.25_{bench}.json"
+            if not bud_path.exists():
+                subprocess.run(
+                    [PYQ3, str(REPO / "scripts/stitch_budget_alloc.py"),
+                     "--calib", str(calib_path), "--r", "0.25",
+                     "--mode", mode, "--tau", str(tau), "--clamp", str(clamp),
+                     "--out", str(bud_path)], check=True)
+            if is_comb:
+                tag = f"pre_bd_{mode}t{tau}_tau{div_tau}_{bench}_r0.25"
+                run_cell("pre", bench, 0.25, tag,
+                         diversity="nms", div_tau=float(div_tau),
+                         div_gamma=1.5,
+                         extra_args=["--budget-file", str(bud_path),
+                                     "--max-num-seqs", "1"])
+            else:
+                tag = f"pre_budget_{mode}t{tau}_{bench}_r0.25"
+                run_cell("pre", bench, 0.25, tag,
+                         extra_args=["--budget-file", str(bud_path),
+                                     "--max-num-seqs", "1"])
 
 
 def phase_probe2(best_tau: float, best_gam: float):
@@ -287,22 +312,29 @@ def summary():
             pre = _acc(f"q3_pre_{bench}_r{r}")
             post = _acc(f"q3_post_{bench}_r{r}")
             dv_best, dv_cfg = None, None
-            for p in sorted((OUT / "sota_stitch").glob(
-                    f"q3_pre_dv_{bench}_r{r}_*.json")):
-                v = acc_of(str(p))
-                if v is not None and (dv_best is None or v > dv_best):
-                    dv_best, dv_cfg = v, p.stem.replace(
-                        f"q3_pre_dv_{bench}_r{r}_", "")
+            for glob_pat in (f"q3_pre_dv_{bench}_r{r}_*.json",
+                             f"q3_pre_budget_*_{bench}_r{r}.json",
+                             f"q3_pre_bd_*_{bench}_r{r}.json"):
+                for p in sorted((OUT / "sota_stitch").glob(glob_pat)):
+                    v = acc_of(str(p))
+                    if v is not None and (dv_best is None or v > dv_best):
+                        dv_best = v
+                        dv_cfg = p.stem.replace(f"q3_pre_dv_{bench}_r{r}_", "") \
+                            .replace(f"q3_pre_budget_", "") \
+                            .replace(f"q3_pre_bd_", "")
 
             def f(x):
                 return f"{x:.4f}" if x is not None else "   -   "
 
             inc = max(pre or 0, post or 0)
-            dv = dv_best or 0.0
-            best = ("DV" if dv >= inc - 1e-9 else
+            dv = dv_best if dv_best is not None else None
+            best = ("DV" if dv is not None and dv >= inc - 1e-9 else
                     ("RBM" if (pre or 0) >= (post or 0) else "POST"))
-            dpp = f"{100*(dv-(pre or 0)):+.1f}" if pre is not None else "  -"
-            dpo = f"{100*(dv-(post or 0)):+.1f}" if post is not None else "  -"
+            if dv is None:
+                dpp = dpo = "  n/a"
+            else:
+                dpp = f"{100*(dv-(pre or 0)):+.1f}" if pre is not None else "  -"
+                dpo = f"{100*(dv-(post or 0)):+.1f}" if post is not None else "  -"
             print(f" {bench:9s} r={r:<5} {f(pre)} {f(post)} {f(dv_best)} "
                   f"{str(dv_cfg):>12} {dpp:>6}pp {dpo:>6}pp  [{best}]")
             if r == 0.25 and pre is not None and post is not None and dv_best:
@@ -337,6 +369,9 @@ def main():
     ap.add_argument("--budget-mode", choices=["spectral", "erank"],
                     default="spectral")
     ap.add_argument("--budget-tau", type=float, default=0.9)
+    ap.add_argument("--combine-tau", type=float, default=None,
+                    help="phase budget: >0 also runs budget+diversity-NMS "
+                         "combined cells at this NMS threshold")
     ap.add_argument("--force", action="store_true")
     args = ap.parse_args()
     if args.phase == "ref":
@@ -352,7 +387,8 @@ def main():
     elif args.phase == "calib":
         phase_calib()
     elif args.phase == "budget":
-        phase_budget(args.budget_mode, args.budget_tau)
+        phase_budget(args.budget_mode, args.budget_tau,
+                     div_tau=args.combine_tau)
     elif args.phase == "summary":
         summary()
 
