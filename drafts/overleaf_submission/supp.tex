@@ -89,7 +89,8 @@ column is taken from the same M1 table in \path{drafts/paper_v4.md} \S\,4.1.
 benchmark and smallest (but still substantial) on object-centric GQA ---
 $\rho = 0.137 < 0.332 < 0.360$; Jaccard $= 0.180 < 0.243 < 0.278$. Chance-level
 Jaccard at $\kappa = 25\%$ is 0.25 (overlap is below random for DocVQA, i.e.\
-actively anti-correlated in the decision band).
+actively anti-correlated in the decision band). Per-image distributions are in
+Supplementary Figure~\ref{fig:supp_quantitative} (top).
 
 % =============================================================================
 \section*{S2. M2 --- demotion directionality vs text-stroke energy, full table (same sample as S1)}
@@ -125,6 +126,21 @@ hypothesis (merger trained on natural content attenuates high-frequency stroke
 energy): testable hypothesis, not a measured result. Second text-stroke proxy
 (Laplacian variance): future work (single-proxy disclosure).
 
+\begin{figure*}[p]
+  \centering
+  \includegraphics[width=\textwidth]{figs/token_survival_combined.pdf}
+  \caption{\textbf{Representative token-survival maps at 25\% retention.}
+    TextVQA (top) and DocVQA (bottom) use the same query-blind L2 selector
+    before and after Qwen3-VL's native merger. In each row, the first two panels
+    show the pre- and post-selected units; the third overlays pre-kept (green),
+    post-kept (red dashed), and pre-only/post-dropped units (orange). These are
+    audited single-image mechanism examples, not aggregate accuracy evidence.}
+  \Description{Two rows compare pre-merger and post-merger token selection on
+    one TextVQA street image and one DocVQA document image. The overlap panels
+    expose which spatial units survive only before or only after merging.}
+  \label{fig:supp_token_survival}
+\end{figure*}
+
 % =============================================================================
 \section*{S3. Retention curve --- full number strings ($n = 200$, both Qwen models)}
 % =============================================================================
@@ -152,7 +168,33 @@ endpoints only). Source: \path{experiments/j8_ablations.md} via
 compression (DocVQA post even leads 1--2~pp within noise at 75\%); the
 pre-merger lead emerges and widens monotonically with depth. Same shallow
 regime as the Qwen2.5-VL 600k-cap reversal (body \S\,5.4
-boundary; \S\,8 item~3). Data source for Fig.~3.
+boundary; \S\,8 item~3). The Qwen3-VL curves are visualized in
+Supplementary Figure~\ref{fig:supp_quantitative} (bottom).
+
+\begin{figure*}[p]
+  \centering
+  \includegraphics[width=\textwidth]{figs/token_survival_m1_rank_overlap.pdf}
+  \vspace{4pt}
+  \includegraphics[width=0.88\textwidth]{figs/retention_curves.pdf}
+  \caption{\textbf{Quantitative mechanism and depth diagnostics.} Top:
+    per-image pre/post rank agreement on the deterministic seed-0 M1 sample
+    ($n=64$ per benchmark); boxes and points show the distributions, with
+    mean$\pm$standard deviation annotated. Bottom: normalized accuracy as
+    compression deepens on Qwen3-VL-8B ($n=200$ per point). Pre-merger
+    selection preserves substantially more text-dense accuracy, while ChartQA
+    is primarily budget-limited and GQA does not exhibit the text-dense stage
+    effect. Error bars are binomial standard errors propagated through the
+    fixed uncompressed baseline.}
+  \Description{The top row contains three rank-agreement distributions for
+    DocVQA, TextVQA, and GQA. The bottom row contains five retention curves for
+    TextVQA, DocVQA, OCR-Bench, ChartQA, and GQA. DocVQA has the strongest rank
+    reshuffling, and the pre-merger accuracy advantage grows with compression
+    on the three text-dense benchmarks.}
+  \label{fig:supp_quantitative}
+\end{figure*}
+
+% Keep the S1--S3 evidence figures with their corresponding supplementary text.
+\clearpage
 
 % =============================================================================
 \section*{S4. Primary paired McNemar statistics --- per cell (full splits, both Qwen models)}

@@ -25,6 +25,6 @@
 - 投稿前/claim 推翻/凭据/单次 >6 GPU·h 升级 user；GPU 单卡 A40 串行。
 - 双门 NO-GO 落地后方法维持 plain RBM；§6 引用待 user OK。
 - 任务书交付齐：experiments/cvpr2026_token_compression_audit.md（新颖性）+ deferred_rbm_gate.md（Stage A）+ rbm_ot_gate.md（Stage B）+ DECISIONS/STATE 更新；以 Code-Yan-ZX 身份 commit+push（无 AI 署名）。
-- 2026-08-14 终稿：Fig.1 第2页；Fig.2 forest plot 改黛青/朱砂/秋香 + 圆/方/菱形；Fig.3 纯白透明背景、无底色块；`main.pdf` 19页，补充材料第11页开始；`token_survival_textvqa.pdf` 遮挡已修复并与 DocVQA 合成单页 `output/pdf/token_survival_textvqa_docvqa_combined.pdf`。
+- 2026-08-14 终稿：正文 Fig.1--3 不变；补充 Fig.4 采用 TextVQA+DocVQA token-survival 合并版，Fig.5 合排 M1 分布+retention 曲线；`main.pdf` 22页（8页正文+2页参考文献，补充第11页起），无遮挡/越界/未定义引用。
 - 参考文献 49 条且全部正文引用，集中补充 CVPR 2026（正式 CVF proceedings 与 arXiv 预印本严格区分）；无 undefined citation。已安装 `nature-academic-search` 到个人 Codex skills（下轮可用）。
 - 下一步仅人工项：核验 ACM MM'27 官方日期/地点/模板元数据；保持匿名投稿时不填作者，camera-ready 再填作者/单位/DOI/ISBN；实际上传/投稿须 user 确认。
