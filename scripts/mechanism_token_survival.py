@@ -366,8 +366,11 @@ def draw(s, res, out_base):
            f"(b){st['frac_above_median_edge_b']:.2f}\n"
            f"kept/dropped Sobel | PRE {st['pre_edge_keep']:.3f}/{st['pre_edge_drop']:.3f}  "
            f"POST {st['post_edge_keep']:.3f}/{st['post_edge_drop']:.3f}")
-    axes[2].text(0.008, 0.992, txt, transform=axes[2].transAxes, fontsize=8.5,
+    # Keep the dense statistics above the overlap image. Placing this at y<1
+    # obscures the evidence grid, especially for the landscape TextVQA case.
+    axes[2].text(0.008, 1.55, txt, transform=axes[2].transAxes, fontsize=8.5,
                  va="top", ha="left", color="white", family="monospace",
+                 clip_on=False,
                  bbox=dict(fc="black", alpha=0.62, ec="none", pad=4))
     from matplotlib.lines import Line2D
     from matplotlib.patches import Patch
