@@ -1,7 +1,7 @@
 # STATE.md - 当前项目状态（主窗口维护，保持 ≤30 行）
 
 > 项目：VLM 视觉 token 压缩 · 目标：Rank-Before-Merge -> ACM MM'27
-> 最近更新：2026-08-13 · **Overleaf 权威稿已完成投稿级重构：8 页正文 + 1 页参考文献，后接补充材料；仅待作者及官方投稿元数据。**
+> 最近更新：2026-08-14 · **Overleaf 权威稿已完成投稿级重构：8 页正文，后接参考文献与补充材料；仅待作者及官方投稿元数据。**
 
 ## ★ 服务器任务书终判：双门均 NO-GO（2026-08-10）
 - **Deferred RBM (rho=1,K=3) 零代码臂**：n=64×4 dev gate -- 锚点 ≡ plain RBM bit-identical，ptid 64/64×3+58/58 全等；cond1（四基准 ≥max(RBM,fst3)−1pp）textvqa/docvqa FAIL → **NO-GO**，不进入 n=200。GPU 0.75h。
@@ -30,6 +30,7 @@
 - 2026-08-13：Fig.2 forest plot 配色改为低饱和钢蓝/砖陶红/灰橄榄，背景改近白灰+暖象牙；数据与统计不变。主稿重新编译为 18 页，Fig.2 所在 page-6 渲染通过。
 - 2026-08-13：按用户给定 TransPrune 风格重做 Fig.1：新增 `drafts/figures/frontispiece_fig1/render_main_framework.py`，采用输入→双排序路径→总体排名/结果→stage accumulation 的横向主框图；嵌入 OCRBench ocr0422 真实图像与 RBM mask，主稿 caption 同步改写。`C:\Python314\python.exe` 渲染通过，主稿 18 页编译、page-3 视觉检查通过。image2 风格探索因当前进程无 `OPENAI_API_KEY` 未执行；最终图保持代码原生、可复现。
 - 2026-08-13：按用户进一步要求将 Fig.1 改为 CVPR insight-driven overview：标题突出 “Saliency should be measured before information mixing”，四区为 Problem→Insight→Method→Evidence；核心对照为 FastV `Merge→Rank` vs RBM `Rank→Merge`，方法分支只改变 ranking 位置，证据卡显示同预算 κ=25% 下 `✗ A115-126` vs `✓ A105-108`。新增可编辑 SVG `drafts/overleaf_submission/figs/fig1.svg`，PDF/PNG 及主稿 18 页编译通过。
+- 2026-08-14：Fig.1 最终改为矢量 hybrid：顶部 RBM/Post-L2 同构 stage-order，主体为稳定 `ocr0804`+`textvqa_34982` 两例×三方法真实 kept-index mask（原图全不透明、矢量勾叉），底部仅 Qwen3-VL full-split 0–100 score anchor（+38.4/+24.3/+36.3/-2.8；OCRBench /10）；`ocr0422` 因独立复跑不稳不作旗舰。Fig.3 保留，未接主稿的 Fig.4 候选撤下；主稿 19 页系参考文献多一页，正文仍 8 页。
 - 2026-08-12：Post-L2/FastV-k3 源 200-sample run 未存 per-sample kept indices（仅 pre 存了），原 frontispiece 三方法共用 RBM mask（违反 task spec「Do not reuse the RBM mask for other methods and do not derive masks from image pixels」）。scripts/capture_frontispiece_masks.py 单例重捕：--mode post --r-post 0.25 与 --mode fastv --r 0.75 --fastv-k 3，ptid=69 + answer-prefix + OCRBench correctness 全等；mask 差异 RBM∩Post=18 RBM∩FastV=14 Post∩FastV=15（皆 < 54，distinct 真实）；PDF SHA 同；overleaf 同步。GPU 0.4 min，未升级。
 - User 2026-08-12 否决三例 contact-sheet 作为首页图；改为单案例旗舰图：沿用原 Overleaf pipeline 流向/配色，以 OCRBench ocr0422（备选 ocr0804）串起 input→rank stage→真实局部 mask/答案；缺 FastV/Post mask 必须单例补捕获，禁复用 RBM mask。任务书见 `drafts/figures/CLAUDE_CODE_PROMPT_FIG1_QUALITATIVE.md`。
 - 2026-08-12 投稿稿收口：摘要约 230 词；Fig.2 改为三模型×四基准 paired-95%CI forest plot；Fig.3 改为双模型共享 TextVQA/DocVQA retention 曲线；删除重复正文表、压缩负结果/局限/结论；统计主口径=20k paired bootstrap + paired sign-flip，McNemar 仅补充二值结果。

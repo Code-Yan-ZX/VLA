@@ -213,3 +213,11 @@
 - **Task-1 结果（freq@α=1,β=0.6，official）**：textvqa +1.2pp@25%/+0.5pp@50%；docvqa −1.6pp@25%/+0.6pp@50%；ocrbench −2.2pp@25%/0@50%；gqa −1.6pp@25%/+0.2pp@50%。→ 方差项在最 text-dense 且高压缩（TextVQA@25%）真正提升；粗压缩下 docvqa/ocrbench/gqa 受损。Mixed profile —— 如实记录，组合阶段会考察 freq+adaptive 是否 mitigate。
 - **Task-2 round-1 校准失误 + round-2 修正**：第一轮 τ_hf∈{0.15,0.30,0.50} 全部 > TextVQA 的 mean1sd hf_ratio≈0.142 → hf 项永不触发 → 纯熵路由把文字图 flip 到 POST → acc 暴跌（0.528/0.374 vs pre 0.68）。正确分隔带在 GQA≈0.127 与 TextVQA≈0.142 之间 → round-2 τ_hf∈{0.08,0.13,0.20}。机制本身工作（路由计数正确），是网格范围问题。
 - **Task-2 结论：acceptance FAIL，如实记录（2 轮搜索已尽）**。TextVQA 网格胜者 τ_hf=0.08 → 所有图全 PRE → adaptive ≡ RBM（textvqa/docvqa/ocrbench 0.00pp 回归 ✓，但 GQA +0.00pp < 要求的 +1pp ✗）。τ_hf=0.13（设计上该 flip GQA→POST）：TextVQA 51/320 flip → −7pp text（超 0.5pp 限），GQA 仅 22/243 flip → 0.428 < RBM 0.438。→ 无单一全局 τ 能满足「GQA≥+1pp 且 text≤0.5pp 回归」。结构原因：GQA 与 TextVQA 的 hf_ratio(mean1sd) 分布重叠（均值 0.127 vs 0.142，per-image spread 大），query-free 全局阈值无法分开。按任务停条件记录失败原因，不宣提升。
+
+## 2026-08-14 | Fig.1 hybrid frontispiece 定稿 + Fig.4 候选撤下
+
+- **决定**：Fig.1 保留顶部双 lane（RBM: Rank→Keep→Merge；Post-L2: Merge→Rank→Keep），主体采用 combined PDF 的“案例行×方法列”视觉语法，但使用审计稳定的 `ocrbench_ocr0804` 与 `textvqa_34982`，列为 RBM/Post-L2/FastV-k3。
+- **理由**：`ocr0422` 的审计 RBM 答案虽正确，独立复跑曾返回错误 `A5`，不再让不稳定单例承担旗舰证据；`ocr0804` 为 1/0/0，`textvqa_34982` 为 1/0/1，可同时展示 OCR 优势与 FastV 的诚实适用边界。
+- **图像/定量纪律**：只从原生网格 `kept_indices_*` 重建 mask，原图 100% 不透明，选中单元仅 0.14-alpha 蓝色覆盖；底栏只取 Qwen3-VL-8B、κ=25%、official full split 的 RBM−Post-L2，统一为 0–100 score scale：TextVQA +38.4、DocVQA +24.3、OCRBench +36.3（/1000 除 10）、GQA -2.8。保留绝对分数与 GQA 负值，禁用跨模型 `to` 范围或 universal-winner 暗示。
+- **范围**：Fig.3 mechanism candidate 保留；未接入主稿的 Fig.4 regime candidate 及 renderer 删除，Table 2 与正文 scope discussion 继续承担工作负载边界证据。
+- **验证**：bundle validator 46 checksum/6 cases/391 mechanism rows PASS；六组 kept indices 唯一、不越界、严格 25% 且等于相应 score top-k；`latexmk` PASS、无 undefined/overfull，page-3 视觉检查通过。正文仍 8 页；总页数 19 是参考文献增页后补充材料顺延。

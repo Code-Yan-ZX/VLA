@@ -10,8 +10,9 @@ Overleaf figures yet.
   (OCRBench `ocr0804`, TextVQA `34982`) plus full-split aggregate anchor.
 - `outputs/fig3_mechanism_candidate.{pdf,svg,png}`: per-image rank reshuffle,
   edge-unit demotion, and Qwen3-VL ranking-swap recovery.
-- `outputs/fig4_regime_qualitative_candidate.{pdf,svg,png}`: regime map plus
-  OCR/document, scene-text, and GQA boundary examples.
+- The former Fig. 4 regime/qualitative candidate was rejected during the
+  2026-08-14 figure review and removed. Table 2 and the main-text scope
+  discussion remain authoritative; no replacement Fig. 4 is planned.
 
 ## Selection and audit constraints
 
@@ -21,7 +22,8 @@ Overleaf figures yet.
 - `textvqa_35164` is also retained but not used for the flagship candidate:
   the independent Post-L2 regeneration changed the audited correctness.
 - `ocr0804` and `textvqa_34982` have stable qualitative directions and are used
-  in Fig.1. `gqa_201056134` is reserved for the workload-boundary figure.
+  in Fig.1. `gqa_201056134` remains in the audited bundle as a scope-boundary
+  case but is not promoted into a standalone body figure.
 - The NPZ `keep_*` arrays are square-packed display masks. Renderers rebuild
   spatial maps from raw `kept_indices` and the native unit grid; they never
   paste the padded square directly onto the image.
@@ -34,7 +36,6 @@ Overleaf figures yet.
 C:\Python314\python.exe drafts\figures\cvpr_redesign\validate_bundle.py
 C:\Python314\python.exe drafts\figures\cvpr_redesign\render_fig1.py
 C:\Python314\python.exe drafts\figures\cvpr_redesign\render_fig3.py
-C:\Python314\python.exe drafts\figures\cvpr_redesign\render_fig4.py
 ```
 
 The validator must pass before any candidate is copied into

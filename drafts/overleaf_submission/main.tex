@@ -282,25 +282,26 @@ fixed:
     only in Table~\ref{tab:tab3}.
 \end{itemize}
 
-% FIG 1 --- frontispiece: one OCRBench example, three zones, 7.0x3.6 inches
+% FIG 1 --- frontispiece: stage-order intervention + two audited examples
 \begin{figure*}[t]
   \centering
   \includegraphics[width=\textwidth]{figs/fig1.pdf}
   \caption{\textbf{Saliency should be measured before information mixing.}
-  The left panel shows an OCR-sensitive airport-board region for the query
-  ``which counter is boarding?'' (ground truth: \texttt{A105-108}). The insight
-  panel isolates the ordering difference: FastV-style selection first merges
-  local visual units and then ranks them, whereas Rank-Before-Merge (RBM)
-  ranks raw $2\!\times\!2$ units before the native merger. The two method
-  branches are otherwise symmetric and use the same budget,
-  $\kappa=25\%$. On this measured OCRBench case, FastV retains the wrong
-  counter (\texttt{A115-126}), while RBM retains the answer-bearing units and
-  returns \texttt{A105-108}.}
-  \Description{A minimalist vector overview has four labeled regions: Problem,
-  Insight, Method, and Evidence. It compares Merge-then-Rank with
-  Rank-then-Merge, shows symmetric orange RBM and blue FastV-style branches at
-  kappa 25 percent, and reports the incorrect A115-126 versus correct A105-108
-  answers on an airport information board.}
+  The top strip isolates the controlled stage-order change: RBM ranks raw
+  $2\!\times\!2$ units before the native merger, whereas Post-L2 applies the
+  same L2 selector to merged rows at the same $\kappa=25\%$ budget. Two
+  regeneration-stable audited cases show exact native-grid kept indices over
+  unmodified inputs; vector check/cross markers give answer correctness. RBM
+  alone recovers the document date, whereas RBM and FastV-k3 both recover the
+  scene text. The Qwen3-VL-8B full-split anchor reports RBM minus Post-L2 on a
+  common 0--100 scale, with OCRBench divided by ten and GQA retained as the
+  scope boundary.}
+  \Description{A vector overview first compares Rank-then-Keep-then-Merge with
+  Merge-then-Rank-then-Keep at the same 25 percent budget. Below, two rows of
+  real images compare measured retained-unit masks for RBM, Post-L2, and
+  FastV-k3. Correct and incorrect answers are marked by vector checks and
+  crosses. A final Qwen3-VL-8B strip gives four full-split score changes on a
+  common zero-to-one-hundred scale, including a negative GQA boundary.}
   \label{fig:fig1}
 \end{figure*}
 

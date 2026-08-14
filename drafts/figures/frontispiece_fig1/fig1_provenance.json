@@ -1,0 +1,98 @@
+{
+  "renderer": "drafts\\figures\\frontispiece_fig1\\render_main_framework.py",
+  "bundle": "drafts\\figures\\server_exports\\cvpr_figure_data_v1",
+  "cases": [
+    {
+      "case_id": "ocrbench_ocr0804",
+      "metadata": "cases\\ocrbench_ocr0804\\case.json",
+      "image": "cases\\ocrbench_ocr0804\\input.jpg",
+      "methods": [
+        {
+          "method": "rbm",
+          "file": "cases\\ocrbench_ocr0804\\pre_scores.npz",
+          "key": "kept_indices_pre"
+        },
+        {
+          "method": "post_l2",
+          "file": "cases\\ocrbench_ocr0804\\post_scores.npz",
+          "key": "kept_indices_post"
+        },
+        {
+          "method": "fastv_k3",
+          "file": "cases\\ocrbench_ocr0804\\fastv_scores.npz",
+          "key": "kept_indices_fastv"
+        }
+      ]
+    },
+    {
+      "case_id": "textvqa_34982",
+      "metadata": "cases\\textvqa_34982\\case.json",
+      "image": "cases\\textvqa_34982\\input.jpg",
+      "methods": [
+        {
+          "method": "rbm",
+          "file": "cases\\textvqa_34982\\pre_scores.npz",
+          "key": "kept_indices_pre"
+        },
+        {
+          "method": "post_l2",
+          "file": "cases\\textvqa_34982\\post_scores.npz",
+          "key": "kept_indices_post"
+        },
+        {
+          "method": "fastv_k3",
+          "file": "cases\\textvqa_34982\\fastv_scores.npz",
+          "key": "kept_indices_fastv"
+        }
+      ]
+    }
+  ],
+  "aggregate_source": "aggregate/aggregate_main_results.csv",
+  "aggregate_filter": {
+    "model": "qwen3vl",
+    "retention": 0.25
+  },
+  "aggregate_display": [
+    {
+      "benchmark": "textvqa",
+      "rbm": 60.53,
+      "post_l2": 22.17,
+      "delta": 38.367,
+      "n": 5000,
+      "source": "runs/full_matrix/*_full.json per-sample rescore (official_scorers.py) + experiments/paired_metric_statistics.md",
+      "native_unit": "pp"
+    },
+    {
+      "benchmark": "docvqa",
+      "rbm": 48.06,
+      "post_l2": 23.77,
+      "delta": 24.298,
+      "n": 5349,
+      "source": "runs/full_matrix/*_full.json per-sample rescore (official_scorers.py) + experiments/paired_metric_statistics.md",
+      "native_unit": "ANLS"
+    },
+    {
+      "benchmark": "ocrbench",
+      "rbm": 54.7,
+      "post_l2": 18.4,
+      "delta": 36.3,
+      "n": 1000,
+      "source": "runs/full_matrix/*_full.json per-sample rescore (official_scorers.py) + experiments/paired_metric_statistics.md",
+      "native_unit": "OCRBench points"
+    },
+    {
+      "benchmark": "gqa",
+      "rbm": 44.88,
+      "post_l2": 47.71,
+      "delta": -2.83,
+      "n": 12578,
+      "source": "runs/full_matrix/*_full.json per-sample rescore (official_scorers.py) + experiments/paired_metric_statistics.md",
+      "native_unit": "pp"
+    }
+  ],
+  "notes": [
+    "All mask rectangles are reconstructed from native-grid kept_indices, not square-packed keep masks.",
+    "Source images are rendered at full opacity; selected cells use a 0.14-alpha blue overlay.",
+    "OCRBench is normalized from /1000 to the same 0--100 display scale as the other official metrics."
+  ]
+}
