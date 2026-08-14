@@ -287,14 +287,17 @@ def phase_adaptive():
 
 
 def phase_verify(best_tau: float, best_gam: float):
+    """n=500 verify with _n500-suffixed tags (the dev n=200 cells share the
+    UNsuffixed names; the suffix keeps the two slices' outputs distinct)."""
     for r in (0.25, 0.5):
         for bench in BENCHES_CORE:
-            # incumbent arms at same n=500 slice
+            # incumbent arms at the same n=500 slice
             for mode in ("pre", "post"):
-                run_cell(mode, bench, r, _tag(mode, bench, r), n=500)
-            run_cell("pre", bench, r,
-                     _tag("pre_dv", bench, r, div_tau=best_tau,
-                          div_gamma=best_gam),
+                run_cell(mode, bench, r, f"{_tag(mode, bench, r)}_n500",
+                         n=500)
+            dv_tag = _tag("pre_dv", bench, r, div_tau=best_tau,
+                          div_gamma=best_gam)
+            run_cell("pre", bench, r, f"{dv_tag}_n500",
                      n=500, diversity="nms", div_tau=best_tau,
                      div_gamma=best_gam)
     for bench in ("chartqa",):
@@ -328,13 +331,16 @@ def summary():
     verdict_rows = []
     for bench in BENCHES_CORE:
         for r in (0.25, 0.5):
-            pre = _acc(f"q3_pre_{bench}_r{r}")
-            post = _acc(f"q3_post_{bench}_r{r}")
+            pre = _acc(f"q3_pre_{bench}_r{r}_n500") or _acc(f"q3_pre_{bench}_r{r}")
+            post = _acc(f"q3_post_{bench}_r{r}_n500") or _acc(f"q3_post_{bench}_r{r}")
             dv_best, dv_cfg = None, None
             for glob_pat in (f"q3_pre_dv_{bench}_r{r}_*.json",
                              f"q3_pre_budget_*_{bench}_r{r}.json",
                              f"q3_pre_bd_*_{bench}_r{r}.json",
-                             f"q3_pre_ada_{bench}_r{r}.json"):
+                             f"q3_pre_ada_{bench}_r{r}.json",
+                             f"q3_pre_{bench}_r{r}_n500.json",
+                             f"q3_post_{bench}_r{r}_n500.json",
+                             f"q3_pre_dv_{bench}_r{r}_*_n500.json"):
                 for p in sorted((OUT / "sota_stitch").glob(glob_pat)):
                     v = acc_of(str(p))
                     if v is not None and (dv_best is None or v > dv_best):
