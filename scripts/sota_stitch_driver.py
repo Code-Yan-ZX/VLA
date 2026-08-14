@@ -88,7 +88,9 @@ def wait_gpu():
 def run_cell(mode: str, bench: str, r: float, tag: str, n: int = 0,
              selector: str = "l2", alpha: float = 1.0, beta: float = 1.0,
              diversity: str = "none", div_tau: float = 0.75,
-             div_gamma: float = 1.5, extra_args: list | None = None,
+             div_gamma: float = 1.5, div_adaptive: bool = False,
+             div_scale: float = 25.0,
+             extra_args: list | None = None,
              force: bool = False) -> str | None:
     """Run one runner cell; returns the output JSON path (or None on failure).
     mode ∈ {pre, post}; diversity ∈ {none (incumbent RBM), nms (stitch probe)}.
@@ -106,6 +108,8 @@ def run_cell(mode: str, bench: str, r: float, tag: str, n: int = 0,
            "--diversity", diversity]
     if diversity == "nms":
         cmd += ["--div-tau", str(div_tau), "--div-gamma", str(div_gamma)]
+        if div_adaptive:
+            cmd += ["--div-adaptive", "--div-scale", str(div_scale)]
     # extra_args AFTER benchextra so per-cell overrides (--budget-file,
     # --max-num-seqs 1) win argparse's last-value-wins
     cmd += [*benchextra, *(extra_args or []), "--out", str(out_file)]
@@ -220,8 +224,12 @@ def phase_calib():
     be DIFFERENT paths -- main writes the result last (overwrites)."""
     for bench in BENCHES_CORE:
         calib_path = OUT / "sota_stitch" / f"calib_{bench}.json"
+        # max-num-seqs=1: with batched requests vLLM's vision-encoder cache
+        # replays skipped images (no visual pass -> no per-image spectral
+        # entry; measured 126/200 at seq=8). Sequential firing guarantees
+        # n_calib == n (each image's visual pass runs exactly once).
         run_cell("pre", bench, 0.05, f"calib_run_{bench}", extra_args=[
-            "--budget-calib", str(calib_path)])
+            "--budget-calib", str(calib_path), "--max-num-seqs", "1"])
 
 
 def phase_budget(mode: str = "spectral", tau: float = 0.9, clamp: float = 0.5,
@@ -267,6 +275,15 @@ def phase_probe2(best_tau: float, best_gam: float):
                       div_gamma=best_gam),
                  selector="freq", alpha=1.0, beta=0.6,
                  diversity="nms", div_tau=best_tau, div_gamma=best_gam)
+
+
+def phase_adaptive():
+    """AgilePruner-style adaptive-NMS probe: tau_r = min(div-tau, r*(erank/25)*0.01)
+    per image (selection-level, iso-token). Dev n=200 @ r=0.25, 4 benches."""
+    for bench in BENCHES_CORE:
+        run_cell("pre", bench, 0.25, f"pre_ada_{bench}_r0.25",
+                 diversity="nms", div_tau=0.75, div_gamma=1.5, div_adaptive=True,
+                 div_scale=25.0)
 
 
 def phase_verify(best_tau: float, best_gam: float):
@@ -316,7 +333,8 @@ def summary():
             dv_best, dv_cfg = None, None
             for glob_pat in (f"q3_pre_dv_{bench}_r{r}_*.json",
                              f"q3_pre_budget_*_{bench}_r{r}.json",
-                             f"q3_pre_bd_*_{bench}_r{r}.json"):
+                             f"q3_pre_bd_*_{bench}_r{r}.json",
+                             f"q3_pre_ada_{bench}_r{r}.json"):
                 for p in sorted((OUT / "sota_stitch").glob(glob_pat)):
                     v = acc_of(str(p))
                     if v is not None and (dv_best is None or v > dv_best):
@@ -365,7 +383,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--phase", choices=["ref", "grid", "retest", "verify",
                                         "probe2", "calib", "budget",
-                                        "summary"], required=True)
+                                        "adaptive", "summary"], required=True)
     ap.add_argument("--best-tau", type=float, default=0.75)
     ap.add_argument("--best-gam", type=float, default=1.5)
     ap.add_argument("--budget-mode", choices=["spectral", "erank"],
@@ -386,6 +404,8 @@ def main():
         phase_verify(args.best_tau, args.best_gam)
     elif args.phase == "probe2":
         phase_probe2(args.best_tau, args.best_gam)
+    elif args.phase == "adaptive":
+        phase_adaptive()
     elif args.phase == "calib":
         phase_calib()
     elif args.phase == "budget":

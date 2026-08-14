@@ -496,7 +496,28 @@ def _image_spectral_stats(feats_i, cap: int = 256) -> dict:
         return {"f": int(f), "svd_desc": []}
 
 
-def _select_nms_units(scores, feats, k, gamma: float = 1.5, tau: float = 0.75):
+def _erank_of(feats_i):
+    """Participation-ratio effective rank of one image's pre-merger unit
+    mean-features [f, 4, ctx]. Used by the adaptive-NMS scale (AgilePruner)."""
+    X = feats_i.mean(dim=1).float()
+    fn = min(X.shape[0], X.shape[1])
+    if fn < 2:
+        return 1.0
+    try:
+        s = torch.linalg.svdvals(X)[:fn].double()
+        w = s * s
+        tot = float(w.sum())
+        if not (tot > 0):
+            return 1.0
+        pr = (tot * tot) / float((w * w).sum())
+        return float(pr) if pr > 0 else 1.0
+    except Exception:
+        return 1.0
+
+
+def _select_nms_units(scores, feats, k, gamma: float = 1.5, tau: float = 0.75,
+                      adaptive: bool = False, erank: float = 1.0,
+                      erank_scale: float = 25.0):
     """S6 (PRUNESID-style) importance + diversity selection on ONE image's
     pre-merger merge-units. ``scores``: [f] unit importance (any selector);
     ``feats``: [f, unit=4, ctx] the SAME pre-merger tensor the selector used.
@@ -518,7 +539,7 @@ def _select_nms_units(scores, feats, k, gamma: float = 1.5, tau: float = 0.75):
     k = min(int(k), int(f))
     if k <= 0:
         return torch.empty(0, dtype=torch.long, device=scores.device)
-    if tau >= 1.0 or k >= f:
+    if (not adaptive) and (tau >= 1.0 or k >= f):
         return torch.topk(scores, k).indices
     pool_n = max(k, min(f, int(round(gamma * k))))
     pool = torch.topk(scores, pool_n).indices
@@ -530,7 +551,13 @@ def _select_nms_units(scores, feats, k, gamma: float = 1.5, tau: float = 0.75):
     for u in range(1, int(pool_n)):
         if len(sel) == k:
             break
-        if float(S[u, keep].max()) > tau:
+        if adaptive:
+            # AgilePruner Eq.6 structure: tau_r = min(tau_max, r*erank/scale*0.01)
+            # with r = 1-based importance order of the candidate within image.
+            tau_step = min(tau, u * (erank / erank_scale) * 0.01)
+        else:
+            tau_step = tau
+        if float(S[u, keep].max()) > tau_step:
             continue
         keep.append(u)
         sel.append(pool[u])
@@ -873,6 +900,19 @@ def parse_args():
                          "any kept unit are suppressed (PRUNESID intra-group "
                          "NMS). 1.0 = never suppress (== plain top-k). Lower = "
                          "stronger spatial/semantic spread.")
+    ap.add_argument("--div-adaptive", action="store_true",
+                    help="S6 AgilePruner-style ADAPTIVE NMS threshold: per image, "
+                         "the suppression threshold for the r-th candidate in "
+                         "importance order is tau_r = min(div-tau, "
+                         "r * (erank_img/div-scale) * 0.01) -- complex "
+                         "(high-erank) images suppress more aggressively "
+                         "(diverse set), simple images keep fine-grained high-"
+                         "attention units. Selection-level only: counts "
+                         "unchanged (iso-token, placeholder untouched).")
+    ap.add_argument("--div-scale", type=float, default=25.0,
+                    help="S6 adaptive-NMS erank scale (default 25.0; dataset "
+                         "median participation-ratio effective rank; ~22 on "
+                         "the textvqa dev slice, ~20-30 for the other benches)")
     ap.add_argument("--budget-calib", default=None,
                     help="S6 Phase-2 calib dump path (--mode pre ONLY): after "
                          "the run, write per-image spectral stats (f, descending "
@@ -1033,20 +1073,35 @@ def detect_family(model_id: str) -> str:
 # exhausted/None entry falls back to the uniform round(f*(1-r)) count (recorded
 # in the runner diag) rather than crashing the engine.
 # --------------------------------------------------------------------------- #
-BUDGET = {"k": None, "pos": 0, "hits": 0, "fallbacks": 0}
+BUDGET = {"k": None, "frac": None, "pos": 0, "hits": 0, "fallbacks": 0}
 
 
 def _budget_next(f: int, r: float) -> int:
-    lst = BUDGET["k"]
-    if lst is None:
-        return max(1, int(round(f * (1.0 - r))))
-    if BUDGET["pos"] >= len(lst):
+    """Per-image keep-count from the shared budget cursor. f = the image's FULL
+    token count (placeholder len on the prompt side, merged-split len on the
+    prune side -- the SAME grid-derived number). {k:...} files give integer
+    keeps (feature-calib mode); {frac:...} files give per-image retention
+    FRACTIONS (pixel-calib mode, cache-independent): k = round(f * frac).
+    Exhausted/None -> uniform round(f*(1-r)) fallback (counted)."""
+    if BUDGET["k"] is not None:
+        lst = BUDGET["k"]
+        if BUDGET["pos"] < len(lst):
+            k = int(lst[BUDGET["pos"]])
+            BUDGET["pos"] += 1
+            BUDGET["hits"] += 1
+            return max(1, min(f, k))
         BUDGET["fallbacks"] += 1
         return max(1, int(round(f * (1.0 - r))))
-    k = int(lst[BUDGET["pos"]])
-    BUDGET["pos"] += 1
-    BUDGET["hits"] += 1
-    return max(1, min(f, k))
+    if BUDGET["frac"] is not None:
+        lst = BUDGET["frac"]
+        if BUDGET["pos"] < len(lst):
+            fr = float(lst[BUDGET["pos"]])
+            BUDGET["pos"] += 1
+            BUDGET["hits"] += 1
+            return max(1, min(f, int(round(f * fr))))
+        BUDGET["fallbacks"] += 1
+        return max(1, int(round(f * (1.0 - r))))
+    return max(1, int(round(f * (1.0 - r))))
 
 
 def _proc_class(family: str):
@@ -1295,12 +1350,19 @@ def setup_post_merger(model, r: float, selector: str = "l2"):
     def _patched(image_input):
         splits = _orig(image_input)
         diag["fires"] += 1
+        diag.setdefault("fire_splits", []).append(len(splits))
+        diag["fire_total"] = diag.get("fire_total", 0) + len(splits)
         if r == 0.0:
             return splits
         out = []
         for s in splits:
             n = int(s.shape[0])
-            k = max(1, int(round(n * (1.0 - r))))
+            # S6 Phase-2: per-image budget (frac/k file) consumed per SPLIT --
+            # the post path materializes a split for EVERY image (the LLM gets
+            # the embeds either way), so the cursor stays 1:1 with requests at
+            # max-num-seqs=1 regardless of the vision-encoder cache skips.
+            k = _budget_next(n, r) if BUDGET["k"] is not None \
+                or BUDGET["frac"] is not None else max(1, int(round(n * (1.0 - r))))
             score = _score_tokens(s, selector)
             idx = torch.topk(score, k).indices.sort().values
             out.append(s.index_select(0, idx).contiguous())
@@ -2316,7 +2378,8 @@ class PreMergerPruner:
                  adaptive: bool = False, tau_hf: float = 0.3, tau_ent: float = 2.0,
                  hf_var_mode: str = "mean",
                  diversity: str = "none", div_gamma: float = 1.5,
-                 div_tau: float = 0.75):
+                 div_tau: float = 0.75, div_adaptive: bool = False,
+                 div_scale: float = 25.0):
         self.r = r
         self.sm = spatial_merge_size
         self.unit = spatial_merge_size ** 2          # 4
@@ -2337,6 +2400,8 @@ class PreMergerPruner:
         self.diversity = diversity                    # S6: "none" | "nms"
         self.div_gamma = div_gamma                    # S6: candidate-pool factor
         self.div_tau = div_tau                        # S6: NMS cosine threshold
+        self.div_adaptive = div_adaptive              # S6: AgilePruner adaptive tau
+        self.div_scale = div_scale                    # S6: adaptive-tau erank scale
         self.budget_calib = None                      # S6 Phase-2 calib list (alloc'd in main)
         self.stage_decisions = []                     # A: per-image "pre"/"post"
         self.workload_log = []                        # A: per-image stats (diag)
@@ -2354,6 +2419,11 @@ class PreMergerPruner:
         """visual.forward pre_hook: capture grid_thw, plan per-image counts."""
         if not torch.is_tensor(grid_thw):
             grid_thw = torch.as_tensor(grid_thw)
+        # debug (measurement only): how many images arrive per visual call, and
+        # the running total vs the n requests (S6 cache-coverage diagnosis).
+        self.diag.setdefault("vc_batch_sizes", []).append(int(grid_thw.shape[0]))
+        self.diag["vc_total_imgs"] = self.diag.get("vc_total_imgs", 0) + \
+            int(grid_thw.shape[0])
         self.full_units = (grid_thw.prod(-1) // self.unit).tolist()
         if BUDGET["k"] is not None:
             # S6 Phase-2: per-image budget from the allocator (consumes the
@@ -2458,8 +2528,15 @@ class PreMergerPruner:
                 kk = min(k, f)                            # k<=f: never over-ask
                 if self.diversity == "nms" and kk < f:
                     # S6 (PRUNESID stitch): importance-first + intra-group NMS.
-                    idx = _select_nms_units(s_i, feats[off:off + f], kk,
-                                            self.div_gamma, self.div_tau)
+                    # Adaptive mode computes the per-image erank for the
+                    # AgilePruner-style tau_r (added SVD cost only when active).
+                    feats_i = feats[off:off + f]
+                    er_i = _erank_of(feats_i) if self.div_adaptive else 1.0
+                    idx = _select_nms_units(s_i, feats_i, kk,
+                                            self.div_gamma, self.div_tau,
+                                            adaptive=self.div_adaptive,
+                                            erank=er_i,
+                                            erank_scale=self.div_scale)
                 else:
                     idx = torch.topk(s_i, kk).indices
                 keep[off + idx] = True
@@ -2876,7 +2953,8 @@ def setup_pre_merger(model, r: float, selector: str = "l2", family: str = "qwen3
                       tau_ent: float = 2.0,
                       hf_var_mode: str = "mean",
                       diversity: str = "none", div_gamma: float = 1.5,
-                      div_tau: float = 0.75):
+                      div_tau: float = 0.75, div_adaptive: bool = False,
+                      div_scale: float = 25.0):
     if mask_ranking == "swap" and visionzip_style:
         raise SystemExit("--mask-ranking swap is not supported with "
                          "--visionzip-style (dominant-only standard path only).")
@@ -2890,7 +2968,8 @@ def setup_pre_merger(model, r: float, selector: str = "l2", family: str = "qwen3
                              adaptive=adaptive, tau_hf=tau_hf, tau_ent=tau_ent,
                              hf_var_mode=hf_var_mode,
                              diversity=diversity, div_gamma=div_gamma,
-                             div_tau=div_tau)
+                             div_tau=div_tau, div_adaptive=div_adaptive,
+                             div_scale=div_scale)
 
     # (1) visual.forward pre_hook: capture grid_thw -> plan k_units.
     def _visual_prehook(module, args, kwargs):
@@ -3523,6 +3602,23 @@ def run_dry_check(family: str, selector: str = "l2"):
     if idx_lo.sort().values.tolist() != torch.topk(s_dv, 2).indices.sort().values.tolist():
         kept01 = (0 in idx_lo.tolist()) and (1 in idx_lo.tolist())
         assert not kept01, "near-duplicates must not BOTH survive strong suppression"
+    # adaptive-NMS (AgilePruner): tau depends on order x erank; still exactly-k.
+    idx_ada = _select_nms_units(s_dv, feats_dv, k_dv, gamma=1.5, tau=0.75,
+                                adaptive=True, erank=20.0, erank_scale=25.0)
+    assert idx_ada.numel() == k_dv, f"adaptive must keep exactly k ({idx_ada})"
+    er = _erank_of(feats_dv)
+    assert er > 0 and er <= feats_dv.shape[0] * feats_dv.shape[2], er
+    pruner_ad, _ = setup_pre_merger(model, 0.75, "l2", family,
+                                    diversity="nms", div_gamma=1.5,
+                                    div_tau=0.75, div_adaptive=True,
+                                    div_scale=25.0)
+    pruner_ad.begin_pass(grid_thw)
+    assert pruner_ad.k_units == [2, 1], pruner_ad.k_units
+    out_ad = pruner_ad.slice_input(hs, model.visual.merger)
+    assert out_ad.shape[0] == 12 and not torch.isnan(out_ad).any()
+    assert pruner_ad.div_adaptive and pruner_ad.div_scale == 25.0
+    print("[dry-check]   OK adaptive-NMS: exactly-k, erank in range, "
+          "end-to-end passthrough")
     # end-to-end through the pruner: k_units unchanged (iso-token), no NaN.
     pruner_dv, _ = setup_pre_merger(model, 0.75, "l2", family,
                                     diversity="nms", div_gamma=1.5, div_tau=0.75)
@@ -3882,19 +3978,24 @@ def main():
             raise SystemExit("--div-gamma must be in (0,4]")
         if not 0.0 < args.div_tau <= 1.0:
             raise SystemExit("--div-tau must be in (0,1]")
-    # S6 Phase-2 budget machinery (calib dump / per-image budget file) is
-    # defined for the CLEAN standard PRE path only (qwen3vl, stage ranking).
+        if args.div_adaptive and not 0.0 < args.div_scale <= 500.0:
+            raise SystemExit("--div-scale must be in (0,500] "
+                             "(adaptive-NMS erank scale)")
+    # S6 Phase-2 budget machinery. --budget-calib (feature-spectral dump) is
+    # defined for the clean standard PRE path only; --budget-file (per-image
+    # keep list/fractions) works for BOTH pre (merge-unit prune) and post
+    # (FastV-style per-split prune, cache-robust by construction).
     if args.budget_calib or args.budget_file:
-        if args.mode != "pre":
-            raise SystemExit("--budget-calib/--budget-file require --mode pre "
+        if args.budget_calib and args.mode != "pre":
+            raise SystemExit("--budget-calib requires --mode pre "
                              "(spectral stats come from the pre-merger feats)")
+        if args.budget_calib and args.mask_ranking != "stage":
+            raise SystemExit("--budget-calib is not supported with "
+                             "--mask-ranking swap")
         if family != "qwen3vl":
-            raise SystemExit("--budget-calib/--budget-file: qwen3vl only "
-                             "(budget machinery built on the qwen3vl "
-                             "pre-merger; other families port after the gate)")
-        if args.mask_ranking != "stage":
-            raise SystemExit("--budget-* is not supported with "
-                             "--mask-ranking swap (clean stage ranking only)")
+            raise SystemExit("--budget-*: qwen3vl only (budget machinery "
+                             "built on the qwen3vl pre-merger/post path; "
+                             "other families port after the gate)")
         if args.budget_file and args.max_num_seqs != 1:
             raise SystemExit("--budget-file requires --max-num-seqs 1 "
                              "(per-sample budget order is request order)")
@@ -3951,6 +4052,24 @@ def main():
         if args.qa_lambda > 0.0:
             raise SystemExit("glm4v: --qa-lambda>0 is not supported.")
     proc_log = patch_processor(r, family)
+
+    # S6 Phase-2: load the per-image budget cursor ONCE, MODE-AGNOSTIC (pre's
+    # merge-unit prune and post's per-split prune both consume it; the
+    # placeholder patch consumes the same cursor at prompt time). The file is
+    # either {k: [...]} (feature-calib keeps) or {frac: [...]} (pixel-calib
+    # fractions; k derived from each image's OWN f at both sites).
+    if args.budget_file:
+        with open(args.budget_file) as _bf:
+            _bud = json.load(_bf)
+        BUDGET.update({"k": _bud.get("k"), "frac": _bud.get("frac"),
+                       "pos": 0, "hits": 0, "fallbacks": 0})
+        if BUDGET["k"] is None and BUDGET["frac"] is None:
+            raise SystemExit(f"--budget-file {args.budget_file}: needs "
+                             f"'k' (int list) or 'frac' (float list) keys")
+        if "r" in _bud and abs(float(_bud["r"]) - r) > 1e-9:
+            print(f"[budget] WARN allocator r={_bud['r']} != run r={r}; budget "
+                  "total is iso-token to the FILE's r, not the run's",
+                  file=sys.stderr, flush=True)
 
     from vllm import LLM, SamplingParams
     t0 = time.perf_counter()
@@ -4090,26 +4209,22 @@ def main():
                                                  alpha=args.alpha, beta=args.beta,
                                                  diversity=args.diversity,
                                                  div_gamma=args.div_gamma,
-                                                 div_tau=args.div_tau)
+                                                 div_tau=args.div_tau,
+                                                 div_adaptive=args.div_adaptive,
+                                                 div_scale=args.div_scale)
             # S6 Phase-2: collect per-image spectral stats (calib dump: gated
-            # by --budget-calib -- the list stays None otherwise) and activate
-            # the shared budget cursor for BOTH the placeholder patch and the
-            # keep-count when --budget-file is given.
+            # by --budget-calib -- the list stays None otherwise). The budget
+            # cursor itself was loaded MODE-AGNOSTICALLY before the mode chain.
             if args.budget_calib:
                 pruner.budget_calib = []
             if args.budget_file:
-                with open(args.budget_file) as _bf:
-                    _bud = json.load(_bf)
-                BUDGET.update({"k": _bud.get("k"), "pos": 0,
-                               "hits": 0, "fallbacks": 0})
-                if "r" in _bud and abs(float(_bud["r"]) - r) > 1e-9:
-                    print(f"[budget] WARN allocator r={_bud['r']} != run r={r}; "
-                          "budget total is iso-token to the FILE's r, not the "
-                          "run's", file=sys.stderr, flush=True)
-                pruner.diag["budget"] = {"n": len(_bud.get("k", [])),
-                                         "mean_k": _bud.get("mean_k"),
-                                         "mode": _bud.get("mode"),
-                                         "tau": _bud.get("tau")}
+                pruner.diag["budget"] = {
+                    "n": (len(BUDGET["k"]) if BUDGET["k"] is not None
+                          else (len(BUDGET["frac"]) if BUDGET["frac"] is not None
+                                else 0)),
+                    "frac_mode": BUDGET["frac"] is not None,
+                    "pos_end": BUDGET["pos"], "hits": BUDGET["hits"],
+                    "fallbacks": BUDGET["fallbacks"]}
             diag = pruner.diag
     elif args.mode == "pre-final":
         # P0-3 pure-stage confound control: rank at visual.merger's input
