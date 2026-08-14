@@ -86,9 +86,9 @@ def wait_gpu():
 
 
 def run_cell(mode: str, bench: str, r: float, tag: str, n: int = 0,
-             selector: str = "l2", diversity: str = "none",
-             div_tau: float = 0.75, div_gamma: float = 1.5,
-             force: bool = False) -> str | None:
+             selector: str = "l2", alpha: float = 1.0, beta: float = 1.0,
+             diversity: str = "none", div_tau: float = 0.75,
+             div_gamma: float = 1.5, force: bool = False) -> str | None:
     """Run one runner cell; returns the output JSON path (or None on failure).
     mode ∈ {pre, post}; diversity ∈ {none (incumbent RBM), nms (stitch probe)}."""
     subset, _, extra = BENCH[bench]
@@ -100,7 +100,7 @@ def run_cell(mode: str, bench: str, r: float, tag: str, n: int = 0,
     os.makedirs(out_file.parent, exist_ok=True)
     cmd = [PYQ3, str(RUNNER), *STD, "--mode", mode, "--benchmark", bench,
            "--subset", str(REPO / subset), "--n", str(n_override), "--r", str(r),
-           "--selector", selector,
+           "--selector", selector, "--alpha", str(alpha), "--beta", str(beta),
            "--diversity", diversity]
     if diversity == "nms":
         cmd += ["--div-tau", str(div_tau), "--div-gamma", str(div_gamma)]
@@ -196,6 +196,18 @@ def phase_retest(best_tau: float, best_gam: float):
                      diversity="nms", div_tau=best_tau, div_gamma=best_gam)
 
 
+def phase_probe2(best_tau: float, best_gam: float):
+    """Composite stitch probe: freq scorer (Direction B: alpha=1,beta=0.6 --
+    textvqa +1.2pp@25) x diversity-NMS (best tau/gam from grid). Same 4 benches
+    @ r=0.25 dev. Pure selection-level composition, zero count changes."""
+    for bench in BENCHES_CORE:
+        run_cell("pre", bench, 0.25,
+                 _tag("pre_freqdv", bench, 0.25, div_tau=best_tau,
+                      div_gamma=best_gam),
+                 selector="freq", alpha=1.0, beta=0.6,
+                 diversity="nms", div_tau=best_tau, div_gamma=best_gam)
+
+
 def phase_verify(best_tau: float, best_gam: float):
     for r in (0.25, 0.5):
         for bench in BENCHES_CORE:
@@ -252,7 +264,7 @@ def summary():
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--phase", choices=["ref", "grid", "retest", "verify",
-                                        "summary"], required=True)
+                                        "probe2", "summary"], required=True)
     ap.add_argument("--best-tau", type=float, default=0.75)
     ap.add_argument("--best-gam", type=float, default=1.5)
     ap.add_argument("--force", action="store_true")
@@ -265,6 +277,8 @@ def main():
         phase_retest(args.best_tau, args.best_gam)
     elif args.phase == "verify":
         phase_verify(args.best_tau, args.best_gam)
+    elif args.phase == "probe2":
+        phase_probe2(args.best_tau, args.best_gam)
     elif args.phase == "summary":
         summary()
 

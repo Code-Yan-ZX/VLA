@@ -477,6 +477,25 @@ def _score_units(feats, selector: str, alpha: float = 1.0, beta: float = 1.0):
     return (uf - uf.mean(dim=0, keepdim=True)).norm(dim=-1)
 
 
+def _image_spectral_stats(feats_i, cap: int = 256) -> dict:
+    """S6 Phase-2 calib: per-image spectral signature of the pre-merger unit
+    mean-feature matrix [f, 4, ctx] -> mean over the 4 patches -> [f, ctx],
+    then the top (min(f, cap)) DESCENDING singular values (float64, Huber-safe
+    through the allocator). ``f`` is the full unit count. Cheap: f~O(1e3),
+    ctx~O(1e3) -> ~10-30 ms/image GPU."""
+    f = feats_i.shape[0]
+    X = feats_i.mean(dim=1).float().double()
+    Xc = X - X.mean(dim=0, keepdim=True)
+    fn = min(f, X.shape[1], cap)
+    if fn < 2:
+        return {"f": int(f), "svd_desc": []}
+    try:
+        s = torch.linalg.svdvals(Xc)[:fn]
+        return {"f": int(f), "svd_desc": [float(v) for v in s.tolist()]}
+    except Exception:
+        return {"f": int(f), "svd_desc": []}
+
+
 def _select_nms_units(scores, feats, k, gamma: float = 1.5, tau: float = 0.75):
     """S6 (PRUNESID-style) importance + diversity selection on ONE image's
     pre-merger merge-units. ``scores``: [f] unit importance (any selector);
@@ -854,6 +873,21 @@ def parse_args():
                          "any kept unit are suppressed (PRUNESID intra-group "
                          "NMS). 1.0 = never suppress (== plain top-k). Lower = "
                          "stronger spatial/semantic spread.")
+    ap.add_argument("--budget-calib", default=None,
+                    help="S6 Phase-2 calib dump path (--mode pre ONLY): after "
+                         "the run, write per-image spectral stats (f, descending "
+                         "singular values of the per-unit mean-feature matrix, "
+                         "capped at 256) in request order -- the offline input "
+                         "for scripts/stitch_budget_alloc.py. The run still "
+                         "evaluates normally; the dump is a side output.")
+    ap.add_argument("--budget-file", default=None,
+                    help="S6 Phase-2 per-image budget list JSON (from "
+                         "scripts/stitch_budget_alloc.py): {k: [k_i,...]} in "
+                         "subset-index order (max-num-seqs=1 required so request "
+                         "order == sample order). BOTH the processor placeholder "
+                         "and the pre-merger keep-count consume k_i from this "
+                         "list (iso-token with the allocator's nominal r). "
+                         "--mode pre + qwen3vl only. Default None = uniform r.")
     ap.add_argument("--visionzip-style", action="store_true",
                     help="Dominant + context token paradigm (VisionZip proxy). "
                          "Instead of pruning all non-dominant units, merge them "
@@ -991,6 +1025,30 @@ def detect_family(model_id: str) -> str:
     return "qwen3vl"
 
 
+# --------------------------------------------------------------------------- #
+# S6 Phase-2 shared per-image budget holder. Set once in main() when
+# --budget-file is active; consumed by BOTH the processor placeholder patch
+# (prompt time) and the pre-merger keep-count (visual time). max-num-seqs=1
+# keeps request order == sample order, so a single cursor stays aligned. Any
+# exhausted/None entry falls back to the uniform round(f*(1-r)) count (recorded
+# in the runner diag) rather than crashing the engine.
+# --------------------------------------------------------------------------- #
+BUDGET = {"k": None, "pos": 0, "hits": 0, "fallbacks": 0}
+
+
+def _budget_next(f: int, r: float) -> int:
+    lst = BUDGET["k"]
+    if lst is None:
+        return max(1, int(round(f * (1.0 - r))))
+    if BUDGET["pos"] >= len(lst):
+        BUDGET["fallbacks"] += 1
+        return max(1, int(round(f * (1.0 - r))))
+    k = int(lst[BUDGET["pos"]])
+    BUDGET["pos"] += 1
+    BUDGET["hits"] += 1
+    return max(1, min(f, k))
+
+
 def _proc_class(family: str):
     """The multimodal processor class carrying _get_prompt_updates for a family."""
     if family == "qwen2vl":
@@ -1077,7 +1135,8 @@ def patch_processor(r: float, family: str = "qwen3vl"):
                     def _scaled(item_idx, _or=orig_repl, _r=r):
                         t = _or(item_idx)
                         n = len(t)
-                        k = max(1, int(round(n * (1.0 - _r))))
+                        k = (_budget_next(n, _r) if BUDGET["k"] is not None
+                             else max(1, int(round(n * (1.0 - _r)))))
                         log["counts"].append((n, k))
                         return list(t[:k])
                     p = _dc.replace(p, replacement=_scaled)
@@ -2278,6 +2337,7 @@ class PreMergerPruner:
         self.diversity = diversity                    # S6: "none" | "nms"
         self.div_gamma = div_gamma                    # S6: candidate-pool factor
         self.div_tau = div_tau                        # S6: NMS cosine threshold
+        self.budget_calib = None                      # S6 Phase-2 calib list (alloc'd in main)
         self.stage_decisions = []                     # A: per-image "pre"/"post"
         self.workload_log = []                        # A: per-image stats (diag)
         self.full_units = None                        # list[int] per image
@@ -2295,8 +2355,13 @@ class PreMergerPruner:
         if not torch.is_tensor(grid_thw):
             grid_thw = torch.as_tensor(grid_thw)
         self.full_units = (grid_thw.prod(-1) // self.unit).tolist()
-        self.k_units = [max(1, int(round(f * (1.0 - self.r))))
-                        for f in self.full_units]
+        if BUDGET["k"] is not None:
+            # S6 Phase-2: per-image budget from the allocator (consumes the
+            # shared cursor so placeholder and keep-count stay aligned).
+            self.k_units = [_budget_next(f, self.r) for f in self.full_units]
+        else:
+            self.k_units = [max(1, int(round(f * (1.0 - self.r))))
+                            for f in self.full_units]
         self._mask = None
         self.diag["visual_calls"] += 1
         if len(self.diag["nk"]) < 8:
@@ -2358,6 +2423,9 @@ class PreMergerPruner:
             off = 0
             self.stage_decisions = []          # Direction A: per-image stage
             for f, k in zip(self.full_units, self.k_units):
+                if self.budget_calib is not None:
+                    self.budget_calib.append(
+                        _image_spectral_stats(feats[off:off + f]))
                 if self.adaptive:
                     # ---- Direction A workload detector (merger-input only) ----
                     # Per-image decision rule (task spec):
@@ -3466,6 +3534,30 @@ def run_dry_check(family: str, selector: str = "l2"):
     print("[dry-check]   OK diversity-NMS: exactly-k, tau=1==topk, duplicates "
           "suppressed, end-to-end k_units unchanged")
 
+    # (c4) S6 Phase-2 budget machinery: per-image k from the allocator +
+    #      calib spectral stats. Budget activates the shared cursor; both the
+    #      placeholder side (_budget_next) and the pruner (begin_pass) read it.
+    assert BUDGET["k"] is None                        # module starts clean
+    BUDGET.update({"k": [3, 1], "pos": 0, "hits": 0, "fallbacks": 0})
+    assert _budget_next(8, 0.25) == 3 and _budget_next(4, 0.25) == 1
+    assert _budget_next(48, 0.25) == round(48 * 0.75)  # exhausted -> uniform
+    assert BUDGET["fallbacks"] == 1 and BUDGET["hits"] == 2
+    pruner_b, _ = setup_pre_merger(model, 0.25, "l2", family)
+    pruner_b.budget_calib = []                        # --budget-calib side
+    BUDGET.update({"k": [2, 1], "pos": 0, "hits": 0, "fallbacks": 0})
+    pruner_b.begin_pass(grid_thw)
+    assert pruner_b.k_units == [2, 1], pruner_b.k_units  # per-image from file
+    out_b = pruner_b.slice_input(hs, model.visual.merger)
+    assert out_b.shape[0] == (2 + 1) * 4 == 12, out_b.shape
+    calib = _image_spectral_stats(hs.reshape(12, 4, 768))
+    assert calib["f"] == 12 and 0 < len(calib["svd_desc"]) <= 256
+    assert all(calib["svd_desc"][i] >= calib["svd_desc"][i + 1]
+               for i in range(len(calib["svd_desc"]) - 1))
+    assert len(pruner_b.budget_calib) == 2 == len(full_units)  # one per image
+    BUDGET["k"] = None                                # restore clean state
+    print("[dry-check]   OK budget: cursor hit/fallback, per-image k_units "
+          f"= [2,1], calib f={calib['f']} svd_len={len(calib['svd_desc'])}")
+
     # (c2) freq scorer (Direction B): alpha*z(l2) + beta*z(var) on the SAME feats.
     feats_test = torch.randn(8, unit, 768)
     ft = feats_test.float()
@@ -3790,6 +3882,22 @@ def main():
             raise SystemExit("--div-gamma must be in (0,4]")
         if not 0.0 < args.div_tau <= 1.0:
             raise SystemExit("--div-tau must be in (0,1]")
+    # S6 Phase-2 budget machinery (calib dump / per-image budget file) is
+    # defined for the CLEAN standard PRE path only (qwen3vl, stage ranking).
+    if args.budget_calib or args.budget_file:
+        if args.mode != "pre":
+            raise SystemExit("--budget-calib/--budget-file require --mode pre "
+                             "(spectral stats come from the pre-merger feats)")
+        if family != "qwen3vl":
+            raise SystemExit("--budget-calib/--budget-file: qwen3vl only "
+                             "(budget machinery built on the qwen3vl "
+                             "pre-merger; other families port after the gate)")
+        if args.mask_ranking != "stage":
+            raise SystemExit("--budget-* is not supported with "
+                             "--mask-ranking swap (clean stage ranking only)")
+        if args.budget_file and args.max_num_seqs != 1:
+            raise SystemExit("--budget-file requires --max-num-seqs 1 "
+                             "(per-sample budget order is request order)")
     # J5 QA-pre is defined for the STANDARD pre path only (stage ranking,
     # dominant-only). Guard the other paths so λ>0 can never silently touch
     # post/hybrid/swap/visionzip behavior. λ=0 is always allowed (no-op).
@@ -3983,6 +4091,25 @@ def main():
                                                  diversity=args.diversity,
                                                  div_gamma=args.div_gamma,
                                                  div_tau=args.div_tau)
+            # S6 Phase-2: collect per-image spectral stats (calib dump: gated
+            # by --budget-calib -- the list stays None otherwise) and activate
+            # the shared budget cursor for BOTH the placeholder patch and the
+            # keep-count when --budget-file is given.
+            if args.budget_calib:
+                pruner.budget_calib = []
+            if args.budget_file:
+                with open(args.budget_file) as _bf:
+                    _bud = json.load(_bf)
+                BUDGET.update({"k": _bud.get("k"), "pos": 0,
+                               "hits": 0, "fallbacks": 0})
+                if "r" in _bud and abs(float(_bud["r"]) - r) > 1e-9:
+                    print(f"[budget] WARN allocator r={_bud['r']} != run r={r}; "
+                          "budget total is iso-token to the FILE's r, not the "
+                          "run's", file=sys.stderr, flush=True)
+                pruner.diag["budget"] = {"n": len(_bud.get("k", [])),
+                                         "mean_k": _bud.get("mean_k"),
+                                         "mode": _bud.get("mode"),
+                                         "tau": _bud.get("tau")}
             diag = pruner.diag
     elif args.mode == "pre-final":
         # P0-3 pure-stage confound control: rank at visual.merger's input
@@ -4180,6 +4307,22 @@ def main():
         result["qa"] = qa_state["diag"]                 # embed path + qsim counters
     if mrope_fix_diag is not None:
         result["mrope_fix"] = mrope_fix_diag
+    if BUDGET["k"] is not None:
+        result["budget_consumed"] = {"hits": BUDGET["hits"],
+                                     "fallbacks": BUDGET["fallbacks"],
+                                     "pos": BUDGET["pos"]}
+    if args.budget_calib:
+        # S6 Phase-2 calib dump: per-image spectral stats in request order.
+        # max-num-seqs=1 keeps request order == sample order; a warmup replay
+        # of request 0 (one extra entry) is tolerated by the allocator, which
+        # aligns on f_i signatures.
+        calib_pruner = locals().get("pruner")
+        calib_list = (calib_pruner.budget_calib
+                      if calib_pruner is not None else None) or []
+        with open(args.budget_calib, "w") as f:
+            json.dump({"benchmark": args.benchmark, "n": len(samples),
+                       "n_calib": len(calib_list),
+                       "per_image": calib_list}, f, indent=1)
     os.makedirs(os.path.dirname(args.out), exist_ok=True)
     with open(args.out, "w") as f:
         json.dump(result, f, indent=2)
