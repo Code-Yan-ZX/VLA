@@ -106,7 +106,17 @@ def main():
     args = ap.parse_args()
 
     cal = json.load(open(args.calib))
-    entries = cal["per_image"]                    # [{f, svd_desc}...] in index order
+    entries = list(cal["per_image"])              # [{f, svd_desc}...] request order
+    target_n = int(cal.get("n") or len(entries))
+    if len(entries) > target_n:
+        # vLLM may warmup-replay sample 0's vision encoder (one extra entry at
+        # the FRONT of the stream; see kept_log "warmup, dropped at attach").
+        # Alignment is by request order, so drop the leading warmup entries and
+        # keep the last target_n (the run consumed them 1:1 with samples).
+        print(f"calib {args.calib}: {len(entries)} entries > n={target_n}; "
+              f"dropping {len(entries) - target_n} leading warmup entries",
+              flush=True)
+        entries = entries[-target_n:]
     f_list = [e["f"] for e in entries]
     base = [max(1, int(round(f * (1.0 - args.r)))) for f in f_list]
     k_raw = []
