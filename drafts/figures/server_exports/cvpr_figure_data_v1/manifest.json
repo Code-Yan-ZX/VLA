@@ -1,0 +1,1125 @@
+{
+  "schema_version": "cvpr_figure_data_v1",
+  "description": "Measured per-case, per-image mechanism, and aggregate figure data for the redesigned CVPR-style figures (server-side capture; deterministic local renderers compose the final figures). No saliency/invented values: every mask, score, answer, and correctness is a real run or an audited artifact.",
+  "selection_rules": [
+    {
+      "rule": "two OCR/document cases where RBM correct and Post-L2/FastV wrong; ranked from the audited contact_sheet_manifest (9 strict three-arm flips) by shortest GT then prior visually-verified asset availability (ocr0422, ocr0804)."
+    },
+    {
+      "rule": "two scene-text cases with a clear answer-bearing crop (TextVQA; GT is the image's own text annotation): RBM-correct, short answer, at least one other arm wrong (34982, 35164)."
+    },
+    {
+      "rule": "one object-centric GQA case where FastV is correct and RBM wrong (honest regime boundary; 38 candidates, ranked by non-degenerate RBM answer then GT noun): 201056134."
+    },
+    {
+      "rule": "one agreement case (all three arms correct, scene-text): TextVQA 35000."
+    }
+  ],
+  "cases": [
+    {
+      "case_id": "gqa_201056134",
+      "case_dir": "gqa_201056134",
+      "question": "What is the soccer player in front of the goal watching?\nAnswer the question using a single word or phrase.",
+      "ground_truth": "ball",
+      "answers": {
+        "rbm": "nothing",
+        "post_l2": "ball",
+        "fastv_k3": "ball"
+      },
+      "correctness": {
+        "rbm": 0,
+        "post_l2": true,
+        "fastv_k3": 1
+      },
+      "image_sha256": "2a6e24707fac9dc43eb915d78c377b1880a2d5fc1e676d9666d0e8f1f716c123",
+      "source_run_paths": {
+        "pre": "/media/disk2/YZX/research/vla/runs/cascade/gate_pre25_gqa.json",
+        "post": "captured-here",
+        "fastv": "/media/disk2/YZX/research/vla/runs/rankbridge/locked_fst3_gqa_n200.json"
+      },
+      "selection_tier": "see manifest.selection_rules",
+      "regen_byte_identity": {
+        "pre": false,
+        "post": null
+      }
+    },
+    {
+      "case_id": "ocrbench_ocr0422",
+      "case_dir": "ocrbench_ocr0422",
+      "question": "which counter is boarding?",
+      "ground_truth": "A105-108",
+      "answers": {
+        "rbm": "Based on the information displayed on the sign in the image, the counter that is currently **boarding** is **A105-108**.",
+        "post_l2": "Based on the information visible in the image, we can determine which counter is boarding by examining the display.\n\nThe image shows a section of an airport or train station",
+        "fastv_k3": "Based on the information in the image, **no counter is currently boarding**.\n\nHere's why:\n\n1.  **The Display Shows \"Cancelled\"**: The"
+      },
+      "correctness": {
+        "rbm": 1,
+        "post_l2": 0,
+        "fastv_k3": 0
+      },
+      "image_sha256": "6898342c98c69638af0f462d8be72a03225acc6ff22302c8d9cc3124039a960f",
+      "source_run_paths": {
+        "pre": "/media/disk2/YZX/research/vla/runs/cascade/gate_pre25_ocrbench.json",
+        "post": "/media/disk2/YZX/research/vla/runs/cascade/gate_post25_ocrbench.json",
+        "fastv": "/media/disk2/YZX/research/vla/runs/rankbridge/locked_fst3_ocrbench_n200.json"
+      },
+      "selection_tier": "see manifest.selection_rules",
+      "regen_byte_identity": {
+        "pre": false,
+        "post": true
+      }
+    },
+    {
+      "case_id": "ocrbench_ocr0804",
+      "case_dir": "ocrbench_ocr0804",
+      "question": "what is the value for 'CIRCULATION DATES'? Answer this question using the text in the image directly.",
+      "ground_truth": "OCTOBER 1999",
+      "answers": {
+        "rbm": "The value for \"CIRCULATION DATES\" is **OCTOBER 1999**.",
+        "post_l2": "4/14/99",
+        "fastv_k3": "3/3/2013"
+      },
+      "correctness": {
+        "rbm": 1,
+        "post_l2": 0,
+        "fastv_k3": 0
+      },
+      "image_sha256": "59cc3b57d2dbcb28e2fdfe17192d3d69ce27406312f783026265f4b3fba95cbe",
+      "source_run_paths": {
+        "pre": "/media/disk2/YZX/research/vla/runs/cascade/gate_pre25_ocrbench.json",
+        "post": "/media/disk2/YZX/research/vla/runs/cascade/gate_post25_ocrbench.json",
+        "fastv": "/media/disk2/YZX/research/vla/runs/rankbridge/locked_fst3_ocrbench_n200.json"
+      },
+      "selection_tier": "see manifest.selection_rules",
+      "regen_byte_identity": {
+        "pre": false,
+        "post": true
+      }
+    },
+    {
+      "case_id": "textvqa_34982",
+      "case_dir": "textvqa_34982",
+      "question": "what is the name written on the black shirt?\nAnswer the question using a single word or phrase.",
+      "ground_truth": "rock the stripes;rock the stripes;rock the strip;rock the stripes;rock the stripes;rock the stripes;rock the stripes;rock the stripes;rock the stripes;rock the stripes",
+      "answers": {
+        "rbm": "rock the stripes",
+        "post_l2": "real estate",
+        "fastv_k3": "rock the stripes"
+      },
+      "correctness": {
+        "rbm": 1,
+        "post_l2": 0,
+        "fastv_k3": 1
+      },
+      "image_sha256": "0d7eb4b9561a35355cf7feda2ea079dceca828d8540c9feebb5412197ea64d07",
+      "source_run_paths": {
+        "pre": "/media/disk2/YZX/research/vla/runs/cascade/gate_pre25_textvqa.json",
+        "post": "/media/disk2/YZX/research/vla/runs/v3_merger_aware/rescore_rerun/post_textvqa_r0.750_l2_n200.json",
+        "fastv": "/media/disk2/YZX/research/vla/runs/rankbridge/locked_fst3_textvqa_n200.json"
+      },
+      "selection_tier": "see manifest.selection_rules",
+      "regen_byte_identity": {
+        "pre": true,
+        "post": false
+      }
+    },
+    {
+      "case_id": "textvqa_35000",
+      "case_dir": "textvqa_35000",
+      "question": "what is the name of the beverages?\nAnswer the question using a single word or phrase.",
+      "ground_truth": "recyle!;recycle;recycle!;recycle!;recycle;recycle;recycle;recyle;registered by apple;recycle!",
+      "answers": {
+        "rbm": "recycle!",
+        "post_l2": "recycle!",
+        "fastv_k3": "recycle!"
+      },
+      "correctness": {
+        "rbm": 1,
+        "post_l2": 1,
+        "fastv_k3": 1
+      },
+      "image_sha256": "21b4cfcda8e1cdbbb5181e8e00db8586e845effc319f53163c4129ef20556d1f",
+      "source_run_paths": {
+        "pre": "/media/disk2/YZX/research/vla/runs/cascade/gate_pre25_textvqa.json",
+        "post": "/media/disk2/YZX/research/vla/runs/v3_merger_aware/rescore_rerun/post_textvqa_r0.750_l2_n200.json",
+        "fastv": "/media/disk2/YZX/research/vla/runs/rankbridge/locked_fst3_textvqa_n200.json"
+      },
+      "selection_tier": "see manifest.selection_rules",
+      "regen_byte_identity": {
+        "pre": true,
+        "post": true
+      }
+    },
+    {
+      "case_id": "textvqa_35164",
+      "case_dir": "textvqa_35164",
+      "question": "what does her sash say?\nAnswer the question using a single word or phrase.",
+      "ground_truth": "veedol;veedol;veedol;veedol;veedol;veedol;veedol;veedol;veedol;veedol",
+      "answers": {
+        "rbm": "veedol",
+        "post_l2": "vee",
+        "fastv_k3": "veedol"
+      },
+      "correctness": {
+        "rbm": 1,
+        "post_l2": 0,
+        "fastv_k3": 1
+      },
+      "image_sha256": "eb33272dd41d94d2c5e4638bdaa14905063a79c7559ad7a74642ab4743c44ed8",
+      "source_run_paths": {
+        "pre": "/media/disk2/YZX/research/vla/runs/cascade/gate_pre25_textvqa.json",
+        "post": "/media/disk2/YZX/research/vla/runs/v3_merger_aware/rescore_rerun/post_textvqa_r0.750_l2_n200.json",
+        "fastv": "/media/disk2/YZX/research/vla/runs/rankbridge/locked_fst3_textvqa_n200.json"
+      },
+      "selection_tier": "see manifest.selection_rules",
+      "regen_byte_identity": {
+        "pre": true,
+        "post": false
+      }
+    }
+  ],
+  "mechanism": {
+    "summary": {
+      "textvqa": {
+        "n": 64,
+        "spearman_pre_post": {
+          "mean": 0.3319213591641387,
+          "std": 0.12379334282989657,
+          "median": 0.3637441727027446,
+          "q25": 0.25127025375180195,
+          "q75": 0.41448795867573823
+        },
+        "kendall_pre_post": {
+          "mean": 0.2270995065973169,
+          "std": 0.08615490313331231,
+          "median": 0.24725323229030854,
+          "q25": 0.17284969129231426,
+          "q75": 0.2868657648848327
+        },
+        "jaccard_topk": {
+          "mean": 0.24327110167157354,
+          "std": 0.06948228183777146,
+          "median": 0.24878378950040186,
+          "q25": 0.20376175548589343,
+          "q75": 0.2972972972972973
+        },
+        "mean_edge_pre_keep_post_drop": {
+          "mean": 0.28077191337494295,
+          "std": 0.1137028274671786,
+          "median": 0.2756486512915215,
+          "q25": 0.20432613810458988,
+          "q75": 0.3339018644630045
+        },
+        "mean_edge_post_keep_pre_drop": {
+          "mean": 0.18552923892748002,
+          "std": 0.08504283948934281,
+          "median": 0.16712481811018712,
+          "q25": 0.12039619855144444,
+          "q75": 0.23663209216041045
+        },
+        "frac_high_edge_pre_keep_post_drop": {
+          "mean": 0.7224177077761913,
+          "std": 0.11563589212738162,
+          "median": 0.7137237762237763,
+          "q25": 0.6477272727272727,
+          "q75": 0.7916666666666666
+        },
+        "frac_high_edge_post_keep_pre_drop": {
+          "mean": 0.5314103912535896,
+          "std": 0.08336456075565432,
+          "median": 0.5372720063441713,
+          "q25": 0.4823529411764706,
+          "q75": 0.5795454545454546
+        },
+        "rank_shift_edge_rho": {
+          "mean": 0.1545505162121294,
+          "std": 0.13576907892257126,
+          "median": 0.15007041797526238,
+          "q25": 0.05778733806570374,
+          "q75": 0.21574085689136444
+        }
+      },
+      "docvqa": {
+        "n": 64,
+        "spearman_pre_post": {
+          "mean": 0.13703682424919014,
+          "std": 0.15761479528071368,
+          "median": 0.10409192196042993,
+          "q25": 0.050592402406328105,
+          "q75": 0.2549878245297253
+        },
+        "kendall_pre_post": {
+          "mean": 0.09356879830590854,
+          "std": 0.10608880491975788,
+          "median": 0.07020648237995249,
+          "q25": 0.030178783243577104,
+          "q75": 0.17143455367154406
+        },
+        "jaccard_topk": {
+          "mean": 0.17983987684614067,
+          "std": 0.09100280723174158,
+          "median": 0.1707671432402215,
+          "q25": 0.1021377672209026,
+          "q75": 0.24965325936199723
+        },
+        "mean_edge_pre_keep_post_drop": {
+          "mean": 0.6406581508063465,
+          "std": 0.2647203247201487,
+          "median": 0.5938352176994359,
+          "q25": 0.44598411921876596,
+          "q75": 0.9091735947540256
+        },
+        "mean_edge_post_keep_pre_drop": {
+          "mean": 0.12352307450215548,
+          "std": 0.1436555787781614,
+          "median": 0.08504920043762929,
+          "q25": 0.04487288185010139,
+          "q75": 0.16104877505437795
+        },
+        "frac_high_edge_pre_keep_post_drop": {
+          "mean": 0.918372940381566,
+          "std": 0.12555846297151482,
+          "median": 0.9840756994597832,
+          "q25": 0.8767772511848341,
+          "q75": 1.0
+        },
+        "frac_high_edge_post_keep_pre_drop": {
+          "mean": 0.3470342430112629,
+          "std": 0.1730129408227104,
+          "median": 0.39479593961949777,
+          "q25": 0.2304075235109718,
+          "q75": 0.476319350473613
+        },
+        "rank_shift_edge_rho": {
+          "mean": 0.4384669524539571,
+          "std": 0.16020340781914633,
+          "median": 0.43805252299553155,
+          "q25": 0.3768687020869595,
+          "q75": 0.5602852483888351
+        }
+      },
+      "gqa": {
+        "n": 64,
+        "spearman_pre_post": {
+          "mean": 0.36014204663272736,
+          "std": 0.0907623151866257,
+          "median": 0.3714294022573238,
+          "q25": 0.2987854221988004,
+          "q75": 0.4144382578737488
+        },
+        "kendall_pre_post": {
+          "mean": 0.24894901103665484,
+          "std": 0.06342285296275726,
+          "median": 0.2564516673482642,
+          "q25": 0.20401253362115293,
+          "q75": 0.2883872883872884
+        },
+        "jaccard_topk": {
+          "mean": 0.2775869885814058,
+          "std": 0.05999066817844557,
+          "median": 0.2671721677074041,
+          "q25": 0.23809523809523808,
+          "q75": 0.31313131313131315
+        },
+        "mean_edge_pre_keep_post_drop": {
+          "mean": 0.30369950432657716,
+          "std": 0.09736423455336028,
+          "median": 0.2855036608165219,
+          "q25": 0.23651032051181092,
+          "q75": 0.37381156961675044
+        },
+        "mean_edge_post_keep_pre_drop": {
+          "mean": 0.2708928265974866,
+          "std": 0.09546534134909362,
+          "median": 0.2580186787706155,
+          "q25": 0.19857174158096313,
+          "q75": 0.3238182868118639
+        },
+        "frac_high_edge_pre_keep_post_drop": {
+          "mean": 0.5803603673559771,
+          "std": 0.11099098438898251,
+          "median": 0.5783625730994152,
+          "q25": 0.5,
+          "q75": 0.6590909090909091
+        },
+        "frac_high_edge_post_keep_pre_drop": {
+          "mean": 0.53224069770597,
+          "std": 0.08432193061335093,
+          "median": 0.5428571428571428,
+          "q25": 0.47058823529411764,
+          "q75": 0.5882352941176471
+        },
+        "rank_shift_edge_rho": {
+          "mean": 0.03597101448536702,
+          "std": 0.08685799251405865,
+          "median": 0.04451761495749529,
+          "q25": -0.021235951538918458,
+          "q75": 0.09664427333695504
+        }
+      },
+      "ocrbench": {
+        "n": 199,
+        "spearman_pre_post": {
+          "mean": 0.19100695607065651,
+          "std": 0.17960879667519666,
+          "median": 0.19117866195482,
+          "q25": 0.047859368649234506,
+          "q75": 0.31464788732394366
+        },
+        "kendall_pre_post": {
+          "mean": 0.13163601086380178,
+          "std": 0.1228317302039029,
+          "median": 0.13434529720527735,
+          "q25": 0.032729432729432725,
+          "q75": 0.2181500872600349
+        },
+        "jaccard_topk": {
+          "mean": 0.19723890062031293,
+          "std": 0.07949583344973299,
+          "median": 0.19205298013245034,
+          "q25": 0.13414634146341464,
+          "q75": 0.24907063197026022
+        },
+        "mean_edge_pre_keep_post_drop": {
+          "mean": 0.40808566665074736,
+          "std": 0.2609099567793476,
+          "median": 0.32777176974383415,
+          "q25": 0.1996440353191722,
+          "q75": 0.606659585758785
+        },
+        "mean_edge_post_keep_pre_drop": {
+          "mean": 0.1826312284309559,
+          "std": 0.12606742959692224,
+          "median": 0.15316516622284534,
+          "q25": 0.0873277790158534,
+          "q75": 0.23498965615149717
+        },
+        "frac_high_edge_pre_keep_post_drop": {
+          "mean": 0.7880760145944777,
+          "std": 0.1740677933154918,
+          "median": 0.8181818181818182,
+          "q25": 0.6666666666666666,
+          "q75": 0.9364461738002594
+        },
+        "frac_high_edge_post_keep_pre_drop": {
+          "mean": 0.45305322835035877,
+          "std": 0.15522330911383153,
+          "median": 0.46153846153846156,
+          "q25": 0.36153846153846153,
+          "q75": 0.5511811023622047
+        },
+        "rank_shift_edge_rho": {
+          "mean": 0.3286496435891464,
+          "std": 0.20095832708309397,
+          "median": 0.34260168318606044,
+          "q25": 0.17316699644948952,
+          "q75": 0.4891066239287222
+        }
+      }
+    },
+    "capture": {
+      "textvqa": {
+        "n_requested": 64,
+        "n_ok": 64,
+        "n_fail": 0,
+        "seed": 0,
+        "r": 0.75,
+        "max_pixels": 1500000,
+        "model": "Qwen/Qwen3-VL-8B-Instruct",
+        "scoring": "L2 both stages (pre=_score_units ds0 input, post=_score_tokens cat(main,ds0..2))",
+        "subset": "/media/disk2/YZX/research/vla/eval/subsets/textvqa_200.jsonl",
+        "sampled_line_indices": [
+          0,
+          1,
+          2,
+          3,
+          5,
+          10,
+          13,
+          15,
+          22,
+          25,
+          29,
+          37,
+          43,
+          47,
+          52,
+          63,
+          71,
+          72,
+          73,
+          74,
+          75,
+          77,
+          83,
+          84,
+          86,
+          87,
+          90,
+          93,
+          95,
+          96,
+          106,
+          110,
+          114,
+          116,
+          118,
+          119,
+          121,
+          122,
+          126,
+          127,
+          128,
+          132,
+          135,
+          136,
+          138,
+          140,
+          141,
+          142,
+          145,
+          146,
+          153,
+          156,
+          162,
+          163,
+          165,
+          169,
+          176,
+          177,
+          178,
+          182,
+          185,
+          188,
+          189,
+          191
+        ],
+        "npz_path": "/media/disk2/YZX/research/vla/runs/v3_merger_aware/survival_capture/textvqa.npz",
+        "source_kind": "reused audited capture"
+      },
+      "docvqa": {
+        "n_requested": 64,
+        "n_ok": 64,
+        "n_fail": 0,
+        "seed": 0,
+        "r": 0.75,
+        "max_pixels": 1500000,
+        "model": "Qwen/Qwen3-VL-8B-Instruct",
+        "scoring": "L2 both stages (pre=_score_units ds0 input, post=_score_tokens cat(main,ds0..2))",
+        "subset": "/media/disk2/YZX/research/vla/eval/subsets/docvqa_200.jsonl",
+        "sampled_line_indices": [
+          0,
+          1,
+          2,
+          3,
+          5,
+          10,
+          13,
+          15,
+          22,
+          25,
+          29,
+          37,
+          43,
+          47,
+          52,
+          63,
+          71,
+          72,
+          73,
+          74,
+          75,
+          77,
+          83,
+          84,
+          86,
+          87,
+          90,
+          93,
+          95,
+          96,
+          106,
+          110,
+          114,
+          116,
+          118,
+          119,
+          121,
+          122,
+          126,
+          127,
+          128,
+          132,
+          135,
+          136,
+          138,
+          140,
+          141,
+          142,
+          145,
+          146,
+          153,
+          156,
+          162,
+          163,
+          165,
+          169,
+          176,
+          177,
+          178,
+          182,
+          185,
+          188,
+          189,
+          191
+        ],
+        "npz_path": "/media/disk2/YZX/research/vla/runs/v3_merger_aware/survival_capture/docvqa.npz",
+        "source_kind": "reused audited capture"
+      },
+      "gqa": {
+        "n_requested": 64,
+        "n_ok": 64,
+        "n_fail": 0,
+        "seed": 0,
+        "r": 0.75,
+        "max_pixels": 1500000,
+        "model": "Qwen/Qwen3-VL-8B-Instruct",
+        "scoring": "L2 both stages (pre=_score_units ds0 input, post=_score_tokens cat(main,ds0..2))",
+        "subset": "/media/disk2/YZX/research/vla/eval/subsets/gqa_200.jsonl",
+        "sampled_line_indices": [
+          0,
+          1,
+          2,
+          3,
+          5,
+          10,
+          13,
+          15,
+          22,
+          25,
+          29,
+          37,
+          43,
+          47,
+          52,
+          63,
+          71,
+          72,
+          73,
+          74,
+          75,
+          77,
+          83,
+          84,
+          86,
+          87,
+          90,
+          93,
+          95,
+          96,
+          106,
+          110,
+          114,
+          116,
+          118,
+          119,
+          121,
+          122,
+          126,
+          127,
+          128,
+          132,
+          135,
+          136,
+          138,
+          140,
+          141,
+          142,
+          145,
+          146,
+          153,
+          156,
+          162,
+          163,
+          165,
+          169,
+          176,
+          177,
+          178,
+          182,
+          185,
+          188,
+          189,
+          191
+        ],
+        "npz_path": "/media/disk2/YZX/research/vla/runs/v3_merger_aware/survival_capture/gqa.npz",
+        "source_kind": "reused audited capture"
+      },
+      "ocrbench": {
+        "n_requested": 200,
+        "n_ok": 199,
+        "n_fail": 1,
+        "seed": 0,
+        "r": 0.75,
+        "max_pixels": 1500000,
+        "model": "Qwen/Qwen3-VL-8B-Instruct",
+        "scoring": "L2 both stages (pre=_score_units ds0 input, post=_score_tokens cat(main,ds0..2))",
+        "subset": "/media/disk2/YZX/research/vla/eval/subsets/ocrbench_200.jsonl",
+        "sampled_line_indices": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          19,
+          20,
+          21,
+          22,
+          23,
+          24,
+          25,
+          26,
+          27,
+          28,
+          29,
+          30,
+          31,
+          32,
+          33,
+          34,
+          35,
+          36,
+          37,
+          38,
+          39,
+          40,
+          41,
+          42,
+          43,
+          44,
+          45,
+          46,
+          47,
+          48,
+          49,
+          50,
+          51,
+          52,
+          53,
+          54,
+          55,
+          56,
+          57,
+          58,
+          59,
+          60,
+          61,
+          62,
+          63,
+          64,
+          65,
+          66,
+          67,
+          68,
+          69,
+          70,
+          71,
+          72,
+          73,
+          74,
+          75,
+          76,
+          77,
+          78,
+          79,
+          80,
+          81,
+          82,
+          83,
+          84,
+          85,
+          86,
+          87,
+          88,
+          89,
+          90,
+          91,
+          92,
+          93,
+          94,
+          95,
+          96,
+          97,
+          98,
+          99,
+          100,
+          101,
+          102,
+          103,
+          104,
+          105,
+          106,
+          107,
+          108,
+          109,
+          110,
+          111,
+          112,
+          113,
+          114,
+          115,
+          116,
+          117,
+          118,
+          119,
+          120,
+          121,
+          122,
+          123,
+          124,
+          125,
+          126,
+          127,
+          128,
+          129,
+          130,
+          131,
+          132,
+          133,
+          134,
+          135,
+          136,
+          137,
+          138,
+          139,
+          140,
+          141,
+          142,
+          143,
+          144,
+          145,
+          146,
+          147,
+          148,
+          149,
+          150,
+          151,
+          152,
+          153,
+          154,
+          155,
+          156,
+          157,
+          158,
+          159,
+          160,
+          161,
+          162,
+          163,
+          164,
+          165,
+          166,
+          167,
+          168,
+          169,
+          170,
+          171,
+          172,
+          173,
+          174,
+          175,
+          176,
+          177,
+          178,
+          179,
+          180,
+          181,
+          182,
+          183,
+          184,
+          185,
+          186,
+          187,
+          188,
+          189,
+          190,
+          191,
+          192,
+          193,
+          194,
+          195,
+          196,
+          197,
+          198,
+          199
+        ],
+        "npz_path": "/media/disk2/YZX/research/vla/drafts/figures/server_exports/tmp/survival_ocrbench/ocrbench.npz",
+        "source_kind": "captured for this bundle"
+      }
+    }
+  },
+  "swap_control": {
+    "qwen3vl": {
+      "textvqa": {
+        "model": "Qwen/Qwen3-VL-8B-Instruct",
+        "benchmark": "textvqa",
+        "n": 200,
+        "keep_ratio": 0.25,
+        "pre_accuracy": 0.5983,
+        "post_accuracy": 0.215,
+        "swap_accuracy": 0.6033,
+        "swap_vs_pre_answer_agreement": 0.99,
+        "jaccard_swap_pre_kept_set": 1.0,
+        "jaccard_sample_n": 31,
+        "byte_or_tolerance_contract": "kept-set Jaccard(pre, swap)=1.000 over 31 common samples (n=32 probe run, identical attach counts); answer identity 0.990 over 200 (n=200) -- forward path held identical, only the ranking source varies",
+        "verification_result": "swap reproduces pre (not post) => the pre-post gap is a ranking effect"
+      },
+      "docvqa": {
+        "model": "Qwen/Qwen3-VL-8B-Instruct",
+        "benchmark": "docvqa",
+        "n": 200,
+        "keep_ratio": 0.25,
+        "pre_accuracy": 0.465,
+        "post_accuracy": 0.2003,
+        "swap_accuracy": 0.465,
+        "swap_vs_pre_answer_agreement": 1.0,
+        "jaccard_swap_pre_kept_set": 1.0,
+        "jaccard_sample_n": 30,
+        "byte_or_tolerance_contract": "kept-set Jaccard(pre, swap)=1.000 over 30 common samples (n=32 probe run, identical attach counts); answer identity 1.000 over 200 (n=200) -- forward path held identical, only the ranking source varies",
+        "verification_result": "swap reproduces pre (not post) => the pre-post gap is a ranking effect"
+      }
+    },
+    "qwen2vl": {
+      "textvqa": {
+        "model": "Qwen/Qwen2.5-VL-7B-Instruct",
+        "benchmark": "textvqa",
+        "n": 31,
+        "keep_ratio": 0.25,
+        "pre_accuracy": 0.6875,
+        "swap_accuracy": 0.6979,
+        "post_accuracy": null,
+        "swap_vs_pre_answer_agreement": null,
+        "jaccard_swap_pre_kept_set": 1.0,
+        "jaccard_sample_n": 31,
+        "byte_or_tolerance_contract": "kept-set corroboration: Jaccard(pre, swap)=1.000 over 31 common samples (n=32 probe)",
+        "verification_result": "kept-set identity on Q2.5 corroborates the Q3 causal evidence (accuracy-level)"
+      },
+      "docvqa": {
+        "model": "Qwen/Qwen2.5-VL-7B-Instruct",
+        "benchmark": "docvqa",
+        "n": 30,
+        "keep_ratio": 0.25,
+        "pre_accuracy": 0.6,
+        "swap_accuracy": 0.667,
+        "post_accuracy": null,
+        "swap_vs_pre_answer_agreement": null,
+        "jaccard_swap_pre_kept_set": 1.0,
+        "jaccard_sample_n": 30,
+        "byte_or_tolerance_contract": "kept-set corroboration: Jaccard(pre, swap)=1.000 over 30 common samples (n=32 probe)",
+        "verification_result": "kept-set identity on Q2.5 corroborates the Q3 causal evidence (accuracy-level)"
+      }
+    },
+    "internvl3": [
+      {
+        "model": "InternVL3-8B",
+        "benchmark": "textvqa",
+        "n": 200,
+        "keep_ratio": 0.25,
+        "pre_accuracy": 0.7383,
+        "post_accuracy": 0.345,
+        "swap_accuracy": 0.7383,
+        "swap_vs_pre_answer_agreement": 1.0,
+        "jaccard_swap_pre_kept_set": 1.0,
+        "jaccard_sample_n": 197,
+        "byte_or_tolerance_contract": "Jaccard(pre,swap)=1.0 over 197 samples; answer identity 1.00 over 200; consumed 198 swaps with 0 fallbacks (no fallback path)",
+        "verification_result": "accuracy-level replication on third family"
+      },
+      {
+        "model": "InternVL3-8B",
+        "benchmark": "docvqa",
+        "n": 200,
+        "keep_ratio": 0.25,
+        "pre_accuracy": 0.7442,
+        "post_accuracy": 0.4256,
+        "swap_accuracy": 0.7453,
+        "swap_vs_pre_answer_agreement": 0.98,
+        "jaccard_swap_pre_kept_set": 1.0,
+        "jaccard_sample_n": 163,
+        "byte_or_tolerance_contract": "Jaccard(pre,swap)=1.0 over 163 samples; answer identity 0.98 over 200; consumed 164 swaps with 0 fallbacks (no fallback path)",
+        "verification_result": "accuracy-level replication on third family"
+      },
+      {
+        "model": "InternVL3-8B",
+        "benchmark": "gqa",
+        "n": 200,
+        "keep_ratio": 0.25,
+        "pre_accuracy": 0.595,
+        "post_accuracy": 0.585,
+        "swap_accuracy": 0.59,
+        "swap_vs_pre_answer_agreement": 0.995,
+        "jaccard_swap_pre_kept_set": 1.0,
+        "jaccard_sample_n": 192,
+        "byte_or_tolerance_contract": "Jaccard(pre,swap)=1.0 over 192 samples; answer identity 0.99 over 200; consumed 193 swaps with 0 fallbacks (no fallback path)",
+        "verification_result": "accuracy-level replication on third family"
+      }
+    ]
+  },
+  "aggregates": {
+    "main_results_units": "pp / OCRBench points / ANLS (see csv row)",
+    "regime_map_units": "pp (fastv - rbm)",
+    "retention_units": "metric-native",
+    "file_names": [
+      "aggregate_main_results.csv",
+      "aggregate_regime_map.csv",
+      "retention_curves.csv"
+    ]
+  },
+  "validation_gates": {
+    "1_real_cases": {
+      "pass": true,
+      "detail": {
+        "gqa_201056134": "ok",
+        "ocrbench_ocr0422": "ok",
+        "ocrbench_ocr0804": "ok",
+        "textvqa_34982": "ok",
+        "textvqa_35000": "ok",
+        "textvqa_35164": "ok"
+      }
+    },
+    "2_masks_kappa": {
+      "pass": true,
+      "detail": {
+        "gqa_201056134": "ok",
+        "ocrbench_ocr0422": "ok",
+        "ocrbench_ocr0804": "ok",
+        "textvqa_34982": "ok",
+        "textvqa_35000": "ok",
+        "textvqa_35164": "ok"
+      }
+    },
+    "3_iso_tokens": {
+      "pass": true,
+      "detail": {
+        "gqa_201056134": [
+          "ok",
+          {
+            "rbm": 60,
+            "post_l2": 60,
+            "fastv_k3": 60
+          }
+        ],
+        "ocrbench_ocr0422": [
+          "ok",
+          {
+            "rbm": 54,
+            "post_l2": 54,
+            "fastv_k3": 54
+          }
+        ],
+        "ocrbench_ocr0804": [
+          "ok",
+          {
+            "rbm": 186,
+            "post_l2": 186,
+            "fastv_k3": 186
+          }
+        ],
+        "textvqa_34982": [
+          "ok",
+          {
+            "rbm": 168,
+            "post_l2": 168,
+            "fastv_k3": 168
+          }
+        ],
+        "textvqa_35000": [
+          "ok",
+          {
+            "rbm": 144,
+            "post_l2": 144,
+            "fastv_k3": 144
+          }
+        ],
+        "textvqa_35164": [
+          "ok",
+          {
+            "rbm": 168,
+            "post_l2": 168,
+            "fastv_k3": 168
+          }
+        ]
+      }
+    },
+    "4_scorer_recompute": {
+      "pass": true,
+      "detail": {
+        "gqa_201056134": "ok",
+        "ocrbench_ocr0422": "ok",
+        "ocrbench_ocr0804": "ok",
+        "textvqa_34982": "ok",
+        "textvqa_35000": "ok",
+        "textvqa_35164": "ok"
+      }
+    },
+    "5_grid_corners": {
+      "pass": true,
+      "detail": {
+        "gqa_201056134": "ok",
+        "ocrbench_ocr0422": "ok",
+        "ocrbench_ocr0804": "ok",
+        "textvqa_34982": "ok",
+        "textvqa_35000": "ok",
+        "textvqa_35164": "ok"
+      }
+    },
+    "6_table_parity": {
+      "pass": true,
+      "detail": {
+        "mismatches": []
+      }
+    },
+    "7_sidecars": {
+      "pass": true,
+      "detail": {
+        "manifest.json": "ok",
+        "provenance.json": "ok",
+        "checksums.sha256": "ok",
+        "logs/commands.txt": "ok"
+      }
+    },
+    "8_claims": {
+      "pass": true,
+      "detail": "no message calls any fastv data 'attention map' as a general heatmap; fastv scores are named measure-of-query-conditioning attention at layer 3; edge/var named as analysis features."
+    }
+  },
+  "reuse_vs_rerun": {
+    "reused": [
+      "runs/cascade/gate_pre25_*.json (RBM kept indices + answers, all 6 cases)",
+      "drafts/figures/frontispiece_fig1/candidate_assets/ocr0422, ocr0804 (three-arm masks, provenance)",
+      "runs/cascade/gate_post25_ocrbench.json + rescore_rerun/post_textvqa/docvqa (post answers)",
+      "runs/rankbridge/locked_fst3_*_n200.json (fastv)",
+      "survival_* numpy captures (docvqa/textvqa/gqa)",
+      "swap + jaccard + internvl3 swap records",
+      "j7 full-split + paired_metric_statistics.md"
+    ],
+    "rerun_here": [
+      "6-case PRE/POST/FASTV score+mask+aux capture (+ regen verification)",
+      "OCRBench mechanism sweep (prefill-only)"
+    ]
+  }
+}

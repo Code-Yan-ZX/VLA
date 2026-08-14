@@ -1,0 +1,114 @@
+{
+  "qwen3vl": {
+    "textvqa": {
+      "model": "Qwen/Qwen3-VL-8B-Instruct",
+      "benchmark": "textvqa",
+      "n": 200,
+      "keep_ratio": 0.25,
+      "pre_accuracy": 0.5983,
+      "post_accuracy": 0.215,
+      "swap_accuracy": 0.6033,
+      "swap_vs_pre_answer_agreement": 0.99,
+      "jaccard_swap_pre_kept_set": 1.0,
+      "jaccard_sample_n": 31,
+      "byte_or_tolerance_contract": "kept-set Jaccard(pre, swap)=1.000 over 31 common samples (n=32 probe run, identical attach counts); answer identity 0.990 over 200 (n=200) -- forward path held identical, only the ranking source varies",
+      "verification_result": "swap reproduces pre (not post) => the pre-post gap is a ranking effect"
+    },
+    "docvqa": {
+      "model": "Qwen/Qwen3-VL-8B-Instruct",
+      "benchmark": "docvqa",
+      "n": 200,
+      "keep_ratio": 0.25,
+      "pre_accuracy": 0.465,
+      "post_accuracy": 0.2003,
+      "swap_accuracy": 0.465,
+      "swap_vs_pre_answer_agreement": 1.0,
+      "jaccard_swap_pre_kept_set": 1.0,
+      "jaccard_sample_n": 30,
+      "byte_or_tolerance_contract": "kept-set Jaccard(pre, swap)=1.000 over 30 common samples (n=32 probe run, identical attach counts); answer identity 1.000 over 200 (n=200) -- forward path held identical, only the ranking source varies",
+      "verification_result": "swap reproduces pre (not post) => the pre-post gap is a ranking effect"
+    }
+  },
+  "qwen2vl": {
+    "textvqa": {
+      "model": "Qwen/Qwen2.5-VL-7B-Instruct",
+      "benchmark": "textvqa",
+      "n": 31,
+      "keep_ratio": 0.25,
+      "pre_accuracy": 0.6875,
+      "swap_accuracy": 0.6979,
+      "post_accuracy": null,
+      "swap_vs_pre_answer_agreement": null,
+      "jaccard_swap_pre_kept_set": 1.0,
+      "jaccard_sample_n": 31,
+      "byte_or_tolerance_contract": "kept-set corroboration: Jaccard(pre, swap)=1.000 over 31 common samples (n=32 probe)",
+      "verification_result": "kept-set identity on Q2.5 corroborates the Q3 causal evidence (accuracy-level)"
+    },
+    "docvqa": {
+      "model": "Qwen/Qwen2.5-VL-7B-Instruct",
+      "benchmark": "docvqa",
+      "n": 30,
+      "keep_ratio": 0.25,
+      "pre_accuracy": 0.6,
+      "swap_accuracy": 0.667,
+      "post_accuracy": null,
+      "swap_vs_pre_answer_agreement": null,
+      "jaccard_swap_pre_kept_set": 1.0,
+      "jaccard_sample_n": 30,
+      "byte_or_tolerance_contract": "kept-set corroboration: Jaccard(pre, swap)=1.000 over 30 common samples (n=32 probe)",
+      "verification_result": "kept-set identity on Q2.5 corroborates the Q3 causal evidence (accuracy-level)"
+    }
+  },
+  "internvl3": {
+    "rows": [
+      {
+        "model": "InternVL3-8B",
+        "benchmark": "textvqa",
+        "n": 200,
+        "keep_ratio": 0.25,
+        "pre_accuracy": 0.7383,
+        "post_accuracy": 0.345,
+        "swap_accuracy": 0.7383,
+        "swap_vs_pre_answer_agreement": 1.0,
+        "jaccard_swap_pre_kept_set": 1.0,
+        "jaccard_sample_n": 197,
+        "byte_or_tolerance_contract": "Jaccard(pre,swap)=1.0 over 197 samples; answer identity 1.00 over 200; consumed 198 swaps with 0 fallbacks (no fallback path)",
+        "verification_result": "accuracy-level replication on third family"
+      },
+      {
+        "model": "InternVL3-8B",
+        "benchmark": "docvqa",
+        "n": 200,
+        "keep_ratio": 0.25,
+        "pre_accuracy": 0.7442,
+        "post_accuracy": 0.4256,
+        "swap_accuracy": 0.7453,
+        "swap_vs_pre_answer_agreement": 0.98,
+        "jaccard_swap_pre_kept_set": 1.0,
+        "jaccard_sample_n": 163,
+        "byte_or_tolerance_contract": "Jaccard(pre,swap)=1.0 over 163 samples; answer identity 0.98 over 200; consumed 164 swaps with 0 fallbacks (no fallback path)",
+        "verification_result": "accuracy-level replication on third family"
+      },
+      {
+        "model": "InternVL3-8B",
+        "benchmark": "gqa",
+        "n": 200,
+        "keep_ratio": 0.25,
+        "pre_accuracy": 0.595,
+        "post_accuracy": 0.585,
+        "swap_accuracy": 0.59,
+        "swap_vs_pre_answer_agreement": 0.995,
+        "jaccard_swap_pre_kept_set": 1.0,
+        "jaccard_sample_n": 192,
+        "byte_or_tolerance_contract": "Jaccard(pre,swap)=1.0 over 192 samples; answer identity 0.99 over 200; consumed 193 swaps with 0 fallbacks (no fallback path)",
+        "verification_result": "accuracy-level replication on third family"
+      }
+    ],
+    "gate": "internvl3_m3_ranking_swap"
+  },
+  "evidence_tiers": {
+    "qwen3vl": "byte-exact causal (kept-set identity 1.0, n=32 probe) + n=200 answer identity",
+    "qwen2vl": "kept-set corroboration (Jaccard 1.0, n=32) -- accuracy level",
+    "internvl3": "accuracy-level replication (n=200 full, Jaccard 1.0)"
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "git_commit": "275c01b",
+  "git_commit_full": "275c01b814175572680967e550bc04faf554b0d6",
+  "model": "Qwen/Qwen3-VL-8B-Instruct",
+  "model_revision": "0c351dd01ed87e9c1b53cbc748cba10e6187ff3b",
+  "package_versions": {
+    "torch": "2.10.0+cu128",
+    "transformers": "4.57.6",
+    "numpy": "2.2.6",
+    "python": "3.10.20"
+  },
+  "seed": 0,
+  "decoding": "greedy, max_tokens=32",
+  "keep_ratio": 0.25,
+  "pixel_cap": {
+    "textvqa": 0,
+    "gqa": 0,
+    "ocrbench": 0,
+    "docvqa": 600000,
+    "mechanism_sweep": 1500000
+  },
+  "processor": "Qwen3-VL native AutoProcessor; native resolution (max_pixels=0) for cases; 1.5M cap for the mechanism sweep (identical to the existing three captures); grid_thw and processor_hw recorded per case",
+  "hooks": {
+    "pre_scores": "MergerTap on visual.merger + visual.deepstack_merger_list; first-called merger input (runner mask source deepstack_0); score = mean per-patch L2 of the 4-patch unit (runner _score_units 'l2')",
+    "post_scores": "per-image L2 norm of the post-merge <|image_pad|> rows in the captured inputs_embeds (identical to postmerger_keep_tokens)",
+    "fastv_scores": "mean-headed last-query-row attention over the merged image tokens at the FastV layer-3 prune point (rank_keep_indices source; laboratory-explored attention map, not a hand-made saliency)",
+    "edge_energy": "mean Sobel |grad| per 32px (2x2-patch) unit over the processor-resized grayscale image; ANALYSIS feature only, never used for selection",
+    "within_unit_variance": "mean over feature dims of the 4-patch variance (runner 'var' selector), same tensor as the L2 scores"
+  },
+  "case_capture_command": [
+    "python scripts/export_cvpr_cases.py --cases ocrbench_ocr0422 ... gqa_201056134"
+  ],
+  "mechanism_capture_command": "python scripts/export_cvpr_mechanism_ocr.py",
+  "compile_command": "python scripts/export_cvpr_figure_data_compile.py",
+  "generated_at_utc": "2026-08-14T05:11:07Z"
+}
