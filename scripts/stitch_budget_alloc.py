@@ -66,7 +66,10 @@ def allocate(k_raw: list[int], base: list[int], clamp: float) -> list[int]:
     B = sum(base)
     n = len(base)
     lo = [max(1, int(round(b * (1.0 - clamp)))) for b in base]
-    hi = [max(lo[i], int(round(base[i] * (1.0 + clamp)))) for i in range(n)]
+    # hi capped at the image's full unit count f: a budget never exceeds f, so
+    # (lo, hi) is always a feasible interval containing a sum-B allocation.
+    hi = [max(lo[i], min(base[i], int(round(base[i] * (1.0 + clamp)))))
+          for i in range(n)]
     k = [min(h, max(l, raw)) for raw, l, h in zip(k_raw, lo, hi)]
 
     deficit = B - sum(k)
