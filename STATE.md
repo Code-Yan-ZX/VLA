@@ -1,7 +1,7 @@
 # STATE.md - 当前项目状态（主窗口维护，保持 ≤30 行）
 
 > 项目：VLM 视觉 token 压缩 · 目标：Rank-Before-Merge -> ACM MM'27
-> 最近更新：2026-08-14 · **Overleaf 权威稿已完成投稿级重构：8 页正文，后接参考文献与补充材料；仅待作者及官方投稿元数据。**
+> 最近更新：2026-08-14 · **权威稿 8 页正文 + 2 页参考文献；三图与 49 条引用已终验，仅待官方投稿元数据。**
 
 ## ★ 服务器任务书终判：双门均 NO-GO（2026-08-10）
 - **Deferred RBM (rho=1,K=3) 零代码臂**：n=64×4 dev gate -- 锚点 ≡ plain RBM bit-identical，ptid 64/64×3+58/58 全等；cond1（四基准 ≥max(RBM,fst3)−1pp）textvqa/docvqa FAIL → **NO-GO**，不进入 n=200。GPU 0.75h。
@@ -25,5 +25,6 @@
 - 投稿前/claim 推翻/凭据/单次 >6 GPU·h 升级 user；GPU 单卡 A40 串行。
 - 双门 NO-GO 落地后方法维持 plain RBM；§6 引用待 user OK。
 - 任务书交付齐：experiments/cvpr2026_token_compression_audit.md（新颖性）+ deferred_rbm_gate.md（Stage A）+ rbm_ot_gate.md（Stage B）+ DECISIONS/STATE 更新；以 Code-Yan-ZX 身份 commit+push（无 AI 署名）。
-- 2026-08-14 最终图件：Fig.1=`fig2_rows1and2_combined.pdf`（两例 OCRBench × RBM/Post-L2/FastV-k3），题为 “Three selectors retain different visual evidence”；Fig.2 forest plot 不变；Fig.3=merger mechanism 三联图，题为 “What the native merger changes”；旧 Fig.1 SVG 删除，retention curve 仅保留 Supplementary Table S3 引用。
+- 2026-08-14 终稿：Fig.1 第2页；Fig.2 forest plot 改黛青/朱砂/秋香 + 圆/方/菱形；Fig.3 纯白透明背景、无底色块。`main.pdf` 19页，补充材料第11页开始。
+- 参考文献 49 条且全部正文引用，集中补充 CVPR 2026（正式 CVF proceedings 与 arXiv 预印本严格区分）；无 undefined citation。已安装 `nature-academic-search` 到个人 Codex skills（下轮可用）。
 - 下一步仅人工项：核验 ACM MM'27 官方日期/地点/模板元数据；保持匿名投稿时不填作者，camera-ready 再填作者/单位/DOI/ISBN；实际上传/投稿须 user 确认。

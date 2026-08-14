@@ -28,15 +28,16 @@ EXPECTED_MODELS = ["Qwen3-VL-8B", "Qwen2.5-VL-7B", "InternVL3-8B"]
 EXPECTED_PANELS = ["TextVQA", "DocVQA", "OCRBench", "GQA"]
 EXPECTED_UNITS = {"TextVQA": "pp", "DocVQA": "pp", "OCRBench": "pts", "GQA": "pp"}
 
-# Muted editorial palette: steel blue, brick terracotta, and grey olive.
-# These colors remain distinct in grayscale while avoiding the saturated
-# default chart palette that makes the figure feel synthetic.
+# Restrained traditional Chinese palette: dai-qing (ink blue-green), zhu-sha
+# (cinnabar), and qiu-xiang (muted ochre). Distinct marker shapes preserve the
+# model mapping in grayscale and for readers with color-vision deficiencies.
 COLORS = {
-    "Qwen3-VL-8B": "#3E5C76",
-    "Qwen2.5-VL-7B": "#B56552",
-    "InternVL3-8B": "#718B70",
+    "Qwen3-VL-8B": "#354F52",  # dai-qing / ink blue-green
+    "Qwen2.5-VL-7B": "#B34735",  # zhu-sha / cinnabar
+    "InternVL3-8B": "#9A7B3F",  # qiu-xiang / muted ochre
 }
-INK, AXIS_GRAY, GRID_GRAY, ZERO_GRAY = "#2E3334", "#646B69", "#D6D5D0", "#3F4544"
+MARKERS = {"Qwen3-VL-8B": "o", "Qwen2.5-VL-7B": "s", "InternVL3-8B": "D"}
+INK, AXIS_GRAY, GRID_GRAY, ZERO_GRAY = "#292724", "#6B6760", "#D8D3C8", "#393733"
 MINUS = "−"  # true minus sign
 
 
@@ -152,8 +153,8 @@ def render(data: dict, outdir: Path) -> None:
 
     fig, ax = plt.subplots(figsize=(7.09, 3.35))
     fig.subplots_adjust(left=0.17, right=0.985, top=0.80, bottom=0.23)
-    ax.axvspan(-7, 0, color="#F1F1EE", zorder=0)
-    ax.axvspan(0, 50, color="#F8F4EA", zorder=0)
+    ax.axvspan(-7, 0, color="#F2F1ED", zorder=0)
+    ax.axvspan(0, 50, color="#F7F3E8", zorder=0)
     ax.axvline(0, color=ZERO_GRAY, linewidth=1.1, zorder=2)
     ax.xaxis.grid(True, color=GRID_GRAY, linewidth=0.55, zorder=1)
     ax.set_axisbelow(True)
@@ -174,7 +175,7 @@ def render(data: dict, outdir: Path) -> None:
                     raise RuntimeError("figure/statistics mismatch: {} {}".format(model, bench))
             xs.append(xval); ys.append(center + offsets[mi])
             loerr.append(xval - lo); hierr.append(hi - xval)
-        ax.errorbar(xs, ys, xerr=[loerr, hierr], fmt="o",
+        ax.errorbar(xs, ys, xerr=[loerr, hierr], fmt=MARKERS[model],
                     color=COLORS[model], ecolor=COLORS[model],
                     elinewidth=1.25, capsize=2.2, markersize=5.2,
                     markeredgecolor=darken(COLORS[model]), markeredgewidth=0.7,
@@ -197,7 +198,7 @@ def render(data: dict, outdir: Path) -> None:
         ax.spines[side].set_visible(False)
     ax.text(-5.8, 3.38, "post better", fontsize=7, color=AXIS_GRAY,
             ha="left", va="bottom")
-    ax.text(1.0, 3.38, "RBM better", fontsize=7, color="#8A5A45",
+    ax.text(1.0, 3.38, "RBM better", fontsize=7, color="#8D3D32",
             ha="left", va="bottom")
 
     handles, labels = ax.get_legend_handles_labels()

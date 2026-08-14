@@ -227,3 +227,12 @@
 - **Figure 1**：按用户最终决定，直接采用 `fig2_rows1and2_combined.pdf`，不再使用 hybrid/frontispiece。命名为 “Three selectors retain different visual evidence”，仅陈述两个 audited OCRBench 个例、三种 selector 的真实 retained-unit mask 与答案正误，不宣称 regeneration-stable 或总体优势。
 - **Figure 3**：采用 `fig3_mechanism_candidate.pdf`，命名为 “What the native merger changes”。正文改为 pre/post rank preservation、text-stroke edge-energy demotion 与 kept-set-identical ranking-swap control；原 retention-curve 结论只引用 Supplementary Table S3。
 - **Figure 2**：paired-CI forest plot 保持不变。删除与新 Figure 1 不一致的旧 `fig1.svg`，主稿以三份 PDF 为唯一图源。
+
+## 2026-08-14 | 图件分页/配色终验与 CVPR 2026 引用扩充
+
+- **图一分页**：将 full-width Fig.1 浮动体前移到 `\maketitle` 后并使用 `[t!]`；最终 PDF 稳定落在第 2 页。
+- **图二配色**：forest plot 改为中国传统低饱和黛青 `#354F52`、朱砂 `#B34735`、秋香 `#9A7B3F`；同时用圆/方/菱形编码模型，保证灰度打印和色觉差异下可区分。
+- **图三背景**：画布与 axes 设为透明、删除说明框填充；嵌入 ACM PDF 后为纯白纸面。右侧 ranking-swap 说明移至页脚，消除与图例/柱顶数值重叠。
+- **引用策略**：文献库从 25 扩至 49 条，新增以 CVPR 2026 官方 CVF proceedings 为主；未正式发表的 2026 工作保持 `@misc`/arXiv 身份。所有条目均在 Related Work 中按方法类别实质性引用，不用 `\nocite` 凑数。
+- **页数纪律**：删除冗余 `url` 字段，保留作者、题名、venue、年份、页码、DOI/arXiv，使参考文献稳定为 2 页；最终 `main.pdf` 19 页（正文 8、参考文献 2、补充材料从第 11 页开始）。
+- **工具**：按公开仓库 `wp-a/nature-academic-search` 的 Codex skill 路径安装到 `C:\Users\C\.codex\skills\nature-academic-search`；skill 将从下一轮对话起可直接调用。

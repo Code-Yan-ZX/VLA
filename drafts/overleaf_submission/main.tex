@@ -114,6 +114,28 @@ be released.
 
 \maketitle
 
+% FIG 1 --- place the visual summary at the first available double-column top.
+% Keeping this immediately after \maketitle makes the float land on page 2.
+\begin{figure*}[t!]
+  \centering
+  \includegraphics[width=\textwidth]{figs/fig1.pdf}
+  \caption{\textbf{Three selectors retain different visual evidence.}
+  Two audited OCRBench cases compare RBM, Post-L2, and FastV-k3 at the same
+  $\kappa=25\%$ visual-token budget on Qwen3-VL-8B. Blue native-grid cells are
+  the visual units retained by each method; the underlying input remains
+  visible for direct spatial comparison. Vector checks and crosses report
+  answer correctness against the printed ground truth. In both examples, RBM
+  preserves the answer-bearing text and answers correctly, while Post-L2 and
+  FastV-k3 do not. These cases illustrate the selection behavior; aggregate
+  effects and uncertainty are reported in Figure~\ref{fig:fig2}.}
+  \Description{Two OCRBench image rows compare retained visual units for RBM,
+  Post-L2, and FastV-k3 at 25 percent retention. The first ground truth is
+  A105-108 and the second is OCTOBER 1999. Blue grid cells identify units kept
+  by each selector. RBM is correct in both rows, while Post-L2 and FastV-k3 are
+  incorrect, as indicated by vector check and cross marks.}
+  \label{fig:fig1}
+\end{figure*}
+
 % =============================================================================
 \section{Introduction}\label{sec:intro}
 % =============================================================================
@@ -194,7 +216,12 @@ attention-based pruning~\cite{zhang2024fastervlm}; \textbf{SparseVLM} explores
 query-conditioned sparsification~\cite{zhang2024sparsevlm}; \textbf{PruMerge}
 merges by attention-derived importance~\cite{shang2024prumerge};
 \textbf{FitPrune} fits lightweight importance
-predictors~\cite{ye2024fitprune}. These methods prune or merge at different
+predictors~\cite{ye2024fitprune}. Other training-free selectors use visual
+{[CLS]} attention, graph propagation, or multi-cue suppression
+\cite{wang2024vtccls,jiang2025gprune,luan2025adaptprune}, while unified recent
+systems combine importance with diversity or text-guided merging
+\cite{yu2026visiontrim,baek2026agilepruner,fang2026prunesid}. These methods
+prune or merge at different
 encoder-output or LLM-side hook points. None isolates selection immediately
 before versus after a model's native spatial merger under iso-model, iso-token,
 and iso-selector control.
@@ -208,6 +235,9 @@ lossy-merger thesis, cited as support, not as a competitor. This lineage adds a
 \emph{second}, learned merging stage; we hold the native merger fixed and ask
 only whether selection should precede or follow it, so it is orthogonal to, and
 composes with, our stage axis.
+Learned visual projectors such as TokenPacker condense tokens while preserving
+fine local cues~\cite{li2024tokenpacker}; unlike our inference-time test, they
+alter the projector architecture and require model adaptation.
 
 \textbf{VisionZip and Qwen-family compression.} \textbf{VisionZip} selects
 ``dominant'' tokens by CLS-to-patch attention and merges the remainder into
@@ -225,6 +255,23 @@ token-transition variation~\cite{li2026transprune}, while V2Drop exploits
 variation across adjacent layers~\cite{chen2026v2drop}. They are complementary
 to the controlled native-merger stage axis studied here.
 
+\textbf{The CVPR 2026 frontier.} Recent work broadens token reduction beyond
+scalar attention ranks through hierarchical selection~\cite{sun2026hiloprune}.
+Set coverage, reconstruction error, and functional
+sensitivity motivate joint or projector-aware selection
+\cite{ma2026apet,xu2026score,du2026coin,kim2026zooprune,lee2026spare}; learned
+or strongly conditioned compressors instead model semantic labels,
+information flow, or head importance
+\cite{wang2026metacompress,song2026evocomp,sun2026ifprune,zhu2026hawk}.
+Other work makes token lifetime explicitly layer-dependent
+\cite{wang2026informationhorizon,chen2026alvts,li2026crisp}, or preserves
+discarded content through object-centric, optimal-transport, or hybrid
+aggregation~\cite{lei2026core,li2026aot,zhang2026hybrid}. Document- and
+OCR-specific studies further show that generic accuracy can hide lost textual
+evidence~\cite{choi2026docprune,liu2026provenance}. These advances reinforce
+the need to localize the intervention stage, but none performs our matched
+pre/post test at a frozen model's native spatial merger.
+
 \textbf{The design point we isolate.} We do not claim a topological vacuum.
 QuietPrune-style in-ViT pruning~\cite{gao2026quietprune} is a different,
 earlier, trained stage;
@@ -238,7 +285,9 @@ text-dense workloads, which the methods above neither report nor control for.
 
 \textbf{Efficiency evaluation of VLMs.} Reported speedups depend heavily on
 engine and protocol. We adopt the lmms-eval family of \emph{official} scorers
-for accuracy~\cite{zhang2024lmmseval} and confine all throughput claims to a
+for accuracy~\cite{zhang2024lmmseval}; EffiVLM-Bench independently emphasizes
+cross-backbone, multi-metric acceleration evaluation
+\cite{wang2025effivlmbench}. We confine all throughput claims to a
 single engine (\S\ref{sec:efficiency}).
 
 % =============================================================================
@@ -280,28 +329,6 @@ fixed:
     contrast, iso-selector with the pre arm; the layer-2 FastV contrast is used
     only in Table~\ref{tab:tab3}.
 \end{itemize}
-
-% FIG 1 --- two audited OCRBench examples with three measured selectors
-\begin{figure*}[t]
-  \centering
-  \includegraphics[width=\textwidth]{figs/fig1.pdf}
-  \caption{\textbf{Three selectors retain different visual evidence.}
-  Two audited OCRBench cases compare RBM, Post-L2, and FastV-k3 at the same
-  $\kappa=25\%$ visual-token budget on Qwen3-VL-8B. Blue native-grid cells are
-  the visual units retained by each method; the underlying input remains
-  visible for direct spatial comparison. Vector checks and crosses report
-  answer correctness against the printed ground truth. In both examples, RBM
-  preserves the answer-bearing text and answers correctly, while Post-L2 and
-  FastV-k3 do not. These cases illustrate the selection behavior; aggregate
-  effects and uncertainty are reported in Figure~\ref{fig:fig2}.}
-  \Description{Two OCRBench image rows compare retained visual units for RBM,
-  Post-L2, and FastV-k3 at 25 percent retention. The first ground truth is
-  A105-108 and the second is OCTOBER 1999. Blue grid cells identify units kept
-  by each selector. RBM is correct in both rows, while Post-L2 and FastV-k3 are
-  incorrect, as indicated by vector check and cross marks.}
-  \label{fig:fig1}
-\end{figure*}
-
 
 \textbf{Budget definition.} Retention $\kappa$ is defined over \emph{merge
 units} relative to each image's \textbf{own} full unit count, so two methods at

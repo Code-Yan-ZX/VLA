@@ -27,7 +27,7 @@ GQA = "#6B806B"
 RBM = "#C56A3D"
 POST = "#3F6672"
 SWAP = "#6B806B"
-PAPER = "#FBFAF7"
+PAPER = "#FFFFFF"
 
 mpl.rcParams.update(
     {
@@ -42,6 +42,7 @@ mpl.rcParams.update(
         "axes.linewidth": 0.6,
         "savefig.facecolor": PAPER,
         "figure.facecolor": PAPER,
+        "axes.facecolor": "none",
         "pdf.fonttype": 42,
         "ps.fonttype": 42,
         "svg.fonttype": "none",
@@ -140,29 +141,22 @@ def swap_panel(fig: plt.Figure, spec) -> dict:
         for bar, value in zip(bars, series):
             ax.text(bar.get_x() + bar.get_width() / 2, value + 0.014, f"{value:.3f}", ha="center", va="bottom", fontsize=5.6, color=colors[label], rotation=90)
     ax.set_xticks(x, ["TextVQA", "DocVQA"])
-    ax.set_ylim(0, 0.70)
+    ax.set_ylim(0, 0.74)
     ax.set_ylabel("official score")
     ax.grid(axis="y", color=GRID, linewidth=0.45)
-    ax.set_title("(c) Pre ranking recovers pre accuracy", loc="left", fontweight="bold", color=INK, pad=2)
-    ax.legend(loc="upper right", frameon=False, fontsize=5.7, ncol=1)
+    ax.set_title("(c) Ranking-swap control", loc="left", fontweight="bold", color=INK, pad=2)
+    ax.legend(loc="upper center", bbox_to_anchor=(0.5, 1.0), frameon=False,
+              fontsize=5.5, ncol=3, columnspacing=0.8, handlelength=1.3)
     ax.text(
-        0.04,
-        0.96,
-        "same post forward path\nkept-set Jaccard = 1.000",
+        0.5,
+        -0.13,
+        "same post path; Jaccard=1.000 | Qwen3-VL: n=200 answers, n=30/31 kept sets",
         transform=ax.transAxes,
+        ha="center",
         va="top",
-        color=INK,
-        fontsize=6.2,
-        bbox={"facecolor": "#F0F3EF", "edgecolor": "#B5C0B5", "linewidth": 0.6, "pad": 3.0},
-    )
-    ax.text(
-        0.04,
-        0.16,
-        "Qwen3-VL causal contract\nn=200 answers; n=30/31 kept sets",
-        transform=ax.transAxes,
         color=MUTED,
-        fontsize=5.6,
-        bbox={"facecolor": PAPER, "edgecolor": "none", "alpha": 0.84, "pad": 1.5},
+        fontsize=5.4,
+        clip_on=False,
     )
     return q3
 
@@ -175,7 +169,7 @@ def main() -> None:
 
     left = outer[0].subgridspec(2, 1, hspace=0.52)
     ax1 = fig.add_subplot(left[0])
-    horizontal_distribution(ax1, data, "spearman_pre_post", "(a) Rank correlation before vs after merger", (-0.28, 0.62))
+    horizontal_distribution(ax1, data, "spearman_pre_post", "(a) Rank correlation across merger", (-0.28, 0.62))
     ax1.set_xlabel("Spearman rho")
     ax2 = fig.add_subplot(left[1])
     horizontal_distribution(ax2, data, "jaccard_topk", "Top-25% kept-set overlap", (0.02, 0.45))
@@ -188,7 +182,13 @@ def main() -> None:
     fig.text(0.985, 0.975, "per-image distributions | 25% retained", color=MUTED, ha="right", fontsize=6.4, va="top")
 
     for suffix in ("pdf", "svg", "png"):
-        fig.savefig(OUT / f"fig3_mechanism_candidate.{suffix}", dpi=300, bbox_inches="tight", pad_inches=0.03)
+        fig.savefig(
+            OUT / f"fig3_mechanism_candidate.{suffix}",
+            dpi=300,
+            bbox_inches="tight",
+            pad_inches=0.03,
+            transparent=True,
+        )
     plt.close(fig)
 
     provenance = {
