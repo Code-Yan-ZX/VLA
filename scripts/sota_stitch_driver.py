@@ -88,10 +88,12 @@ def wait_gpu():
 def run_cell(mode: str, bench: str, r: float, tag: str, n: int = 0,
              selector: str = "l2", alpha: float = 1.0, beta: float = 1.0,
              diversity: str = "none", div_tau: float = 0.75,
-             div_gamma: float = 1.5, force: bool = False) -> str | None:
+             div_gamma: float = 1.5, extra_args: list | None = None,
+             force: bool = False) -> str | None:
     """Run one runner cell; returns the output JSON path (or None on failure).
-    mode ∈ {pre, post}; diversity ∈ {none (incumbent RBM), nms (stitch probe)}."""
-    subset, _, extra = BENCH[bench]
+    mode ∈ {pre, post}; diversity ∈ {none (incumbent RBM), nms (stitch probe)}.
+    extra_args = additional runner flags (e.g. --budget-file/--budget-calib)."""
+    subset, _, benchextra = BENCH[bench]
     n_override = n if n else BENCH[bench][1]
     out_file = OUT / "sota_stitch" / f"{tag}.json"
     if not force and out_file.exists() and out_file.stat().st_size > 100:
@@ -104,7 +106,9 @@ def run_cell(mode: str, bench: str, r: float, tag: str, n: int = 0,
            "--diversity", diversity]
     if diversity == "nms":
         cmd += ["--div-tau", str(div_tau), "--div-gamma", str(div_gamma)]
-    cmd += [*extra, "--out", str(out_file)]
+    # extra_args AFTER benchextra so per-cell overrides (--budget-file,
+    # --max-num-seqs 1) win argparse's last-value-wins
+    cmd += [*benchextra, *(extra_args or []), "--out", str(out_file)]
     wait_gpu()
     log(f"RUN {tag}: {mode} {bench} r={r} n={n_override} tau={div_tau} "
         f"gam={div_gamma} -> {out_file.name}")
@@ -196,6 +200,36 @@ def phase_retest(best_tau: float, best_gam: float):
                      diversity="nms", div_tau=best_tau, div_gamma=best_gam)
 
 
+def phase_calib():
+    """Phase-2 calib dump: pre r=0.05, --budget-calib per bench (n=200,
+    request order == sample order via default max-num-seqs of the runner)."""
+    for bench in BENCHES_CORE:
+        calib_path = OUT / "sota_stitch" / f"calib_{bench}.json"
+        run_cell("pre", bench, 0.05, f"calib_{bench}", extra_args=[
+            "--budget-calib", str(calib_path)])
+
+
+def phase_budget(mode: str = "spectral", tau: float = 0.9, clamp: float = 0.5):
+    """Phase-2 eval: allocator -> per-image budgets (iso-token to r=0.25),
+    then pre + --budget-file runs on the 4 benches (max-num-seqs=1)."""
+    for bench in BENCHES_CORE:
+        calib_path = OUT / "sota_stitch" / f"calib_{bench}.json"
+        if not calib_path.exists():
+            log(f"MISSING {calib_path.name}; run phase calib first")
+            continue
+        bud_path = OUT / "sota_stitch" / \
+            f"budgets_{mode}_t{tau}_r0.25_{bench}.json"
+        subprocess.run(
+            [PYQ3, str(REPO / "scripts/stitch_budget_alloc.py"),
+             "--calib", str(calib_path), "--r", "0.25",
+             "--mode", mode, "--tau", str(tau), "--clamp", str(clamp),
+             "--out", str(bud_path)], check=True)
+        tag = f"pre_budget_{mode}t{tau}_{bench}_r0.25"
+        run_cell("pre", bench, 0.25, tag,
+                 extra_args=["--budget-file", str(bud_path),
+                             "--max-num-seqs", "1"])
+
+
 def phase_probe2(best_tau: float, best_gam: float):
     """Composite stitch probe: freq scorer (Direction B: alpha=1,beta=0.6 --
     textvqa +1.2pp@25) x diversity-NMS (best tau/gam from grid). Same 4 benches
@@ -229,44 +263,80 @@ def phase_verify(best_tau: float, best_gam: float):
 
 
 def summary():
-    """Print the per-bench x per-r table: RBM(pre), FastV(post), best diversity."""
-    def _acc(name: str):
-        p = OUT / "sota_stitch" / f"{name}.json"
-        return acc_of(str(p)) if p.exists() else None
+    """Official-metric table with incumbents, best diversity (tau/gamma), deltas
+    and the r=0.25 gate verdict.
+
+    Gate (r=0.25, dev): GO if diversity wins >=1 cell where POST is incumbent
+    (textvqa/gqa up to data) AND no >1pp regression on PRE-incumbent cells.
+    SOTA-hold = dv >= max(pre, post) - 1e-3 on ALL four cells at r=0.25."""
+    def _acc(*names):
+        for name in names:
+            p = OUT / "sota_stitch" / f"{name}.json"
+            if p.exists():
+                v = acc_of(str(p))
+                if v is not None:
+                    return v
+        return None
 
     print("\n=== per-bench r map: incumbent (pre/post) vs best diversity ===")
     print(f" {'bench':9s} {'r':<5} {'RBM_pre':>8} {'FastV_post':>10} "
-          f"{'DV_best':>8} {'incumbent'}")
+          f"{'DV_best':>9} {'(tau,gam)':>12} {'dv-pre':>7} {'dv-post':>7}")
+    verdict_rows = []
     for bench in BENCHES_CORE:
         for r in (0.25, 0.5):
             pre = _acc(f"q3_pre_{bench}_r{r}")
             post = _acc(f"q3_post_{bench}_r{r}")
-            dv_best = None
+            dv_best, dv_cfg = None, None
             for p in sorted((OUT / "sota_stitch").glob(
                     f"q3_pre_dv_{bench}_r{r}_*.json")):
                 v = acc_of(str(p))
                 if v is not None and (dv_best is None or v > dv_best):
-                    dv_best = v
+                    dv_best, dv_cfg = v, p.stem.replace(
+                        f"q3_pre_dv_{bench}_r{r}_", "")
 
             def f(x):
                 return f"{x:.4f}" if x is not None else "   -   "
 
-            prev = pre or 0.0
-            postv = post or 0.0
+            inc = max(pre or 0, post or 0)
             dv = dv_best or 0.0
-            m = max(prev, postv, dv)
-            best = ("RBM" if prev == m else
-                    ("POST" if postv == m else "DV"))
+            best = ("DV" if dv >= inc - 1e-9 else
+                    ("RBM" if (pre or 0) >= (post or 0) else "POST"))
+            dpp = f"{100*(dv-(pre or 0)):+.1f}" if pre is not None else "  -"
+            dpo = f"{100*(dv-(post or 0)):+.1f}" if post is not None else "  -"
             print(f" {bench:9s} r={r:<5} {f(pre)} {f(post)} {f(dv_best)} "
-                  f" {best}")
+                  f"{str(dv_cfg):>12} {dpp:>6}pp {dpo:>6}pp  [{best}]")
+            if r == 0.25 and pre is not None and post is not None and dv_best:
+                verdict_rows.append((bench, pre, post, dv_best))
+
+    print("\n=== r=0.25 gate ===")
+    if len(verdict_rows) == 4:
+        losses = [(b, p, d) for b, p, q, d in verdict_rows if d < p - 0.01]
+        wins_post = [(b, q, d) for b, p, q, d in verdict_rows
+                     if q > p and d > q - 0.001]
+        wins_pre = [(b, p, d) for b, p, q, d in verdict_rows
+                    if p > q and d > p - 0.001]
+        sota_hold = all(d >= max(p, q) - 1e-3 for b, p, q, d in verdict_rows)
+        print(f" losses (>1pp vs PRE-incumbent): {losses if losses else 'none'}")
+        print(f" DV beats PRE on PRE-leading: {[b for b,_,_ in wins_pre]}")
+        print(f" DV beats POST on POST-leading: {[b for b,_,_ in wins_post]}")
+        go = (not losses) and wins_post
+        print(f" gate verdict: {'GO -> promote to n=500' if go else 'NO-GO'} "
+              f"(rule: no >1pp PRE regression AND win >=1 POST-led cell)")
+        print(f" SOTA-held-all-four (dv>=max(pre,post)): {sota_hold}")
+    else:
+        print(" cell set incomplete for the gate")
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--phase", choices=["ref", "grid", "retest", "verify",
-                                        "probe2", "summary"], required=True)
+                                        "probe2", "calib", "budget",
+                                        "summary"], required=True)
     ap.add_argument("--best-tau", type=float, default=0.75)
     ap.add_argument("--best-gam", type=float, default=1.5)
+    ap.add_argument("--budget-mode", choices=["spectral", "erank"],
+                    default="spectral")
+    ap.add_argument("--budget-tau", type=float, default=0.9)
     ap.add_argument("--force", action="store_true")
     args = ap.parse_args()
     if args.phase == "ref":
@@ -279,6 +349,10 @@ def main():
         phase_verify(args.best_tau, args.best_gam)
     elif args.phase == "probe2":
         phase_probe2(args.best_tau, args.best_gam)
+    elif args.phase == "calib":
+        phase_calib()
+    elif args.phase == "budget":
+        phase_budget(args.budget_mode, args.budget_tau)
     elif args.phase == "summary":
         summary()
 
