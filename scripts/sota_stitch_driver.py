@@ -215,10 +215,12 @@ def phase_retest(best_tau: float, best_gam: float):
 
 def phase_calib():
     """Phase-2 calib dump: pre r=0.05, --budget-calib per bench (n=200,
-    request order == sample order via default max-num-seqs of the runner)."""
+    request order == sample order via default max-num-seqs of the runner).
+    The runner's --out (eval result) and --budget-calib (spectral dump) MUST
+    be DIFFERENT paths -- main writes the result last (overwrites)."""
     for bench in BENCHES_CORE:
         calib_path = OUT / "sota_stitch" / f"calib_{bench}.json"
-        run_cell("pre", bench, 0.05, f"calib_{bench}", extra_args=[
+        run_cell("pre", bench, 0.05, f"calib_run_{bench}", extra_args=[
             "--budget-calib", str(calib_path)])
 
 
