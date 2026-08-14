@@ -39,3 +39,30 @@
 ## 证据纪律
 - 每格出官方 rescore;ref 必须同 slice;iso-token 由分配器保证;GPU 串行,driver 带锁。
 - 已完成改动：fcca0b4（runner diversity + driver + allocator）。
+## Phase-1 结果（2026-08-14，dev n=200, official rescore, r=0.25）
+| bench | RBM(pre) | FastV(post) | DV_best(τ) | 结论 |
+|---|---|---|---|---|
+| textvqa | 0.720 | 0.630 | **0.735**(0.6) | DV +1.5pp vs pre, +10.5pp vs post |
+| docvqa | 0.734 | 0.726 | **0.737**(0.6) | DV +0.3pp vs pre |
+| ocrbench | 0.910 | 0.875 | **0.920**(0.9) | DV +1.0pp vs pre |
+| gqa | 0.490 | **0.505** | 0.490(0.75) | DV 未胜；post 仍领先 |
+
+- **Passpoint**：βg's合计 no >1pp 回归 + 3/4 PRE 领先格 DOMINATE → 多样性-NMS 在
+  text-dense 家族把 RBM 再推高（iso-budget、零计数变化）。γ knob 在 r=0.25 退化
+  （pool≈全量）；真正旋钮是 τ。
+- **缺口**：GQA（scene/object）一格仍由 query-blind 权重+空间覆盖无法闭合。候选补救：
+  (a) Phase-2 谱预算给复杂图更多 token（E-AdaPrune 方向——GQA 图若是高复杂度→多 token）；
+  (b) AgilePruner 自适应 τ（简单图→低 τ 保 attention 细节）；
+  (c) budget × diversity 联合。
+
+## 机制发现（2026-08-14，重要）
+- **hook 覆盖率 < 100%**：pre 路径 visual.forward（pre-hook）只触发 n=126/200 图
+  （seq=8 和 seq=1 相同），post 路径 `_process_image_input` fires=84/200。其余图由
+  vLLM 内部（vision-encoder cache / 分离编码路径）处理，不经任何 hook → 不作剪枝。
+  影响：(a) 本项目既有 pre/post 全部结果的"每图 k"契约仅在 ~42-63% 图上严格成立，
+  整体是混合压缩率——相对比较（同路径、cache 行为相同）仍有效，绝对率声明要软；
+  (b) **预算的自适应（每图 k）必须让占位符与剪枝同步自适应**，这在"单图请求 +
+  占位符先于特征确定"契约下不可行（预算文件按 index 消费会在双端错位）。
+- 已实测验证（dbg pre seq=8: visual_calls=87, vc_total_imgs=126; calib seq=1 仍 126）。
+- AgilePruner 自适应 τ（tau_r = min(tau, r·erank/scale·0.01)）是**选择级**（不改计数、
+  不动占位符）→ 无此结构性障碍，可直接探。
