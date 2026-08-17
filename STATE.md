@@ -18,6 +18,11 @@
 - 入稿位置：正文 §6 末尾一段；补充 S4c.3 为 8 格完整表、缺失单元格和范围限制。
 - OCRBench FastV@75% 因运行时失败缺失；原始 S6 JSON/Bootstrap 工件未在当前 clone 中，投稿前应恢复到匿名 artifact。
 - hook 覆盖率的“混合压缩率”解释未经 cache-disabled 审计，不写入论文、不作为当前结论。
+- **user 裁定**：S6 对论文帮助不大、不进主文；上述入稿仅作探索性扩展。评估要点见
+  notes/s6_value_assessment.md：`--r`=剪枝率（S6 的 75/50% retention ≠ 论文 25/12.5%），
+  无单一方法稳定胜出（DV 4胜1平3负 / ADA 3胜5负），对 incumbent RBM 无显著差（CI 含 0
+  非"持平"，需非劣界+非劣检验）；hook 覆盖率解释未经 cache-disabled 审计，不推翻主表。
+- 若补强：固定 Diversity-RBM 跑 r=0.75/0.875、用与调参前 200 条不重叠的 slice、非劣性检验。
 
 ## ★ 验证与下一步
 - 新增内容编译无 undefined citation/reference；视觉检查正文第 8 页、补充第 14/16 页无裁切或重叠。
