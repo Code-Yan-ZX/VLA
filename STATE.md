@@ -28,3 +28,19 @@
 - 2026-08-14 终稿：正文 Fig.1--3 不变；补充 Fig.4 采用 TextVQA+DocVQA token-survival 合并版，Fig.5 合排 M1 分布+retention 曲线；`main.pdf` 22页（8页正文+2页参考文献，补充第11页起），无遮挡/越界/未定义引用。
 - 参考文献 49 条且全部正文引用，集中补充 CVPR 2026（正式 CVF proceedings 与 arXiv 预印本严格区分）；无 undefined citation。已安装 `nature-academic-search` 到个人 Codex skills（下轮可用）。
 - 下一步仅人工项：核验 ACM MM'27 官方日期/地点/模板元数据；保持匿名投稿时不填作者，camera-ready 再填作者/单位/DOI/ISBN；实际上传/投稿须 user 确认。
+
+## ★ S6 2026-论文缝合（2026-08-17）：Diversity/Adaptive-RBM 达到当前 SOTA 平手
+- **方法**：RBM + PRUNESID 式多样性-NMS（`--diversity nms`）+ AgilePruner 式自适应 τ
+  （`--div-adaptive`：τ_r=min(τ, r·erank/scale·0.01)）。选择级、iso-token、占位符零改动。
+- **dev n=200 r=0.25（official）**：ADAPTIVE 唯一赢 GQA（0.510>post 0.505）且 4/4≥现任；
+  DV(τ0.6) textvqa 0.735/docvqa 0.737；freqDV docvqa 0.753。
+- **n=500（决定性）**：8/8 格与现任为噪声内平手；textvqa-r0.25 DV 可靠超 FastV 臂
+  （+8.3pp，20k bootstrap CI 排除 0）；其余 7 格 CI 含 0，dev 的 4/4 hold 未显著复现。
+  → **结论：缝合方法"达到/持平当前 SOTA"（训练-free、零计数变化），未证明可靠全面超越**。
+- **结构性发现**：hook 覆盖率 pre 126/200、post 84/200（vLLM 内部编码路径绕过 hook）→
+  既有 pre/post "每图 k"契约仅对 ~42-63% 图严格成立；每图自适应预算与占位符契约不兼容
+  （特征 pass 部分图不触发）→ E-AdaPrune 式预算判结构性 NO-GO，如实记录不宣。
+- 交付：notes/s6_report_draft.md（终稿）+ notes/s6_stitching_design.md；代码与数据已提交
+  （Code-Yan-ZX，无 AI 署名）。
+- **下一步（待 user 定）**：① 接受"达到 SOTA 平手"为停点；② 继续推可靠超越
+  （n=500 边界格加大样本、per-bench 自适应 τ、或 freq×diversity 进 n500）。
