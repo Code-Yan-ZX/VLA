@@ -24,6 +24,22 @@
   非"持平"，需非劣界+非劣检验）；hook 覆盖率解释未经 cache-disabled 审计，不推翻主表。
 - 若补强：固定 Diversity-RBM 跑 r=0.75/0.875、用与调参前 200 条不重叠的 slice、非劣性检验。
 
+## ★ 创新 D1：learned boundary scorer（2026-08-17，进行中）
+- user 目标：方法不再"太简单"，达 SOTA 或强补论文。调研结论（notes/innovation_directions.md）：
+  全部 6+ 扩展均为 training-free 启发式并已证伪；文献共识 OCR 选择需学习组件；2026
+  新方法（ET-Prune/RUTA/RoRA/GMC）证明 query-aware+轻量训练+动态预算是当前赢家。
+- **D1 = stage-distillation learned scorer**：小 MLP 把边界特征 [l2, edge, var, pos,
+  neighbors] 映射到 POST 阶段（全模型）重要性排序；全部特征在 pre-merger hook 实时可算。
+- 零 GPU 离线验证（proto_stage_distill.py，held-out 图）：POST 与 PRE top-25% kept-set
+  重叠仅 0.295-0.441（docvqa 最低）；MLP 学到 POST 排序 Jaccard docvqa 0.345→0.537、
+  textvqa 0.373→0.416、gqa 0.441→0.490（均为 held-out 泛化）。
+- 代码已落地 + commit：runner `--selector learned`（dry-check ALL PASS）、learned_scorer.py、
+  train_learned_scorer.py、build_learned_heldout.py、run_d1_eval.sh、analyze_d1.py。
+- **进行中**：n=200/bench 特征捕获（qwen3vl_clean，docvqa 大图慢 ~2h，个别图 SKIP 由
+  resume 补）→ 训练 → GPU 评测（learned vs l2 @ r=0.75 held-out 200，~1.5-2h）→ 配对分析。
+- GO 判据：held-out learned ≥ l2 → 扩展（r=0.875、ocrbench、query-aware、correctness-flip
+  teacher 对照）；否则换 teacher / 转 D2（像素谱每图预算，复核"结构性 NO-GO"=技术失败）。
+
 ## ★ 验证与下一步
 - 新增内容编译无 undefined citation/reference；视觉检查正文第 8 页、补充第 14/16 页无裁切或重叠。
 - 仅有既存标题 metadata overfull 9.77pt；非 S6 引入。
