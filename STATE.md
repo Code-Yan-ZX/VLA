@@ -40,6 +40,16 @@
 - GO 判据：held-out learned ≥ l2 → 扩展（r=0.875、ocrbench、query-aware、correctness-flip
   teacher 对照）；否则换 teacher / 转 D2（像素谱每图预算，复核"结构性 NO-GO"=技术失败）。
 
+## ★ 创新 D1/D2 进展（2026-08-17）
+- **D1 learned scorer 终判**：held-out 200（官方）textvqa learned 0.435 vs l2 0.595（−16pp）；
+  gqa 0.550 vs 0.515（+3.5pp）。→ **方法机制可行（gqa 正），POST teacher 在文本密集任务
+  反任务**（POST 降权文本笔画 → 学避开文本）。机制洞察可入论文 negative results（反向印证
+  RBM PRE 选择+保留文本）。部署/训练/评测代码全落地（--selector learned，dry-check PASS）。
+- **D2 像素谱预算：像素级 SVD 能量无判别力**（128-512px 下 spectral tau 全≈1.0、erank 全
+  0.05）——像素复杂度代理不可用；转 **feature-side 谱**（S6 证实范围 [360,768]）公平评测
+  进行中（textvqa，max-num-seqs=1 全量覆盖，budget vs uniform 同切片对照）。
+- 全部记录：notes/innovation_directions.md §七~十一。
+
 ## ★ 验证与下一步
 - 新增内容编译无 undefined citation/reference；视觉检查正文第 8 页、补充第 14/16 页无裁切或重叠。
 - 仅有既存标题 metadata overfull 9.77pt；非 S6 引入。
