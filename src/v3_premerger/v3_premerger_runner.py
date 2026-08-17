@@ -4270,7 +4270,8 @@ def main():
                         raise SystemExit("--learned-scorer <dir> requires "
                                          "--learned-bench <name>")
                     lsp = os.path.join(lsp, f"{args.learned_bench}_scorer.json")
-                learned_scorer = LearnedScorer(lsp).to(model.device)
+                _dev = next(model.parameters()).device
+                learned_scorer = LearnedScorer(lsp).to(_dev)
             pruner, _handles = setup_pre_merger(model, r, args.selector, family,
                                                  visionzip_style=args.visionzip_style,
                                                  visionzip_dom_ratio=args.visionzip_dom_ratio,
