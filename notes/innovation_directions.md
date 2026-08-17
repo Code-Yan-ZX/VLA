@@ -82,3 +82,47 @@
   - 评估：n=200，docvqa/textvqa/gqa/ocrbench @ r=0.75/0.875，vs PRE-L2 基线（论文方法）+ FastV。
   - 判据：learned ≥ PRE-L2 为 GO 继续（teacher 迭代/query-aware）；< PRE-L2 则换 teacher（correctness-flip）或转 D2。
   - 预算：训练 CPU 秒级；GPU eval 4 基准 × 2 r × n=200 ≈ 1-2 GPU·h（自主范围内）。
+
+## 九、D1 执行状态（2026-08-17）
+- 已实现：learned_scorer.py（训练/运行时同一特征构建 + MLP）、train_learned_scorer.py、
+  runner `--selector learned --learned-scorer --learned-bench`（dry-check ALL PASS）、
+  build_learned_heldout.py（held-out 200/bench）、run_d1_eval.sh + analyze_d1.py。
+- 捕获：n=200/bench 特征捕获进行中（qwen3vl_clean env，docvqa 大图慢，~2h 总量；
+  个别图 vision tower 未触发被 SKIP，resume 会补）。
+- 协议：训练 subset A（eval/subsets/200）→ 评测 held-out 200（full_splits 不相交）
+  → learned vs l2 配对 per-sample。
+- 待办：捕获完成 → train_learned_scorer（CPU 秒级）→ run_d1_eval（3 bench × 2 sel
+  × r=0.75，~1.5-2h GPU）→ analyze_d1 配对对比。
+- GO 判据：held-out 上 learned ≥ l2 且配对增益可辨 → 扩展（r=0.875、ocrbench、
+  query-aware 变体、正确性翻转 teacher 对照）；否则换 teacher / 转 D2。
+
+## 十、D1 首个 teacher NO-GO + 机制洞察（2026-08-17）
+- **结果（textvqa held-out 200，官方 vqaacc）**：learned(POST-distill)=0.435 vs l2=0.595
+  （−16pp）；runner 内部打分 −19.5pp。两套打分均大幅劣于基线 → **stage-distillation
+  到 POST 排序在任务精度上是负面的**。
+- **机制洞察（写入论文 negative results 的候选）**：POST 阶段系统性降权高 edge
+  （文本笔画）单位（rank_delta hi-edge −68.6 / lo-edge +28.0）——学 POST 排序 = 学
+  "避开文本" → 文本密集任务（textvqa/docvqa）变差。这与论文 M2（text-stroke
+  demotion）+ Table 1（pre 选择胜 post 选择）完全自洽，**反向印证 PRE 保留文本能力
+  是 RBM 优势的本质**。
+- **区分"方法缺陷 vs teacher 缺陷"**：gqa 的 POST 降权弱（corr(edge,drank)=−0.034）→
+  若 gqa 上 learned ≥ l2，则证明特征映射有效、错在 teacher；若 gqa 也差 → 方法本身
+  有缺陷（特征/模型容量）。
+- **下一步候选**：① correctness-flip teacher（任务接地，成本高 ~4-6 GPU·h）；
+  ② 换 teacher 为"l2 加权 var/edge 的任务最优组合"（freq scorer 证明 var 有任务价值，
+  但手调已试）；③ 放弃 learned，转 D2（像素谱每图预算，training-free 保身份）。
+
+## 十一、D1 诊断终判：method 可行、teacher 反任务（2026-08-17）
+- **held-out 200（官方 scorer）**：
+  | bench | learned(POST) | l2 | Δ | 配对 |
+  |---|---|---|---|---|
+  | textvqa | 0.435 | 0.595 | −16.0pp | 13胜45负 |
+  | gqa | 0.550 | 0.515 | +3.5pp | 18胜11负 |
+- **结论：learned scorer 的方法机制有效（gqa 正），POST teacher 在文本密集任务反任务（textvqa 大负）**。
+  机制：POST 系统性降权文本笔画 → 学 POST = 学避开文本。与论文 M2（text-stroke demotion）
+  + Table 1（pre 胜 post）自洽。
+- **论文价值**：这是可写进论文 negative-results/机制的完整证据链——"POST 阶段的重要性在
+  text-dense 上反任务"反向强化 RBM 的 PRE 选择+保留文本。learned scorer（gqa 正）可作为
+  "学习评分器可行但需任务接地 teacher"的诚实记录。
+- **下一步**：① D2 像素谱每图预算（便宜、training-free、保身份）；② corrective distillation
+  （任务接地 teacher：从答对的 keep-set 学，预期 learned ≥ l2 across benches，成本更高）。
