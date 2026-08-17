@@ -48,7 +48,10 @@
 - **D2 像素谱预算：像素级 SVD 能量无判别力**（128-512px 下 spectral tau 全≈1.0、erank 全
   0.05）——像素复杂度代理不可用；转 **feature-side 谱**（S6 证实范围 [360,768]）公平评测
   进行中（textvqa，max-num-seqs=1 全量覆盖，budget vs uniform 同切片对照）。
-- 全部记录：notes/innovation_directions.md §七~十一。
+- 全部记录：notes/innovation_directions.md §七~十三；综合报告 notes/innovation_summary.md。
+- **待 user 定**：① 机制洞察入论文 negative-results 段（推荐，零风险）；② 方法升级跑
+  corrective distillation（~3-4h GPU 自主可执行，预期 +0-3pp，诚实评估不达 SOTA）；
+  ③ query-aware learned（>6 GPU·h，升级后攻）。
 
 ## ★ 验证与下一步
 - 新增内容编译无 undefined citation/reference；视觉检查正文第 8 页、补充第 14/16 页无裁切或重叠。
