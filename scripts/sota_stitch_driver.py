@@ -286,6 +286,16 @@ def phase_adaptive():
                  div_scale=25.0)
 
 
+def phase_verify_ada():
+    """n=500 verification of the AgilePruner ADAPTIVE-NMS method (the dev
+    slice's 4/4 SOTA-hold; GQA is the decisive cell). Same _n500 tag scheme."""
+    for r in (0.25, 0.5):
+        for bench in BENCHES_CORE:
+            run_cell("pre", bench, r, f"pre_ada_{bench}_r{r}_n500",
+                     n=500, diversity="nms", div_tau=0.75, div_gamma=1.5,
+                     div_adaptive=True, div_scale=25.0)
+
+
 def phase_verify(best_tau: float, best_gam: float):
     """n=500 verify with _n500-suffixed tags (the dev n=200 cells share the
     UNsuffixed names; the suffix keeps the two slices' outputs distinct)."""
@@ -337,10 +347,9 @@ def summary():
             for glob_pat in (f"q3_pre_dv_{bench}_r{r}_*.json",
                              f"q3_pre_budget_*_{bench}_r{r}.json",
                              f"q3_pre_bd_*_{bench}_r{r}.json",
-                             f"q3_pre_ada_{bench}_r{r}.json",
-                             f"q3_pre_{bench}_r{r}_n500.json",
-                             f"q3_post_{bench}_r{r}_n500.json",
-                             f"q3_pre_dv_{bench}_r{r}_*_n500.json"):
+                             f"q3_pre_dv_{bench}_r{r}_*_n500.json",
+                             f"pre_ada_{bench}_r{r}.json",
+                             f"pre_ada_{bench}_r{r}_n500.json"):
                 for p in sorted((OUT / "sota_stitch").glob(glob_pat)):
                     v = acc_of(str(p))
                     if v is not None and (dv_best is None or v > dv_best):
@@ -388,8 +397,9 @@ def summary():
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--phase", choices=["ref", "grid", "retest", "verify",
-                                        "probe2", "calib", "budget",
-                                        "adaptive", "summary"], required=True)
+                                        "verify_ada", "probe2", "calib",
+                                        "budget", "adaptive",
+                                        "summary"], required=True)
     ap.add_argument("--best-tau", type=float, default=0.75)
     ap.add_argument("--best-gam", type=float, default=1.5)
     ap.add_argument("--budget-mode", choices=["spectral", "erank"],
@@ -408,6 +418,8 @@ def main():
         phase_retest(args.best_tau, args.best_gam)
     elif args.phase == "verify":
         phase_verify(args.best_tau, args.best_gam)
+    elif args.phase == "verify_ada":
+        phase_verify_ada()
     elif args.phase == "probe2":
         phase_probe2(args.best_tau, args.best_gam)
     elif args.phase == "adaptive":
