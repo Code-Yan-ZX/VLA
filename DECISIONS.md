@@ -245,3 +245,5 @@
 - **Phase 2（已实现，待 grid 后跑）**：E-AdaPrune 谱能量 / PRUNESID 动态压缩比 / AgilePruner erank 的自适应预算。离线链：`--budget-calib`（pre r=0.05 记录 per-image svd 谱,request order）→ scripts/stitch_budget_alloc.py（spectral τ/erank → iso-token per-image k,clamp[0.5,2]×base,hi⊆f,穷举验证）→ `--budget-file` + max-num-seqs=1（占位符与 keep-count 共用一个 cursor）。**
 - **AgilePruner 关键参考（全文已读）**：简单/集中证据图宜 attention 打分、复杂/分布特征图宜 diversity；自适应 τ_i = order_i × (erank_img/erank_avg × 0.01)（cap）;70 his per-image count 变体在 GQA/POPE/MME/MMBench 有增益。→ 若 Phase-1 近胜，Phase-3 用自适应 τ 升级 NMS。
 - 提交：fcca0b4（diversity 模块+dry-check）、80df159（budget machinery）、driver phases 提交。
+
+## 2026-08-17 | S6 论文集成 | **Diversity-RBM 仅作为后续探索性扩展写入，不升级核心方法或 SOTA claim** | `n=500` 只覆盖 Qwen3-VL 的 75%/50% retention；固定 DV/Adaptive 各有小幅胜负交换，但对逐格较强 RBM/FastV incumbent 均未建立显著正差。TextVQA@75% 的 0.748 主要是相对 FastV 0.665 的条件收益，和 RBM 0.745 近似；“CI 含 0”也不能证明等价。原报告“达到当前 SOTA 平手”容易把内部逐格 incumbent 误读为外部 published SOTA，故不采用。 | 正文 §6 增加一段 bounded interpretation；补充 S4c.3 增加八格表、缺格说明与单模型/轻压缩限制。plain RBM 继续为论文方法；标题、摘要、贡献列表不变。hook 覆盖率的混合压缩解释未经 cache-disabled 审计，不入稿。 |

@@ -911,6 +911,19 @@ scene images to POST collapses TextVQA by a further $7$~pp. The GQA and TextVQA
 workload signatures overlap at the unit level, so no single global threshold
 reconciles the two acceptance criteria.
 
+\textbf{Exploratory diversity-constrained selection.} A subsequent,
+non-prespecified probe augments RBM with importance-ordered cosine NMS
+(Diversity-RBM), or conditions the NMS threshold on image effective rank
+(Adaptive-Diversity-RBM), following recent diversity-aware
+selectors~\cite{fang2026prunesid,baek2026agilepruner}. On the same Qwen3-VL
+$n=500$ slices at 75\% and 50\% retention, each fixed variant trades small wins
+and losses against plain RBM; neither establishes an improvement over the
+stronger per-cell RBM/FastV incumbent. The clearest conditional result is
+TextVQA at 75\% retention, where Diversity-RBM scores 0.748 versus 0.665 for
+FastV but only 0.745 for RBM. We therefore treat diversity as a competitive
+mild-compression extension, not a new default or a headline comparison
+(Supplementary~S4c.3).
+
 These results bound, rather than close, the tested design space: image-only
 signals cannot access the query-dependent oracle headroom, while cascading
 discards evidence needed by the second selector. We therefore freeze plain RBM
