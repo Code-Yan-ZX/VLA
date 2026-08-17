@@ -245,4 +245,3 @@
 - **Phase 2（已实现，待 grid 后跑）**：E-AdaPrune 谱能量 / PRUNESID 动态压缩比 / AgilePruner erank 的自适应预算。离线链：`--budget-calib`（pre r=0.05 记录 per-image svd 谱,request order）→ scripts/stitch_budget_alloc.py（spectral τ/erank → iso-token per-image k,clamp[0.5,2]×base,hi⊆f,穷举验证）→ `--budget-file` + max-num-seqs=1（占位符与 keep-count 共用一个 cursor）。**
 - **AgilePruner 关键参考（全文已读）**：简单/集中证据图宜 attention 打分、复杂/分布特征图宜 diversity；自适应 τ_i = order_i × (erank_img/erank_avg × 0.01)（cap）;70 his per-image count 变体在 GQA/POPE/MME/MMBench 有增益。→ 若 Phase-1 近胜，Phase-3 用自适应 τ 升级 NMS。
 - 提交：fcca0b4（diversity 模块+dry-check）、80df159（budget machinery）、driver phases 提交。
->>>>>>> S6: design note + decision record (PRUNESID diversity phase-1 live, E-AdaPrune budget phase-2 machinery ready)
