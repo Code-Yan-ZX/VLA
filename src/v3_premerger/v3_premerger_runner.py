@@ -836,7 +836,7 @@ def parse_args():
     ap.add_argument("--n", type=int, default=200)
     ap.add_argument("--max-tokens", type=int, default=32)
     ap.add_argument("--selector", default="l2",
-                    choices=["l2", "attn", "edge", "var", "freq"],
+                    choices=["l2", "attn", "edge", "var", "freq", "learned"],
                     help="l2 = L2-norm selector (default, original behavior); "
                          "attn = global-centroid-distance saliency proxy -- a "
                          "DIFFERENT selector for stage-effect robustness; "
@@ -913,6 +913,20 @@ def parse_args():
                     help="S6 adaptive-NMS erank scale (default 25.0; dataset "
                          "median participation-ratio effective rank; ~22 on "
                          "the textvqa dev slice, ~20-30 for the other benches)")
+    ap.add_argument("--learned-scorer", default=None,
+                    help="D1 learned boundary scorer: path to a JSON trained "
+                         "by scripts/train_learned_scorer.py. Requires "
+                         "--selector learned and family qwen3vl (the scorer "
+                         "mimics the POST-stage ranking from boundary feats "
+                         "[l2, edge, var, pos, neighbors] -- all computable at "
+                         "the pre-merger hook). Training is per-benchmark; "
+                         "--learned-bench must match the evaluated benchmark "
+                         "so the right scorer weights load.")
+    ap.add_argument("--learned-bench", default=None,
+                    help="D1: benchmark name for the learned scorer file "
+                         "selection, e.g. textvqa. When --learned-scorer is a "
+                         "DIRECTORY, the runner loads "
+                         "<dir>/<learned-bench>_scorer.json.")
     ap.add_argument("--budget-calib", default=None,
                     help="S6 Phase-2 calib dump path (--mode pre ONLY): after "
                          "the run, write per-image spectral stats (f, descending "
@@ -2379,7 +2393,7 @@ class PreMergerPruner:
                  hf_var_mode: str = "mean",
                  diversity: str = "none", div_gamma: float = 1.5,
                  div_tau: float = 0.75, div_adaptive: bool = False,
-                 div_scale: float = 25.0):
+                 div_scale: float = 25.0, learned_scorer=None):
         self.r = r
         self.sm = spatial_merge_size
         self.unit = spatial_merge_size ** 2          # 4
@@ -2407,6 +2421,8 @@ class PreMergerPruner:
         self.workload_log = []                        # A: per-image stats (diag)
         self.full_units = None                        # list[int] per image
         self.k_units = None                           # list[int] per image
+        self.learned_scorer = None                    # D1: loaded LearnedScorer
+        self.grids = []                               # D1: per-image (h,w) patches
         self._mask = None                             # cached token mask
         self.merger_origs = {}                        # tag -> orig forward (swap)
         self.diag = {"visual_calls": 0, "merger_calls": 0,
@@ -2425,6 +2441,9 @@ class PreMergerPruner:
         self.diag["vc_total_imgs"] = self.diag.get("vc_total_imgs", 0) + \
             int(grid_thw.shape[0])
         self.full_units = (grid_thw.prod(-1) // self.unit).tolist()
+        # D1: per-image (h_patch, w_patch) grids for learned-scorer pos/neighbor
+        # features. grid_thw = [B,3] (t,h,w); t==1 for stills.
+        self.grids = [(int(g[1]), int(g[2])) for g in grid_thw]
         if BUDGET["k"] is not None:
             # S6 Phase-2: per-image budget from the allocator (consumes the
             # shared cursor so placeholder and keep-count stay aligned).
@@ -2479,9 +2498,25 @@ class PreMergerPruner:
                 where = f"swap:post-ranking@{tag}"
             else:
                 feats = hs.reshape(num_units, self.unit, ctx)
-                scores = _score_units(feats, self.selector,
-                                      self.alpha, self.beta)   # [num_units]
-                where = tag
+                if self.selector == "learned":
+                    # D1 learned boundary scorer: imitate the POST-stage
+                    # ranking from boundary features [l2, edge, var] + grid
+                    # position/neighbors. All computed on the same tensor L2
+                    # uses, so deployment matches training (no pixels/query).
+                    if self.learned_scorer is None:
+                        raise SystemExit("--selector learned requires "
+                                         "--learned-scorer (dry-check without "
+                                         "weights not supported for learned)")
+                    l2 = _score_units(feats, "l2")
+                    ed = _score_units(feats, "edge")
+                    vv = _score_units(feats, "var")
+                    scores = self.learned_scorer.score(
+                        l2, ed, vv, self.full_units, self.grids)
+                    where = "learned"
+                else:
+                    scores = _score_units(feats, self.selector,
+                                          self.alpha, self.beta)   # [num_units]
+                    where = tag
                 # ---- J5 QA-pre: blend query-similarity into the pre ranking ----
                 # Only entered when qa_lambda>0 (λ=0 => bit-identical plain RBM).
                 # Stage ranking only; swap/visionzip paths are guarded out in main.
@@ -2954,7 +2989,8 @@ def setup_pre_merger(model, r: float, selector: str = "l2", family: str = "qwen3
                       hf_var_mode: str = "mean",
                       diversity: str = "none", div_gamma: float = 1.5,
                       div_tau: float = 0.75, div_adaptive: bool = False,
-                      div_scale: float = 25.0):
+                      div_scale: float = 25.0,
+                      learned_scorer=None):
     if mask_ranking == "swap" and visionzip_style:
         raise SystemExit("--mask-ranking swap is not supported with "
                          "--visionzip-style (dominant-only standard path only).")
@@ -2969,7 +3005,10 @@ def setup_pre_merger(model, r: float, selector: str = "l2", family: str = "qwen3
                              hf_var_mode=hf_var_mode,
                              diversity=diversity, div_gamma=div_gamma,
                              div_tau=div_tau, div_adaptive=div_adaptive,
-                             div_scale=div_scale)
+                             div_scale=div_scale,
+                             learned_scorer=learned_scorer)
+    if learned_scorer is not None:
+        pruner.learned_scorer = learned_scorer
 
     # (1) visual.forward pre_hook: capture grid_thw -> plan k_units.
     def _visual_prehook(module, args, kwargs):
@@ -3507,7 +3546,8 @@ def _run_dry_check_glm4v():
     print(f"[dry-check] ALL PASS for family=glm4v")
 
 
-def run_dry_check(family: str, selector: str = "l2"):
+def run_dry_check(family: str, selector: str = "l2",
+                  learned_scorer_path: str | None = None):
     import torch.nn as nn
 
     if family == "internvl3":
@@ -3556,7 +3596,18 @@ def run_dry_check(family: str, selector: str = "l2"):
     # (b) pre-merger hook TARGET SET matches family (deepstack included/omitted).
     #     The pruner is created with the DRY-CHECK selector (not hardcoded "l2")
     #     so step (c)'s slice_input actually exercises edge/var/attn scoring.
-    pruner, handles = setup_pre_merger(model, 0.75, selector, family)
+    _ls = None
+    if selector == "learned":
+        if not learned_scorer_path:
+            raise SystemExit("--dry-check --selector learned requires "
+                             "--learned-scorer <json>")
+        _repo = os.path.dirname(os.path.dirname(
+            os.path.dirname(os.path.abspath(__file__))))
+        sys.path.insert(0, os.path.join(_repo, "scripts"))
+        from learned_scorer import LearnedScorer
+        _ls = LearnedScorer(learned_scorer_path).to("cpu")
+    pruner, handles = setup_pre_merger(model, 0.75, selector, family,
+                                       learned_scorer=_ls)
     n_merger_hooks = len(handles) - 1                 # -1 for the visual.fwd hook
     expected = 4 if family == "qwen3vl" else 1        # merger + 3 deepstack | merger only
     assert n_merger_hooks == expected, \
@@ -3905,7 +3956,7 @@ def main():
     # chosen family. Exits before any vLLM/GPU use. The --selector is threaded
     # into the mask-logic test so edge/var/attn are exercised (not just l2).
     if args.dry_check:
-        run_dry_check(family, args.selector)
+        run_dry_check(family, args.selector, args.learned_scorer)
         return
 
     if args.out is None:
@@ -4199,6 +4250,27 @@ def main():
                 qa_state = _qa_precompute(model, tokenizer, samples,
                                           args.qa_embed_cache, args.max_pixels,
                                           model_id)
+            learned_scorer = None
+            if args.selector == "learned":
+                if family != "qwen3vl":
+                    raise SystemExit("--selector learned requires family "
+                                     "qwen3vl (scorer trained on qwen3vl "
+                                     "merger-input features).")
+                import sys as _sys
+                _repo = os.path.dirname(os.path.dirname(
+                    os.path.dirname(os.path.abspath(__file__))))
+                _sys.path.insert(0, os.path.join(_repo, "scripts"))
+                from learned_scorer import LearnedScorer  # noqa: E402
+                lsp = args.learned_scorer
+                if lsp is None:
+                    raise SystemExit("--selector learned requires "
+                                     "--learned-scorer <json-or-dir>")
+                if os.path.isdir(lsp):
+                    if not args.learned_bench:
+                        raise SystemExit("--learned-scorer <dir> requires "
+                                         "--learned-bench <name>")
+                    lsp = os.path.join(lsp, f"{args.learned_bench}_scorer.json")
+                learned_scorer = LearnedScorer(lsp).to(model.device)
             pruner, _handles = setup_pre_merger(model, r, args.selector, family,
                                                  visionzip_style=args.visionzip_style,
                                                  visionzip_dom_ratio=args.visionzip_dom_ratio,
@@ -4211,7 +4283,8 @@ def main():
                                                  div_gamma=args.div_gamma,
                                                  div_tau=args.div_tau,
                                                  div_adaptive=args.div_adaptive,
-                                                 div_scale=args.div_scale)
+                                                 div_scale=args.div_scale,
+                                                 learned_scorer=learned_scorer)
             # S6 Phase-2: collect per-image spectral stats (calib dump: gated
             # by --budget-calib -- the list stays None otherwise). The budget
             # cursor itself was loaded MODE-AGNOSTICALLY before the mode chain.

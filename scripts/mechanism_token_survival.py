@@ -195,6 +195,10 @@ def scores_from_cap(cap):
     ctx = hs_ds0.shape[-1]
     feats = hs_ds0.reshape(num_units, MERGE ** 2, ctx)
     pre_scores = _score_units(feats, "l2").numpy().astype(np.float64)
+    # Feature-space selectors from the SAME tensor the runner deploys:
+    # these are what a runtime learned-scorer can compute (no pixels).
+    edge_feat = _score_units(feats, "edge").numpy().astype(np.float64)
+    var_feat = _score_units(feats, "var").numpy().astype(np.float64)
 
     # POST: visual output row = cat(main, ds0, ds1, ds2) [num_units, 4*4096]
     main = cap["out"]["merger"]
@@ -202,7 +206,8 @@ def scores_from_cap(cap):
     post_feat = torch.cat([main] + ds, dim=1)      # [num_units, 16384]
     post_scores = _score_tokens(post_feat, "l2").numpy().astype(np.float64)
     assert pre_scores.shape[0] == post_scores.shape[0] == num_units
-    return pre_scores, post_scores, h, w
+    assert edge_feat.shape == pre_scores.shape and var_feat.shape == pre_scores.shape
+    return pre_scores, post_scores, h, w, edge_feat, var_feat
 
 
 def unit_edge_from_image(image_path: str, h: int, w: int) -> np.ndarray:
@@ -288,7 +293,7 @@ ANALYZE_IMG = None  # legacy: set per-sample (analyze uses it for edge energy)
 def analyze(cap):
     """Legacy entry: cap -> full result dict (scores from cap, edge from
     ANALYZE_IMG). Kept for the 2-image deep-dive figures."""
-    pre, post, h, w = scores_from_cap(cap)
+    pre, post, h, w, _efeat, _var = scores_from_cap(cap)
     edge = unit_edge_from_image(ANALYZE_IMG, h, w)
     return analyze_arrays(pre, post, edge, h, w)
 
@@ -424,16 +429,17 @@ def capture_bench(llm, cap, sp, bench: str, n: int, seed: int, r: float,
 
     # resume: load previously captured arrays/ids
     npz_path = f"{out_dir}/{bench}.npz"
-    prev_chunks, prev_counts = ([], [], []), []
+    prev_chunks, prev_counts = ([], [], [], [], []), []
     hs, ws, ids = [], [], []
     if os.path.exists(npz_path):
         z = np.load(npz_path)
-        prev_chunks = ([z["pre"]], [z["post"]], [z["edge"]])
+        prev_chunks = ([z["pre"]], [z["post"]], [z["edge"]],
+                       [z["edge_feat"]], [z["var_feat"]])
         prev_counts = [int(c) for c in np.diff(z["offsets"])]
         ids = z["ids"].tolist(); hs = z["h"].tolist(); ws = z["w"].tolist()
         print(f"[capture] {bench}: resuming ({len(ids)} images cached in npz)",
               flush=True)
-    new_pre, new_post, new_edge = [], [], []
+    new_pre, new_post, new_edge, new_efeat, new_var = [], [], [], [], []
     done = set(ids)
 
     n_fail = 0
@@ -450,7 +456,7 @@ def capture_bench(llm, cap, sp, bench: str, n: int, seed: int, r: float,
             ]}]
             try:
                 out = llm.chat([msgs], sampling_params=sp)[0]
-                pre, post, h, w = scores_from_cap(cap)
+                pre, post, h, w, edge_feat, var_feat = scores_from_cap(cap)
                 edge = unit_edge_from_image(row["image"], h, w)
                 break
             except Exception as e:
@@ -470,6 +476,8 @@ def capture_bench(llm, cap, sp, bench: str, n: int, seed: int, r: float,
         new_pre.append(pre.astype(np.float32))
         new_post.append(post.astype(np.float32))
         new_edge.append(edge.astype(np.float32))
+        new_efeat.append(edge_feat.astype(np.float32))
+        new_var.append(var_feat.astype(np.float32))
         hs.append(h); ws.append(w); ids.append(str(row["id"]))
         if (j + 1) % 10 == 0 or j + 1 == len(rows):
             print(f"[capture] {bench}: {j + 1}/{len(rows)} "
@@ -482,14 +490,19 @@ def capture_bench(llm, cap, sp, bench: str, n: int, seed: int, r: float,
         if (prev_chunks[1] or new_post) else np.zeros(0, np.float32)
     edge_all = np.concatenate(prev_chunks[2] + new_edge) \
         if (prev_chunks[2] or new_edge) else np.zeros(0, np.float32)
+    efeat_all = np.concatenate(prev_chunks[3] + new_efeat) \
+        if (prev_chunks[3] or new_efeat) else np.zeros(0, np.float32)
+    var_all = np.concatenate(prev_chunks[4] + new_var) \
+        if (prev_chunks[4] or new_var) else np.zeros(0, np.float32)
     counts = prev_counts + [int(c.shape[0]) for c in new_pre]
     offsets = np.concatenate([[0], np.cumsum(counts)]).astype(np.int64)
     assert len(ids) == len(counts) == len(offsets) - 1
     assert int(offsets[-1]) == int(pre_all.shape[0]) == int(post_all.shape[0]) \
-        == int(edge_all.shape[0])
+        == int(edge_all.shape[0]) == int(efeat_all.shape[0]) == int(var_all.shape[0])
 
     os.makedirs(out_dir, exist_ok=True)
     np.savez_compressed(npz_path, pre=pre_all, post=post_all, edge=edge_all,
+                        edge_feat=efeat_all, var_feat=var_all,
                         offsets=offsets,
                         h=np.asarray(hs, np.int32), w=np.asarray(ws, np.int32),
                         ids=np.asarray(ids, dtype=np.str_))
