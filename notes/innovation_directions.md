@@ -126,3 +126,30 @@
   "学习评分器可行但需任务接地 teacher"的诚实记录。
 - **下一步**：① D2 像素谱每图预算（便宜、training-free、保身份）；② corrective distillation
   （任务接地 teacher：从答对的 keep-set 学，预期 learned ≥ l2 across benches，成本更高）。
+
+## 十二、D2 终判：双重 NO-GO（2026-08-17）
+- **像素谱预算**：像素级 SVD 谱能量无判别力（128/256/512px 下 spectral-tau 全≈1.0、
+  erank 全 0.05）——自然图谱系重尾，累计能量饱和；slope（log 衰减）有方差但不构成
+  干净复杂度代理。→ 像素复杂度信号不可用。
+- **feature 谱预算**：feature-side spectral 有真实范围（mean_k=182.5 range=[80,256]
+  iso-total 36328）——但部署 eval **skip=200 全跳过**，复现 S6 的 skip=200 故障。
+  → **确认 S6"结构性 NO-GO"判定**（占位符先于特征固定、部分图特征 pass 不触发、
+  cursor 顺序错位 → 数量不匹配）。我此前"技术失败可修"的怀疑被证伪。
+- **结论**：per-image budget（无论像素/feature 信号）在本 vLLM 占位符架构上不可行，
+  作为方法贡献不成立。uniform@max1=0.595 与 max16 一致（缓存行为不影响 uniform 精度）。
+
+## 十三、D1+D2 探索综合结论（2026-08-17）
+- **给论文的直接帮助（已获）**：
+  ① 机制洞察：POST 阶段重要性降权文本笔画 → 学 POST 反任务（textvqa −16pp）；
+     gqa 上 POST 降权弱 → learned +3.5pp。**反向印证 RBM 的 PRE 选择+保留文本是
+     text-dense 优势的本质**。可入论文 negative-results/机制段。
+  ② learned scorer 机制可行：小 MLP 能从边界特征学 POST 排序（held-out Jaccard
+     docvqa +20.5pp）——证明边界特征信息量 + 学习方法有效，只是 teacher 需任务接地。
+  ③ 负发现：像素复杂度代理无判别力；per-image budget 架构性不可行（确认 S6）。
+- **方法升级的诚实评估**：learned scorer 需 corrective distillation（任务接地 teacher：
+  从"答对的随机 keep-set"学），预期 modest（l2 本身已强，headroom ~1-3pp 据 freq
+  scorer/diversity 证据），成本 ~3-4 GPU·h（批量标签生成可压到 ~1.5h）。不会达 SOTA。
+- **SOTA 的现实评估**：2026 竞品（ET-Prune/RUTA/RoRA）已占据 training-free/轻训
+  query-aware+动态预算赛道；本项目 1×A40 自主预算内无法追平。论文的现实定位 =
+  机制理解（stage law + POST/PRE 差异机制）+ 诚实方法升级（learned scorer 或保持
+  极简）+ 严格 iso-budget 评测协议。
