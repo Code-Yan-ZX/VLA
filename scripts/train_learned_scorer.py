@@ -67,9 +67,13 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--bench", nargs="+", default=["textvqa", "docvqa", "gqa"])
     ap.add_argument("--out-dir", default=str(ROOT / "runs/learned_scorer"))
-    ap.add_argument("--epochs", type=int, default=300)
+    ap.add_argument("--epochs", type=int, default=80)
     ap.add_argument("--lr", type=float, default=1e-3)
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--max-train-units", type=int, default=60000,
+                    help="random subsample of TRAIN units per epoch-step to "
+                         "bound CPU time on huge benches (docvqa ~730k units). "
+                         "Held-out Jaccard is still computed on ALL test units.")
     args = ap.parse_args()
     out = Path(args.out_dir)
     out.mkdir(parents=True, exist_ok=True)
@@ -79,7 +83,7 @@ def main():
         pre, post, edge, efeat, var = (npz["pre"], npz["post"], npz["edge"],
                                        npz["edge_feat"], npz["var_feat"])
         offsets, h, w = npz["offsets"], npz["h"], npz["w"]
-        X, _ = build_features_np(pre, efeat, var, offsets, h, w)
+        X = build_features_np(pre, efeat, var, offsets, h, w)
         y = post
         Xs, mu, sd = standardize(X)
         tr_u, te_u = split_by_image(offsets, frac=0.7, seed=args.seed)
@@ -92,6 +96,10 @@ def main():
                 offs_te.append(offs_te[-1] + (e - s))
         offs_te = np.array(offs_te)
 
+        rng = np.random.default_rng(args.seed + 1)
+        if Xtr.shape[0] > args.max_train_units:
+            idx = rng.choice(Xtr.shape[0], args.max_train_units, replace=False)
+            Xtr = Xtr[idx]; ytr = ytr[idx]
         Xt = torch.tensor(Xtr, dtype=torch.float32)
         yt = torch.tensor((ytr - ytr.mean()) / (ytr.std() + 1e-9),
                           dtype=torch.float32)
@@ -127,8 +135,13 @@ def main():
 
         # save scorer trained on ALL units (full data for deployment)
         mlp2 = build_mlp(X.shape[1])
-        Xt_all = torch.tensor(Xs, dtype=torch.float32)
-        yt_all = torch.tensor((y - y.mean()) / (y.std() + 1e-9),
+        if Xs.shape[0] > args.max_train_units:
+            idx = rng.choice(Xs.shape[0], args.max_train_units, replace=False)
+            Xs_tr = Xs[idx]; y_tr = y[idx]
+        else:
+            Xs_tr, y_tr = Xs, y
+        Xt_all = torch.tensor(Xs_tr, dtype=torch.float32)
+        yt_all = torch.tensor((y_tr - y_tr.mean()) / (y_tr.std() + 1e-9),
                               dtype=torch.float32)
         opt2 = torch.optim.Adam(mlp2.parameters(), lr=args.lr)
         for _ in range(args.epochs):

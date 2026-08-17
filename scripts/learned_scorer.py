@@ -42,7 +42,21 @@ def build_mlp(n_in: int, hidden: int = 64) -> nn.Sequential:
 # --------------------------------------------------------------------------
 # numpy feature builder (training). Recomputes l2/edge/var from per-unit
 # score arrays (the capture already stored the runner's exact scores).
+# Neighbor = 4-neighbor mean over the unit grid, zero-padded at borders.
+# VECTORIZED (per-unit python loop was ~minutes for 700k docvqa units).
 # --------------------------------------------------------------------------
+def _neigh_mean_np(a, Hh, Ww):
+    """4-neighbor mean of a (Hh*Ww,) array, zero-padded borders. Vectorized."""
+    a2 = a.reshape(Hh, Ww).astype(np.float64)
+    pad = np.zeros((Hh + 2, Ww + 2), dtype=np.float64)
+    pad[1:-1, 1:-1] = a2
+    s = (pad[2:, 1:-1] + pad[:-2, 1:-1] + pad[1:-1, 2:] + pad[1:-1, :-2])
+    cnt = np.zeros((Hh, Ww))
+    cnt[:, :] = 4
+    cnt[0, :] -= 1; cnt[-1, :] -= 1; cnt[:, 0] -= 1; cnt[:, -1] -= 1
+    return (s / cnt).reshape(-1)
+
+
 def build_features_np(pre, edge_feat, var_feat, offsets, h, w):
     """-> X [n_units, 10], per-unit rows grouped by image (offsets)."""
     Xs = []
@@ -59,19 +73,9 @@ def build_features_np(pre, edge_feat, var_feat, offsets, h, w):
         rn = rows / max(1, Hh - 1) if Hh > 1 else np.zeros(n)
         cn = cols / max(1, Ww - 1) if Ww > 1 else np.zeros(n)
         p, ed, v = pre[s:e], edge_feat[s:e], var_feat[s:e]
-        p_n = np.empty(n); e_n = np.empty(n); v_n = np.empty(n)
-        for u in range(n):
-            r, c = rows[u], cols[u]
-            nb = []
-            for dr, dc in ((-1, 0), (1, 0), (0, -1), (0, 1)):
-                rr, cc = r + dr, c + dc
-                if 0 <= rr < Hh and 0 <= cc < Ww:
-                    nb.append(rr * Ww + cc)
-            if nb:
-                p_n[u] = p[nb].mean(); e_n[u] = ed[nb].mean()
-                v_n[u] = v[nb].mean()
-            else:
-                p_n[u] = p[u]; e_n[u] = ed[u]; v_n[u] = v[u]
+        p_n = _neigh_mean_np(p, Hh, Ww)
+        e_n = _neigh_mean_np(ed, Hh, Ww)
+        v_n = _neigh_mean_np(v, Hh, Ww)
         X = np.stack([p, ed, v, rn, cn, rn - 0.5, cn - 0.5,
                       p_n, e_n, v_n], axis=1)
         Xs.append(X)
@@ -90,6 +94,17 @@ def standardize(X, mu=None, sd=None):
 # scored per unit; grids = list of (h_patch, w_patch) per image; counts =
 # per-image unit counts (== self.full_units).
 # --------------------------------------------------------------------------
+def _neigh_mean_torch(a, Hh, Ww, device):
+    """4-neighbor mean of a (Hh*Ww,) tensor, zero-padded borders. Vectorized."""
+    a2 = a.reshape(Hh, Ww)
+    pad = torch.zeros(Hh + 2, Ww + 2, device=device, dtype=a.dtype)
+    pad[1:-1, 1:-1] = a2
+    s = (pad[2:, 1:-1] + pad[:-2, 1:-1] + pad[1:-1, 2:] + pad[1:-1, :-2])
+    cnt = torch.full((Hh, Ww), 4.0, device=device)
+    cnt[0, :] -= 1; cnt[-1, :] -= 1; cnt[:, 0] -= 1; cnt[:, -1] -= 1
+    return (s / cnt).reshape(-1)
+
+
 def build_features_torch(l2, edge, var, counts, grids, device):
     """-> torch [n_units, 10] on `device`. counts = per-image unit counts;
     grids = per-image (h_patch, w_patch)."""
@@ -105,20 +120,9 @@ def build_features_torch(l2, edge, var, counts, grids, device):
         rn = rows / max(1, Hh - 1) if Hh > 1 else torch.zeros(n, device=device)
         cn = cols / max(1, Ww - 1) if Ww > 1 else torch.zeros(n, device=device)
         p = l2[off:off + n]; ed = edge[off:off + n]; v = var[off:off + n]
-        p_n = torch.empty(n, device=device); e_n = torch.empty(n, device=device)
-        v_n = torch.empty(n, device=device)
-        for u in range(n):
-            r, c = int(rows[u]), int(cols[u])
-            nb = []
-            for dr, dc in ((-1, 0), (1, 0), (0, -1), (0, 1)):
-                rr, cc = r + dr, c + dc
-                if 0 <= rr < Hh and 0 <= cc < Ww:
-                    nb.append(rr * Ww + cc)
-            if nb:
-                p_n[u] = p[nb].mean(); e_n[u] = ed[nb].mean()
-                v_n[u] = v[nb].mean()
-            else:
-                p_n[u] = p[u]; e_n[u] = ed[u]; v_n[u] = v[u]
+        p_n = _neigh_mean_torch(p, Hh, Ww, device)
+        e_n = _neigh_mean_torch(ed, Hh, Ww, device)
+        v_n = _neigh_mean_torch(v, Hh, Ww, device)
         feats.append(torch.stack([p, ed, v, rn, cn, rn - 0.5, cn - 0.5,
                                   p_n, e_n, v_n], dim=1))
         off += n
