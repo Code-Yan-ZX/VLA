@@ -27,7 +27,8 @@ for b in "${BENCHES[@]}"; do
       args+=(--learned-scorer runs/learned_scorer --learned-bench "$b")
     fi
     timeout 7200 "$PY" "$RUNNER" "${args[@]}" \
-      > "experiments/d1_${tag}.log" 2>&1 || { echo "[d1] FAIL $tag (see log)"; }
+      > "experiments/d1_${tag}.log" 2>&1 && echo "[d1] OK $tag $(date +%H:%M)" \
+      || { echo "[d1] FAIL $tag (see log)"; }
   done
 done
 echo "[d1] done $(date +%H:%M)"
