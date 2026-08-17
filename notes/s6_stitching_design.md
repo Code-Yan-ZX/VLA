@@ -66,3 +66,15 @@
 - 已实测验证（dbg pre seq=8: visual_calls=87, vc_total_imgs=126; calib seq=1 仍 126）。
 - AgilePruner 自适应 τ（tau_r = min(tau, r·erank/scale·0.01)）是**选择级**（不改计数、
   不动占位符）→ 无此结构性障碍，可直接探。
+
+## Phase-1b 结果（2026-08-17, dev n=200, official, r=0.25）
+| bench | RBM pre | FastV post | DV(τ0.6) | **ADAPTIVE**(τ0.75,scale25) |
+|---|---|---|---|---|
+| textvqa | 0.720 | 0.630 | **0.735** | 0.720 |
+| docvqa | 0.734 | 0.726 | **0.737** | 0.735 |
+| ocrbench | 0.910 | 0.875 | **0.920**(τ0.9) | 0.910 |
+| gqa | 0.490 | 0.505 | 0.490 | **0.510** ✅ |
+- **ADAPTIVE-NMS（AgilePruner tau_r = min(τ, r·erank/scale·0.01)）是唯一赢 GQA 的变体**
+  （0.510 > post 0.505），且 textvqa/docvqa/ocrbench 三格 ≥ 现任 → dev 上 4/4 SOTA-hold。
+- DV(τ0.6) 在 textvqa/docvqa 更高；ocrbench 需 τ0.9。单一方法取舍：ADAPTIVE 全 hold、
+  DV(τ0.6) 更尖。n=500 验证中（verify_ada）。
