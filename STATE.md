@@ -8,6 +8,7 @@
 - 核心定位：plain RBM 是 training-free OCR/text-dense 鲁棒默认；FastV 是 query-conditioned 强 baseline；不宣通用胜出或 SOTA。
 - 三模型结果按 accuracy-level directional replication 表述；byte-exact 因果归因仅限 Qwen3-VL。
 - 2026-08-18 已完成：修复 InternVL `\textbf` 拼写；将 “generalization/isomorphism” 收紧为 third-family replication。
+- 2026-08-18 已完成方向回顾：新增 2023--2025 技术谱系与 2026 四轴研究地图；确认 stage/information-loss 定位区别于拥挤的 scorer 赛道。
 
 ## 创新探索终判
 - 六项 prespecified 扩展均未稳定优于 stronger constituent；不再继续 router/cascade/RankBridge/RBM-OT/freq/adaptive 等开放式搜索。
