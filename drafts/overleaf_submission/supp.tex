@@ -2,14 +2,9 @@
 %  supp_acmmm.tex  --  Supplementary Material for "Rank Before You Merge"
 %  Converted from drafts/supp_acmmm.md (S1--S9). Double-blind.
 %
-%  S1/S2 TODO COMPLETION (this build):
-%   - S1 Kendall-tau column filled from drafts/paper_v4.md Sec. 4.1 (M1 table):
-%       DocVQA 0.094, TextVQA 0.227, GQA 0.249.
-%   - S2 per-benchmark Sobel cells filled from drafts/paper_v4.md Sec. 4.2 (M2
-%       table): TextVQA 0.281/0.186, 72% vs 53%; GQA 0.304/0.271, 58% vs 53%.
-%     All values exist in paper_v4 -> NO "[TODO source missing]" remains.
-%   Source of the filled cells = the same M1/M2 mechanism campaign
-%   (mechanism_verification_report Sec. 1--2; released with code).
+%  Evidence completion notes (not part of the rendered submission):
+%   - S1 Kendall-tau and S2 Sobel cells were copied from the project audit record.
+%   - All values have a corresponding S9 audit identifier.
 %
 %  Numbers are copied verbatim. Run/digest paths are reproducibility metadata
 %  (generic internal filenames; they identify no author / repo / institution).
@@ -50,13 +45,12 @@
   \maketitle
 \fi
 
-\noindent\footnotesize Every number is labeled with its source digest
-(\path{experiments/*.md}) or run-JSON path. Tables S1--S3/S7 support
+\noindent\footnotesize Every number is indexed by an audit identifier in S9. Tables S1--S3/S7 support
 \S\,5 of the body; S4--S6 support \S\,4 (S4b cascade counts support \S\,6); S8
-supports \S\,3; S9 is the per-cell reproducibility index, with the full
-per-cell listing (cell / $n$ / official / ptid / skip / JSON path) in
+supports \S\,3; S9 gives the per-cell artifact index, with cell, sample count,
+official metric, token count, skip accounting, and manifest identifier in
 S9.1--S9.4; S10 is a qualitative same-image pre/post selection comparison
-rendered from measured Qwen3-VL-8B merger L2 (four panels each, no paired
+rendered from measured Qwen3-VL-8B merger features (four panels each, no paired
 question).
 
 % =============================================================================
@@ -65,10 +59,9 @@ question).
 
 Per image, Spearman correlation of the pre ranking (merger-input unit L2) with
 the post ranking (merged-token L2) over all units, plus top-25\% kept-set
-overlap. Source: mechanism\_verification\_report \S\,1 (M1 campaign; released
-with code) via \path{drafts/paper_v4.md} \S\,4 (measured under the
-\path{experiments/j3_mechanism_crossarch.md} campaign). The Kendall-$\tau$
-column is taken from the same M1 table in \path{drafts/paper_v4.md} \S\,4.1.
+overlap. Evidence record: audit index entry for the M1
+mechanism campaign. The Kendall-$\tau$ column is taken from the same audited
+M1 record.
 
 \begin{table}[h]
   \centering
@@ -97,10 +90,9 @@ Supplementary Figure~\ref{fig:supp_quantitative} (top).
 % =============================================================================
 
 rank\_shift $=$ post\_rank $-$ pre\_rank ($+$ $\Rightarrow$ demoted); per-unit
-Sobel edge energy as the text-stroke proxy. Source: mechanism\_verification\_report
-\S\,2 (M2 campaign; released with code) via \path{drafts/paper_v4.md} \S\,4.
-The per-benchmark Sobel means and median fractions (TextVQA, GQA) are taken
-from the same M2 table in \path{drafts/paper_v4.md} \S\,4.2.
+Sobel edge energy as the text-stroke proxy. Evidence record: anonymized artifact
+manifest entry for the M2 mechanism campaign. The per-benchmark Sobel means
+and median fractions are taken from the same audited M2 record.
 
 \begin{table}[h]
   \centering
@@ -146,8 +138,8 @@ energy): testable hypothesis, not a measured result. Second text-stroke proxy
 % =============================================================================
 
 pre$-$post $\Delta$ at 75\% / 50\% / 25\% retention (the body \S\,5.4 prints
-endpoints only). Source: \path{experiments/j8_ablations.md} via
-\path{drafts/paper_v4.md} \S\,5.6.
+endpoints only). Evidence record: audit index entry for the
+retention-curve ablation.
 
 \begin{table}[h]
   \centering
@@ -205,10 +197,9 @@ $z = (b - c)/\sqrt{b + c}$, with $b/c$ the pre-only / post-only correct counts;
 positive $z =$ pre-merger lead, negative $=$ post-merger lead (GQA only).
 Cross-check $=$ independent-binomial $z$ (SE $\sqrt{\mathrm{se}^2_{\mathrm{pre}}
 + \mathrm{se}^2_{\mathrm{post}}}$); ``agree \%'' $=$ per-question agreement of
-the recorded correctness indicators. Source: \path{drafts/paper_v4.md} \S\,5.2
-paired-test table (per-sample rescore of \path{runs/full_matrix/j7_*_full.json},
-paired by question id, restricted to ids answered in both arms; 200/200
-ground-truth self-test) + \path{experiments/j7_main_table.md}.
+the recorded correctness indicators. Evidence record: audit index
+entry for the paired-test table; paired by question id, restricted to ids answered
+in both arms; the 200/200 ground-truth self-test is retained in the audit record.
 
 \begin{table*}[h]
   \centering
@@ -260,9 +251,8 @@ dropping fraction $Y$ of the survivors; total keep $= X\cdot(1 - Y)$. Three arms
 all three arms in every cell, so the comparison is iso-budget). cas\_only /
 pre\_only / fst\_only $=$ per-sample counts correct in only the named arm of the
 pair. Verdict $=$ NO-GO (cascade fails the Pareto rule on all 8
-budget$\times$benchmark cells). Source: \path{runs/cascade/gate_result.json}
-(\path{mcnemar_cas_vs_pre} / \path{mcnemar_cas_vs_fst});
-\path{experiments/cascade_gate.md}.
+budget$\times$benchmark cells). Evidence record: audit index
+entry for the cascade gate and paired McNemar counts.
 
 \begin{table*}[h]
   \centering
@@ -303,9 +293,8 @@ z(\|f_u\|_2) + \beta\, z(\mathrm{Var}_u)$, tuned in two grid rounds on
 TextVQA$_{500}$ at 25\% retention ($\alpha{=}1,\beta{=}0.6$; official VQA-acc).
 The variance term helps only the most text-dense cell and only under aggressive
 compression; everywhere else it is neutral or negative, so no
-no-regression-across-four-benchmarks gate passes. Source:
-\path{experiments/freq_aware/results.json} +
-\path{experiments/freq_aware/grid.json} (\path{scripts/freq_adaptive_driver.py}).
+no-regression-across-four-benchmarks gate passes. Evidence record: anonymized
+audit index entry for the frequency-aware selector.
 
 \begin{table}[h]
   \centering
@@ -343,56 +332,52 @@ $\tau_{\mathrm{HF}}{=}0.13$ threshold does route some scene images to POST but
 collapses TextVQA (51/320 flipped, $-7$~pp) while flipping only 22/243 GQA
 images ($0.428$ vs RBM $0.438$). GQA and TextVQA $r_{\mathrm{HF}}$ distributions
 overlap (means 0.127 vs 0.142), so no single global threshold reconciles the two
-acceptance criteria. Source:
-\path{experiments/adaptive_stage/results.json} +
-\path{experiments/adaptive_stage/grid.json}. Workload-signal analysis:
-\path{scripts/adapt_discriminator_probe.py}.
+acceptance criteria. Evidence record: audit index entry for the
+adaptive stage-router gate and workload-signal analysis.
 
-\noindent\textbf{S4c.3 Diversity-constrained RBM} (exploratory extension):
-Diversity-RBM traverses an importance-ranked candidate pool and suppresses a
-candidate when its cosine similarity to an already selected unit exceeds a
-fixed threshold; Adaptive-Diversity-RBM conditions that threshold on the
-image's participation-ratio effective rank. Both variants retain exactly the
-same number of units as RBM. Table~\ref{tab:supp_diversity} reports the
-Qwen3-VL-8B $n=500$ probe. We convert the runner's prune ratio $r$ to retained
-fraction $\kappa=1-r$ to match the body. The probe covers only mild compression
-($\kappa\in\{75\%,50\%\}$), one model, and fixed evaluation slices.
+\noindent\textbf{S4c.3 Exploratory learned boundary scorer} (body \S\,6):
+we test whether a lightweight learned selector can improve on plain L2 without
+moving selection past the merger. A small MLP receives only pre-merger
+boundary features available at inference time: unit L2 norm, Sobel edge energy,
+local feature variance, normalized position, and neighborhood statistics. Its
+teacher is the post-merger importance ordering captured on separate training
+images; evaluation uses disjoint held-out benchmark samples and the official
+task scorers. Both learned and L2 arms retain exactly 25\% of merger-input
+units and otherwise share the same Qwen3-VL-8B inference configuration.
 
-\begin{table*}[t]
+\begin{table}[h]
   \centering
   \small
-  \begin{tabular}{@{}l c r r r r@{}}
+  \begin{tabular}{@{}l r r r@{}}
     \toprule
-    Benchmark & Retention $\kappa$ & RBM & FastV & Diversity-RBM &
-    Adaptive-Diversity-RBM \\
+    Benchmark & Learned POST teacher & Plain L2 & $\Delta$ learned$-$L2 \\
     \midrule
-    TextVQA   & 75\% & 0.745 & 0.665 & \textbf{0.748} & 0.741 \\
-    TextVQA   & 50\% & 0.673 & 0.387 & 0.673 & \textbf{0.681} \\
-    DocVQA    & 75\% & 0.668 & \textbf{0.674} & 0.667 & 0.668 \\
-    DocVQA    & 50\% & \textbf{0.621} & 0.549 & 0.612 & 0.611 \\
-    OCR-Bench & 75\% & 0.838 & --- & \textbf{0.840} & 0.834 \\
-    OCR-Bench & 50\% & 0.822 & 0.498 & 0.828 & \textbf{0.832} \\
-    GQA       & 75\% & 0.486 & \textbf{0.506} & 0.480 & 0.496 \\
-    GQA       & 50\% & 0.484 & 0.500 & \textbf{0.506} & 0.502 \\
+    TextVQA & 0.435 & \textbf{0.595} & $-16.0$~pp \\
+    GQA     & \textbf{0.550} & 0.515 & $+3.5$~pp \\
     \bottomrule
   \end{tabular}
-  \caption{Exploratory diversity-constrained selection on Qwen3-VL-8B
-  (official metrics, $n=500$). Bold marks the largest point estimate in each
-  row, not a significant winner. Against the stronger available RBM/FastV
-  incumbent in each row, paired bootstrap intervals for both diversity variants
-  include zero; this is inconclusive evidence, not an equivalence result. The
-  missing OCR-Bench FastV cell at 75\% retention is due to a runtime failure.
-  This single-model mild-compression probe is not a headline SOTA comparison.}
-  \label{tab:supp_diversity}
-\end{table*}
+  \caption{Held-out learned-scorer evaluation at 25\% retention
+  ($n=200$ per benchmark; official metrics). The scorer can imitate a
+  post-merger teacher, but the resulting ordering is strongly anti-task on
+  TextVQA and therefore fails the cross-workload no-regression gate.}
+  \label{tab:supp_learned}
+\end{table}
+
+The asymmetric task result is diagnostic rather than a method improvement.
+M2 independently shows that the post-merger ordering demotes
+text-stroke-rich units; distillation transfers this preference into a
+pre-merger scorer and causes a 16.0-pp TextVQA loss. The positive GQA result
+shows that the learned head is capable of changing task behavior, ruling out a
+trivial ``model did not learn'' explanation. We therefore retain plain L2 and
+do not use the learned scorer in any headline table.
 
 % =============================================================================
 \section*{S5. Binomial stderrs + skip accounting (Table 1 Qwen blocks)}
 % =============================================================================
 
 $\sigma = \sqrt{p(1 - p)/n}$, greedy decoding (no temperature variance; error
-bars are binomial only). Source: \path{experiments/j7_main_table.md} (stderr
-column) + the Qwen-block footnotes of Table~1.
+bars are binomial only). Evidence record: audit index entry for
+the Qwen full-split table and skip accounting.
 
 \begin{itemize}
   \item Qwen3-VL none DocVQA: re-run at max-model-len 49,152, native
@@ -452,8 +437,8 @@ full split (no full-split $\kappa = 0.125$ cells; body footnote~c).
 % =============================================================================
 
 The $n = 200$ dev scope used by Tables~3--4 and \S\,5.3 is direction-consistent
-with the full splits. Source: \path{experiments/j2_crossgen_matrix.md}
-($n = 200$ official) + \path{drafts/paper_v4.md} Table~A2 (j0a/j2/j4 campaigns).
+with the full splits. Evidence record: audit index entry for
+the cross-split consistency campaign.
 $\Delta_{25} =$ pre $-$ post at $\kappa = 0.25$.
 
 \begin{table}[h]
@@ -485,8 +470,8 @@ $n = 200$ cross-generation matrix are printed in \path{paper_v4} Table~A2 and
 % =============================================================================
 
 The stage law under a second, non-L2 scorer (global-centroid attention).
-Source: method\_gate\_report via \path{drafts/paper_v4.md} \S\,5 (j3/j5
-campaigns).
+Evidence record: audit index entry for the selector-invariance
+campaign.
 
 \begin{table}[h]
   \centering
@@ -517,9 +502,8 @@ post (main-merger output) contrast. pre-final ranks L2 at the main-merger's
 merge-units from the visual output; the deepstack mergers run untouched. The
 only difference from post is then before vs after the lossy $2\!\times\!2$ main
 merger --- a pure stage variable. Iso-token verified (prompt token ids match
-200/200 per benchmark for pre-final vs post). Source:
-\path{experiments/p0-3_prefinal_control.md}; per-sample JSONs in
-\path{runs/qwen3_prefinal_control/}.
+200/200 per benchmark for pre-final vs post). Evidence record: anonymized
+audit index entry for the pre-final control and its per-sample audit.
 
 \begin{table}[h]
   \centering
@@ -556,12 +540,8 @@ was not re-tested).
   \item \textbf{Qwen3-VL-8B}: the first deepstack merger has index 0 and the
     visual indexes are $[8,16,24]$, so unit scores use \textbf{ViT block-8 outputs}
     (intermediate depth); the single resulting mask is shared by all mergers,
-    including the main merger that consumes the final-block output. Runner
-    diagnostic \path{mask_computed_at} $=$ \texttt{'deepstack\_0'} on every
-    run. Source:
-    \path{experiments/r1_1_swap_jaccard.md} Part~B (three-evidence verification:
-    call order in \path{Qwen3VLVisionModel.forward}, model config, run
-    diagnostics).
+    including the main merger that consumes the final-block output. The tap-point
+    and call-order verification is retained in the audit index.
   \item \textbf{Qwen2.5-VL-7B}: no deepstack; scores are computed on the
     \textbf{main merger input (final ViT block output)}.
     \path{mask_computed_at = 'main'}.
@@ -578,12 +558,12 @@ was not re-tested).
     cells; the Qwen2.5-VL $\times$ pre vllm-mimic positional degeneration
     (repeated ``addCriterion\ldots'' outputs $\to$ pseudo-zero scores) was
     detected and replaced before any reported number; on Qwen3-VL native vs
-    mimic give 0.575 vs 0.525 (same ordering). Source:
-    \path{experiments/r2c_rbm_scope.md}.
+    mimic give 0.575 vs 0.525 (same ordering). The harness and position-layout
+    verification are retained in the audit index.
 \end{itemize}
 
 % =============================================================================
-\section*{S9. Per-cell reproducibility index (run JSONs; gitignored, released with code)}
+\section*{S9. Per-cell reproducibility index}
 % =============================================================================
 
 \begin{table*}[h]
@@ -591,33 +571,32 @@ was not re-tested).
   \small
   \begin{tabular}{@{}p{3.0cm} c p{4.6cm} p{4.6cm}@{}}
     \toprule
-    Body location & Cells & Runs path & Summary digest \\
+    Body location & Cells & Artifact record & Audit summary \\
     \midrule
-    Table 1 (Qwen blocks)             & 26/26        & \path{runs/full_matrix/j7_*.json} & \path{experiments/j7_main_table.md} \\
-    Table 1 (InternVL3 block)         & 16/16        & \path{runs/internvl3/internvl3_*.json} + \path{internvl3_official_summary.json} & \path{experiments/internvl3_main_matrix.md} \\
-    Table 2 FastV-k3                  & 8            & \path{runs/r2_same_scope/r2b_*.json} & \path{experiments/r2b_fastv_k3.md} \\
-    Table 2 RBM same-scope            & 5            & \path{runs/r2_same_scope/r2c_*.json} & \path{experiments/r2c_rbm_scope.md} \\
-    Table 4 cascade gate              & 24/24        & \path{runs/cascade/gate_*.json} + \path{gate_result.json} & \path{experiments/cascade_gate.md} \\
-    Table 5 efficiency                & 7 configs    & \path{runs/full_matrix/efficiency/*.eff.json} & \path{experiments/j6_efficiency.md} \\
-    \S\,5 kept-set Jaccard / swap     & 8            & \path{runs/r1_1_swap_jaccard/*.json} + \path{jaccard_summary.json} & \path{experiments/r1_1_swap_jaccard.md} \\
-    \S\,5.1--5.2 M1/M2                & $n=64 \times 3$ & mechanism campaign (released with code) & mechanism\_verification\_report via \path{drafts/paper_v4.md} \S\,4 \\
-    \S\,5.4 retention curve           & $n=200 \times 4$ & j8 ablation runs & \path{experiments/j8_ablations.md} \\
-    \S\,6 (a)(b)(c) router/hybrid/QA-gate & ---      & gate/j5 runs & \path{experiments/j5_qa_gate_result.md} + \path{paper_v4} \S\,6 \\
-    \S\,8 600k reversal               & 3            & j8b runs & \path{experiments/j8b_q2vl_docvqa_600k.md} \\
-    Engine fairness                   & $r{=}0$ 8/8; none 16/16 & j4 runs & \path{experiments/j4_step2_fix.md} \\
-    PyramidDrop iso-25\% collapse     & $n = 500$    & j7hf runs & \path{experiments/j7hf_baselines_n500.md} \\
+    Table 1 (Qwen blocks)             & 26/26        & audit: table1-qwen & full-split metrics and skip accounting \\
+    Table 1 (InternVL3 block)         & 16/16        & audit: table1-internvl3 & full-split metrics and skip accounting \\
+    Table 2 FastV-k3                  & 8            & audit: table2-fastv-k3 & same-scope rescored cells \\
+    Table 2 RBM same-scope            & 5            & audit: table2-rbm & same-scope rescored cells \\
+    Table 4 cascade gate              & 24/24        & audit: table4-cascade & paired gate statistics \\
+    Table 5 efficiency                & 7 configs    & audit: table5-efficiency & throughput and latency records \\
+    \S\,5 kept-set Jaccard / swap     & 8            & audit: mechanism-swap & kept-set and ordering audit \\
+    \S\,5.1--5.2 M1/M2                & $n=64 \times 3$ & audit: mechanism-m1-m2 & rank and edge-energy measurements \\
+    \S\,5.4 retention curve           & $n=200 \times 4$ & audit: retention-curve & depth ablation records \\
+    \S\,6 (a)--(f) prespecified extensions & ---      & audit: negative-results & gates and extension records \\
+    Learned-scorer probe                   & $n=200 \times 2$ & audit: learned-scorer & model, held-out splits, predictions, and official rescoring \\
+    \S\,8 600k reversal               & 3            & audit: low-cap-reversal & configuration-boundary records \\
+    Engine fairness                   & $r{=}0$ 8/8; none 16/16 & audit: engine-parity & zero-drop and none-cell checks \\
+    PyramidDrop iso-25\% collapse     & $n = 500$    & audit: pyramiddrop-iso25 & iso-budget baseline record \\
     \bottomrule
   \end{tabular}
 \end{table*}
 
 \subsection*{S9.1 InternVL3-8B full-split cells (Table 1; 16/16)}
 
-Model \path{OpenGVLab/InternVL3-8B}, vLLM 0.19, bf16, eager attention, greedy;
+Model \texttt{OpenGVLab/InternVL3-8B}, vLLM 0.19, bf16, eager attention, greedy;
 $r =$ TOTAL drop ($0.750 \to \kappa = 25\%$, $0.875 \to \kappa = 12.5\%$); skip
-$=$ context-overrun cells scored 0. Source:
-\path{runs/internvl3/internvl3_official_summary.json} (+ per-cell
-\path{*_full.json}, each carries \path{n_skipped}; all 0 here). Digest:
-\path{experiments/internvl3_main_matrix.md}.
+$=$ context-overrun cells scored 0. Evidence record: audit index
+entry for the InternVL3 full-split metrics and per-cell skip accounting.
 
 \begin{table*}[h]
   \centering
@@ -646,19 +625,19 @@ $=$ context-overrun cells scored 0. Source:
   \end{tabular}
 \end{table*}
 
-\noindent(All paths relative to \path{runs/internvl3/}. Pre-merger leads on
-every text-dense benchmark at both budgets --- e.g.\ DocVQA ANLS 0.7284 vs
-0.382 at $\kappa = 25\%$; GQA is the near-null object-centric case, 0.5993 vs
-0.6031 --- replicating the stage law on the pixel-shuffle merger design.)
+\noindent(Per-cell artifact identifiers are recorded in the anonymized manifest.
+Pre-merger leads on every text-dense benchmark at both budgets --- e.g.\ DocVQA
+ANLS 0.7284 vs 0.382 at $\kappa = 25\%$; GQA is the near-null object-centric
+case, 0.5993 vs 0.6031 --- replicating the stage law on the pixel-shuffle merger
+design.)
 
 \subsection*{S9.2 Table 2 FastV-k3 same-scope cells (8/8)}
 
 FastV one-shot attention pruning at LLM layer $K = 3$, iso-budget $r = 0.75$
 ($\kappa = 25\%$); HF-transformers 4.57.6 eager harness, official metrics.
-Official values are the rescored results in
-\path{experiments/r2b_fastv_k3.md}; $n$, ptid, skip, engine, and JSON paths are
-audited against the per-cell \path{runs/r2_same_scope/r2b_*.json} files. The
-harness's raw \path{acc} field is not used as the official score.
+Official values are rescored outputs in the audit index; $n$,
+ptid, skip, engine, and per-cell identifiers are audited there. The harness's raw
+\path{acc} field is not used as the official score.
 
 \begin{table*}[h]
   \centering
@@ -687,9 +666,8 @@ field; OCR-Bench skips are long-OCR context overruns, scored 0.)
 
 RBM (pre-merger L2) at iso-budget $r = 0.75$, HF-transformers eager,
 \path{--mrope native} (family-agnostic correct positions), matched to the
-FastV-k3 cells above. Official values are the rescored results in
-\path{experiments/r2c_rbm_scope.md}; ptid, skip, and paths are audited against
-the per-cell \path{runs/r2_same_scope/r2c_*.json} files.
+FastV-k3 cells above. Official values, ptid, skip, and per-cell identifiers are
+recorded in the audit index.
 
 \begin{table*}[h]
   \centering
@@ -712,10 +690,8 @@ the per-cell \path{runs/r2_same_scope/r2c_*.json} files.
 Three arms $\times$ two budgets $\times$ four benchmarks; $n = n_{\mathrm{common}}$
 (matched by question id); official $=$ \path{acc_official} from the paired
 rescore; ptid $=$ mean post-merger token count (identical across the three arms
-in every cell). Source: \path{runs/cascade/gate_result.json} (authoritative
-paired summary) with per-arm run cells
-\path{runs/cascade/gate_\{pre,fst,cas\}\{25,12\}_<bench>.json}. Digest:
-\path{experiments/cascade_gate.md}. (McNemar counts for these cells: S4b.)
+in every cell). Evidence record: audit index entry for the
+cascade paired summary and per-arm cells. (McNemar counts for these cells: S4b.)
 
 \begin{table*}[h]
   \centering
@@ -753,9 +729,9 @@ paired summary) with per-arm run cells
   \end{tabular}
 \end{table*}
 
-\noindent(All paths relative to \path{runs/cascade/}. OCR-Bench
-$n_{\mathrm{common}} = 181$ after 19 long-OCR skips; all other cells
-$n = 200$. \path{missing_cells: []} --- 24/24 present.)
+\noindent(Per-cell artifact identifiers are recorded in the anonymized manifest.
+OCR-Bench $n_{\mathrm{common}} = 181$ after 19 long-OCR skips; all other cells
+$n = 200$. All 24 expected cells are present.)
 
 %──────────────────────────────────────────────────────────────────────────────
 \section*{S10. Qualitative same-image comparison --- measured pre- vs post-merger L2 selection}
