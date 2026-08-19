@@ -136,8 +136,8 @@ def paired_analysis(scores_a, scores_b, label_a, label_b, seed):
     res.update({"mean_delta": round(float(mean), 5),
                 "ci95_lo": round(float(lo), 5), "ci95_hi": round(float(hi), 5),
                 "bootstrap_se": round(float(se), 5), "p_perm": round(float(p), 6)})
-    # McNemar for binary metrics
-    if all((x in (0.0, 1.0) for x in d)):
+    # McNemar for binary metrics (check the SCORES, not the differences)
+    if all(x in (0.0, 1.0) for x in va) and all(x in (0.0, 1.0) for x in vb):
         a_only, b_only, z, pm = PS.mcnemar(va, vb)
         res.update({"mcnemar_A_only": a_only, "mcnemar_B_only": b_only,
                     "mcnemar_z": round(z, 4), "mcnemar_p": round(float(pm), 6)})
@@ -207,6 +207,22 @@ def attempts(cell):
     return {"attempted": len(ps), "completed": len(ps) - skip, "skipped": skip}
 
 
+def cell_meta(cell, path):
+    """Capture the run config recorded in each cell JSON for traceability."""
+    return {
+        "file": os.path.basename(path),
+        "model": cell.get("model"), "mode": cell.get("mode"),
+        "r": cell.get("r"), "benchmark": cell.get("benchmark"),
+        "max_pixels": cell.get("max_pixels"),
+        "max_model_len": cell.get("max_model_len"),
+        "max_num_seqs": cell.get("max_num_seqs"),
+        "max_tokens": cell.get("max_tokens"),
+        "selector": cell.get("selector"),
+        "vllm": cell.get("vllm"), "wall_s": cell.get("wall_s"),
+        "load_s": cell.get("load_s"),
+    }
+
+
 # --------------------------------------------------------------------------- #
 # Campaign layout
 # --------------------------------------------------------------------------- #
@@ -249,6 +265,13 @@ def main():
         "alignment": "intersection of answered sample ids",
         "token_count": "per-sample prompt_token_ids (post-merger visual tokens + text)",
         "date": "2026-08-19",
+        "environment": {
+            "python": "3.10.20", "torch": "2.10.0+cu128",
+            "transformers": "4.57.6", "vllm": "0.19.0",
+            "PIL": "12.2.0", "numpy": "2.2.6", "scipy": "1.15.3",
+            "conda_env": "qwen3vl_clean", "gpu": "A40 46GB (1x)",
+            "hf_offline": "HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1",
+        },
     }
 
     # --------------------------- P0-1 ------------------------------------- #
@@ -260,7 +283,9 @@ def main():
         cell_pf = load(os.path.join(P0_1, f"p0_1_qwen3_pre-final_{bench}_r0.750_full.json"))
         cell_po = load(os.path.join(P0_1, f"p0_1_qwen3_post_{bench}_r0.750_full.json"))
         cell_no = load(NONE_ANCHORS[bench])
-        entry = OrderedDict([("benchmark", bench)])
+        entry = OrderedDict([("benchmark", bench),
+                             ("meta_pre_final", cell_meta(cell_pf, os.path.join(P0_1, f"p0_1_qwen3_pre-final_{bench}_r0.750_full.json")) if cell_pf else None),
+                             ("meta_post", cell_meta(cell_po, os.path.join(P0_1, f"p0_1_qwen3_post_{bench}_r0.750_full.json")) if cell_po else None)])
         entry["attempts"] = {
             "pre-final": attempts(cell_pf) if cell_pf else None,
             "post": attempts(cell_po) if cell_po else None,
@@ -320,6 +345,8 @@ def main():
             p02[key] = {"missing": True}
             continue
         cmp = compare(f"p02_{key}", cell_pre, cell_post, "pre", "post", SEED + 2000, "ocrbench")
+        cmp["meta_pre"] = cell_meta(cell_pre, os.path.join(P0_2, "p0_2_qwen2_pre_ocrbench_r{:.3f}_full.json".format(r)))
+        cmp["meta_post"] = cell_meta(cell_post, os.path.join(P0_2, "p0_2_qwen2_post_ocrbench_r{:.3f}_full.json".format(r)))
         # Table 1 replacement verdict
         verdict_yes = (
             cmp["paired"]["n_paired"] >= 900
@@ -338,6 +365,14 @@ def main():
                 "mismatched-config pair)" if verdict_yes else "NO"),
         }
         p02[key] = cmp
+    # Holm across the two κ levels of P0-2
+    _p = [p02[k]["paired"]["p_perm"] for k in ("k25", "k125")
+          if k in p02 and "paired" in p02[k] and p02[k]["paired"].get("p_perm") is not None]
+    if _p:
+        _adj = holm(_p)
+        for _k, _a in zip(("k25", "k125"), _adj):
+            if _k in p02 and "paired" in p02[_k]:
+                p02[_k]["paired"]["p_perm_holm"] = round(_a, 6)
     out["P0_2_ocrbench_matched"] = p02
 
     # --------------------------- P1 ---------------------------------------- #
@@ -359,7 +394,17 @@ def main():
         cmp["fastv_only_correct"] = fv_only
         cmp["both_correct"] = both
         cmp["model"] = model
+        cmp["meta_rbm"] = cell_meta(cell_rbm, os.path.join(P1, f"p1_{fam}_pre_ocrbench_r25_full.json"))
+        cmp["meta_fastv"] = cell_meta(cell_fv, os.path.join(P1, f"p1_{fam}_fastv_ocrbench_k3_full.json"))
         p1[fam] = cmp
+    # Holm across the two models of P1
+    _p = [p1[f]["paired"]["p_perm"] for f in ("qwen3vl", "qwen2vl")
+          if f in p1 and "paired" in p1[f] and p1[f]["paired"].get("p_perm") is not None]
+    if _p:
+        _adj = holm(_p)
+        for _f, _a in zip(("qwen3vl", "qwen2vl"), _adj):
+            if _f in p1 and "paired" in p1[_f]:
+                p1[_f]["paired"]["p_perm_holm"] = round(_a, 6)
     out["P1_rbm_vs_fastv_hf"] = p1
 
     with open(OUTJSON, "w") as f:
@@ -396,7 +441,9 @@ def report_md(out):
         p = c["paired"]
         ma, mb = c["metric_A"], c["metric_B"]
         def fmt(m):
-            return str(m.get("official", m.get("over_answered")))
+            if "total1000" in m:
+                return f"{m['total1000']}/1000 (ans-mean {m['over_answered']})"
+            return str(m.get("official"))
         ta, tb = c["tokens_A"], c["tokens_B"]
         L.append(
             f"| {bench} | {fmt(ma)} | {fmt(mb)} | {p['mean_delta']*100:.1f} | "
