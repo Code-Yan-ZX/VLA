@@ -1,9 +1,9 @@
 # STATE.md - 当前项目状态（主窗口维护，保持 ≤30 行）
-> 项目：VLM 视觉 token 压缩；目标：Rank-Before-Merge -> ACM MM'27
-> 最近更新：2026-08-19；方法创新冻结，当前为投稿硬化阶段。
+> 项目：VLM 视觉 token 压缩；目标：Rank-Before-Merge -> Q1/Q2 venue（待选）
+> 最近更新：2026-08-19；方法创新冻结，当前为导师审阅与投稿硬化阶段。
 
 ## 当前论文
-- 权威入口：`drafts/overleaf_submission/main.tex`；新 PDF：`output/pdf/rank_before_you_merge_submission_20260819.pdf`。
+- 权威入口：`drafts/overleaf_submission/main.tex`；导师审阅 PDF：`output/pdf/rank_before_you_merge_supervisor_review_20260819.pdf`。
 - 正文 8 页，参考文献 2 页，补充从第 11 页开始，总计 22 页。
 - 定位：RBM 是最小 stage operationalization 与 OCR-oriented 鲁棒默认；FastV 是 query-conditioned 强 baseline；不宣通用胜出/scorer novelty。
 - “Stage Law” 仅指 tested text-dense、iso-model、iso-budget 且共享 query-blind L2-magnitude family 的 pre/post cells；byte-exact 仅限 Qwen3-VL。
@@ -18,10 +18,10 @@
 
 ## 验证与 gate
 - `latexmk` 通过；0 undefined citation/reference、0 overfull、无 Type 3 字体；页 1/3/8/9/10/12/13/22 无裁切/重叠。
-- 可见 `Conference'17`/`10.1145/` 已清除；官方 MM'27 metadata 发布前暂用 `Anonymous Review, 2027`，并因 `printacmref=false` 保留非致命 class warning。
+- 当前采用 `sigconf,nonacm` 通用双栏，无会议/期刊/DOI/版权占位；作者显示为 Zhengxing Yan，单位与邮箱待确认。
 - S9 run JSON 仍为 0/53；不得声称匿名 artifact 已完成。恢复受服务器凭据/连接阻塞。
 - 2026-08-19 官网仅确认 MM'27 在香港、日期待定；正式 CFP/页限/补充政策尚无法核验。
 
 ## 下一步
 - 恢复并核验 53/53 run JSON、14 类 manifest、逐样本/统计/版本/checksum，再解除 artifact gate。
-- CFP 发布后替换 review metadata，确认 8+2 页与 integrated/separate supplement 政策；实际投稿仍须 user 明确确认。
+- 选定 venue 后切换其官方模板并核验页限、匿名规则及 integrated/separate supplement 政策；实际投稿仍须 user 明确确认。

@@ -266,3 +266,8 @@
 - Qwen3 主试验的 layer-8 deepstack tap 在方法前置披露；主 merger 边界的 matched-depth pre-final 作为纯 stage control，byte-exact 归因仍仅限 Qwen3-VL。
 - 发现补充 S10 对 6 个未恢复 panel 与 anonymous archive 的承诺后，决定改为仅陈述已渲染的 4 个 panel；S9 工件在 53/53 JSON+manifest+checksum 通过前一律视为未完成。
 - ACM MM'27 正式 metadata 未发布时，禁止保留 acmart 的 `Conference'17`/空 DOI 假字段；审稿 PDF 暂用显式 `Anonymous Review, 2027`，CFP 发布后必须替换。
+
+## 2026-08-19 | 通用双栏导师审阅稿
+- 用户尚未选定投稿期刊/会议，因此不再把当前稿标为 ACM MM'27 review submission。
+- 保留 `acmart` 的稳定双栏排版，但改用 `sigconf,nonacm`，关闭 ACM reference、CCS、DOI、版权和 venue 占位信息。
+- 作者显示为 `Zhengxing Yan`；单位与邮箱未获确认，不自行推断。选定 venue 后再迁移到其官方模板并按匿名规则处理作者块。

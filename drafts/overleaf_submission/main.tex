@@ -1,16 +1,15 @@
 % =============================================================================
-%  paper_acmmm.tex  --  "Rank Before You Merge" (ACM MM'27 submission)
+%  main.tex  --  "Rank Before You Merge" (generic two-column review draft)
 %  Converted from drafts/paper_acmmm.md (8445 words, 9 sections, 5 tables,
-%  3 figure placeholders). Double-blind review mode.
+%  3 figure placeholders). Prepared for author/supervisor review.
 %
 %  DISCIPLINE (do not violate when editing):
 %   - Every NUMBER is copied verbatim from the markdown source. Do not change.
 %   - Red-line wording (scoped claims, the locked cascade-gate quote, the GQA
 %     single-full-statement, "robust default, not uniformly optimal") is
 %     copied verbatim. Do not weaken.
-%   - Double-blind: NO author / repository / institution / internal digest path
-%     appears anywhere in this file. The "Source: *.md" provenance lines of the
-%     markdown (work notes) are intentionally NOT typeset here.
+%   - Internal repository / digest paths are not typeset. The "Source: *.md"
+%     provenance lines of the markdown (work notes) are intentionally omitted.
 %
 %  FIGURES: three figures embedded from figs/ (all from measured data; no
 %   proxy / schematic / placeholder remains). fig1.pdf = two audited OCRBench
@@ -24,7 +23,7 @@
 %   long (see README_compile.txt, "if it overflows").
 % =============================================================================
 
-\documentclass[sigconf,review,anonymous]{acmart}
+\documentclass[sigconf,nonacm]{acmart}
 
 % --- packages actually used in this file -------------------------------------
 \usepackage{booktabs}     % \toprule \midrule \bottomrule (acmart also loads it)
@@ -35,15 +34,13 @@
 \usepackage{graphicx}     % \includegraphics (figures), \fbox placeholders
 \usepackage{url}          % \path{} for any path-like strings
 
-% --- review / submission front-matter hygiene --------------------------------
+% --- generic two-column review front matter ----------------------------------
 \setcopyright{none}
-% Official ACM MM 2027 dates/DOI are not yet published. Suppress acmart's
-% Conference'17 / 10.1145 placeholder block in the anonymous review PDF.
-\settopmatter{printacmref=false, printccs=true, printfolios=true}
-\acmConference[Anonymous Review]{Anonymous Review}{2027}{}
-\acmYear{2027}
+% This draft is not tied to a journal or conference. Keep the robust acmart
+% two-column typography while suppressing venue, DOI, copyright, and CCS blocks.
+\settopmatter{printacmref=false, printccs=false, printfolios=true}
 \renewcommand\footnotetextcopyrightpermission[1]{}
-% Conference metadata is supplied by ACM for the camera-ready version.
+% Add the target venue's official metadata only after the venue is selected.
 
 % --- CCS concepts (metadata only; regenerate via the ACM CCS tool if desired) -
 \begin{CCSXML}
@@ -72,19 +69,14 @@
 \keywords{visual token compression, vision-language models, training-free
   inference, multimodal foundation models, inference efficiency}
 
-% =============================================================================
-\begin{document}
-
 \title[Rank Before You Merge]{Rank Before You Merge: A Stage Law for Training-Free Visual Token
   Compression in Merger-Equipped Vision-Language Models}
 
-% Double-blind: the [anonymous] option anonymizes this automatically; the
-% placeholder below is the de-anonymization stub.
-\author{Anonymous Author(s)}
-\affiliation{%
-  \institution{Anonymous Affiliation}
-  \country{}
-}
+\author{Zhengxing Yan}
+\hypersetup{pdfauthor={Zhengxing Yan}}
+
+% =============================================================================
+\begin{document}
 
 % -----------------------------------------------------------------------------
 \begin{abstract}

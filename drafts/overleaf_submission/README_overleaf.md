@@ -68,16 +68,14 @@ There are **no** `../` parent-relative paths — verified by
   instructions.
 - `figs/fig1.pdf` uses method-specific measured masks; no mask is reused across
   RBM, post-merger L2, and FastV.
-- The paper is double-blind: no author/institution/repo identifiers appear in
-  the rendered PDF or figure captions. The release artifact and any internal
-  provenance mapping must be checked separately before submission.
+- The current PDF is a generic two-column author draft for supervisor review.
+  It names Zhengxing Yan and is not tied to any journal or conference. The
+  release artifact and internal provenance mapping remain separate concerns.
 
 ## Submission-time fields
 
-Before submission, verify the official ACM MM 2027 call, template version,
-page limits, supplementary policy, and required metadata. The review source
-currently omits conference date/location rather than carrying provisional
-values. Keep `anonymous` review mode and the anonymous author block for
-double-blind review. For the camera-ready version, remove `anonymous`, replace
-the author/affiliation stub, and insert the DOI/ISBN/copyright metadata supplied
-by ACM. The actual upload and submission require human confirmation.
+After selecting a target venue, replace the generic `sigconf,nonacm` mode with
+that venue's official template and verify its page limits, supplementary policy,
+anonymity rules, and required metadata. Add affiliation and contact information
+only after the author confirms them. The actual upload and submission require
+human confirmation.
