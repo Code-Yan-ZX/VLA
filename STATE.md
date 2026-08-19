@@ -1,29 +1,27 @@
 # STATE.md - 当前项目状态（主窗口维护，保持 ≤30 行）
-
 > 项目：VLM 视觉 token 压缩；目标：Rank-Before-Merge -> ACM MM'27
-> 最近更新：2026-08-18；方法创新冻结，当前为投稿硬化阶段。
+> 最近更新：2026-08-19；方法创新冻结，当前为投稿硬化阶段。
 
 ## 当前论文
-- 权威入口：`drafts/overleaf_submission/main.tex`。
+- 权威入口：`drafts/overleaf_submission/main.tex`；新 PDF：`output/pdf/rank_before_you_merge_submission_20260819.pdf`。
 - 正文 8 页，参考文献 2 页，补充从第 11 页开始，总计 22 页。
-- 核心定位：RBM 是最小 stage operationalization 与 OCR/text-dense 鲁棒默认；FastV 是 query-conditioned 强 baseline；不宣通用胜出或 scorer novelty。
-- “Stage Law” 仅指 tested same-scorer、iso-model、iso-budget pre/post cells；byte-exact 因果归因仅限 Qwen3-VL。
-- 六项 prespecified 扩展均未稳定优于 stronger constituent；D1 learned scorer 仅作后续 held-out 机制探针。
+- 定位：RBM 是最小 stage operationalization 与 OCR-oriented 鲁棒默认；FastV 是 query-conditioned 强 baseline；不宣通用胜出/scorer novelty。
+- “Stage Law” 仅指 tested text-dense、iso-model、iso-budget 且共享 query-blind L2-magnitude family 的 pre/post cells；byte-exact 仅限 Qwen3-VL。
+- 六项 prespecified 扩展均未稳定优于 stronger constituent；learned scorer 仅作 exploratory mechanism probe。
 
-## 2026-08-18 评审修改
-- 摘要已桥接 same-scorer +38.4pp 与 FastV 非通用赢家；移除前置机制统计和 GQA 独立 caveat 句。
-- 引言改为问题 -> 定义 pre/post 与 RBM -> 结果 -> 机制 -> contributions。
-- 主假设族固定为 9 个 25% retention text-dense stage contrasts；paired sign-flip p 值做 Holm 校正，其他分析标为 secondary/exploratory。
-- Related Work 排他性措辞收紧；learned scorer/负结果压缩；移除未来 artifact release 声明。
-- README/Supp 清除陈旧 `\acmConference`、`paper_v4`、S1--S9 和 McNemar-primary 表述。
+## 2026-08-19 投稿硬化
+- 明示精确打分：pre=`mean_j ||h_uj||2`，post=`||M(h_u1:4)||2`；不再称 identical scorer。
+- 前置披露 Qwen3 主 pre tap=deepstack[0]/ViT layer 8；matched-depth pre-final control 在主 merger boundary 保留 text-dense 效应。
+- 修正 S1 随机 Jaccard 基线 `1/7≈0.143`、S3 n=200/full-split 混用、GQA z 符号、Post-L2/FastV 误标及 partial-credit SE 表述。
+- 补 AnchorPrune（Qwen2.5 明确 post-merge）与 PixelPrune（pre-ViT）；未发现 matched native-merger pre/post control。
+- 移除 S10 对额外 6 panel/匿名 archive 的未兑现承诺；README 改为 clean allowlist package。
 
-## 验证与阻塞
-- `latexmk -pdf -interaction=nonstopmode -halt-on-error main.tex` 通过；无 undefined citation/reference。
-- 页 1/8/9/10/11 已渲染终验，无裁切或重叠；第 9 页短 running title 不再碰撞页眉。
-- 仅存标题 metadata 的 9.77pt overfull 与非致命 underfull page-balance 警告。
-- S9 要求 53 个唯一 JSON，本地为 0/53；S10 缺 6 个 panel；不得声称匿名 artifact 已完成。
-- 已加 `scripts/build_anonymous_artifact.ps1` 与 `experiments/artifact_recovery_plan.md`；服务器恢复受凭据/连接阻塞。
+## 验证与 gate
+- `latexmk` 通过；0 undefined citation/reference、0 overfull、无 Type 3 字体；页 1/3/8/9/10/12/13/22 无裁切/重叠。
+- 可见 `Conference'17`/`10.1145/` 已清除；官方 MM'27 metadata 发布前暂用 `Anonymous Review, 2027`，并因 `printacmref=false` 保留非致命 class warning。
+- S9 run JSON 仍为 0/53；不得声称匿名 artifact 已完成。恢复受服务器凭据/连接阻塞。
+- 2026-08-19 官网仅确认 MM'27 在香港、日期待定；正式 CFP/页限/补充政策尚无法核验。
 
 ## 下一步
-- 恢复并核验 53/53 run JSON、14 类 audit manifest、6 个 S10 panel、逐样本/统计/版本/checksum，再解除 artifact gate。
-- 核验 ACM MM'27 官方规则与 public prior art；实际投稿仍须 user 明确确认。
+- 恢复并核验 53/53 run JSON、14 类 manifest、逐样本/统计/版本/checksum，再解除 artifact gate。
+- CFP 发布后替换 review metadata，确认 8+2 页与 integrated/separate supplement 政策；实际投稿仍须 user 明确确认。

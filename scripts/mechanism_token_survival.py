@@ -83,7 +83,8 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 plt.rcParams.update({"text.parse_math": False,   # '$' in answers is literal
-                     "font.size": 10, "axes.titlesize": 11})
+                     "font.size": 10, "axes.titlesize": 11,
+                     "pdf.fonttype": 42, "ps.fonttype": 42})
 from matplotlib.patches import Rectangle
 from matplotlib.colors import Normalize
 from PIL import Image

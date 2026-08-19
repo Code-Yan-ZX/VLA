@@ -80,9 +80,10 @@ M1 record.
 
 \noindent\textbf{Reading:} the reshuffle is largest on the most text-dense
 benchmark and smallest (but still substantial) on object-centric GQA ---
-$\rho = 0.137 < 0.332 < 0.360$; Jaccard $= 0.180 < 0.243 < 0.278$. Chance-level
-Jaccard at $\kappa = 25\%$ is 0.25 (overlap is below random for DocVQA, i.e.\
-actively anti-correlated in the decision band). Per-image distributions are in
+$\rho = 0.137 < 0.332 < 0.360$; Jaccard $= 0.180 < 0.243 < 0.278$. For two
+independent size-$\kappa N$ subsets, the large-$N$ chance reference is
+$\kappa/(2-\kappa)=1/7\approx0.143$ at $\kappa=25\%$. All three overlaps are
+above chance but low in absolute terms, with DocVQA closest to chance. Per-image distributions are in
 Supplementary Figure~\ref{fig:supp_quantitative} (top).
 
 % =============================================================================
@@ -148,10 +149,10 @@ retention-curve ablation.
     \toprule
     Model & Benchmark & $\Delta$ @75\% & $\Delta$ @50\% & $\Delta$ @25\% \\
     \midrule
-    Qwen3-VL-8B   & TextVQA & $+8.7$ pp  & $+29.0$ pp & \textbf{+38.4 pp} \\
-    Qwen3-VL-8B   & DocVQA  & $-1.3$ pp  & $+5.9$ pp  & \textbf{+24.3 pp} \\
-    Qwen2.5-VL-7B & TextVQA & $+7.0$ pp  & $+15.3$ pp & \textbf{+26.1 pp} \\
-    Qwen2.5-VL-7B & DocVQA  & $-2.1$ pp  & $-1.4$ pp  & \textbf{+11.0 pp} \\
+    Qwen3-VL-8B   & TextVQA & $+8.7$ pp  & $+29.0$ pp & \textbf{+38.3 pp} \\
+    Qwen3-VL-8B   & DocVQA  & $-1.3$ pp  & $+5.9$ pp  & \textbf{+26.5 pp} \\
+    Qwen2.5-VL-7B & TextVQA & $+7.0$ pp  & $+15.3$ pp & \textbf{+32.0 pp} \\
+    Qwen2.5-VL-7B & DocVQA  & $-2.1$ pp  & $-1.4$ pp  & \textbf{+18.8 pp} \\
     \bottomrule
   \end{tabular}
 \end{table}
@@ -175,8 +176,8 @@ Supplementary Figure~\ref{fig:supp_quantitative} (bottom).
     compression deepens on Qwen3-VL-8B ($n=200$ per point). Pre-merger
     selection preserves substantially more text-dense accuracy, while ChartQA
     is primarily budget-limited and GQA does not exhibit the text-dense stage
-    effect. Error bars are binomial standard errors propagated through the
-    fixed uncompressed baseline.}
+    effect. Error bars are descriptive rate-approximation standard errors;
+    primary inference uses paired metric-level bootstrap and sign-flip tests.}
   \Description{The top row contains three rank-agreement distributions for
     DocVQA, TextVQA, and GQA. The bottom row contains five retention curves for
     TextVQA, DocVQA, OCR-Bench, ChartQA, and GQA. DocVQA has the strongest rank
@@ -211,7 +212,7 @@ in both arms; the 200/200 ground-truth self-test is retained in the audit record
     Qwen3-VL-8B   & TextVQA   & .25  & $+38.4$ pp   & \textbf{+43.0} & 2349 & 183  & 49.4 & 42.3 \\
     Qwen3-VL-8B   & DocVQA    & .25  & $+24.3$ pp   & \textbf{+34.7} & 1601 & 150  & 67.3 & 27.1 \\
     Qwen3-VL-8B   & OCR-Bench & .25  & $+363$ pts   & \textbf{+16.7} & 422  & 56   & 52.2 & 18.2 \\
-    Qwen3-VL-8B   & GQA       & .25  & $-2.8$ pp \dag & \textbf{$-$8.0} & 834 & 1196 & 83.9 & 4.5 \\
+    Qwen3-VL-8B   & GQA       & .25  & $-2.8$ pp \dag & \textbf{$-$8.0} & 834 & 1196 & 83.9 & $-4.5$ \\
     Qwen3-VL-8B   & TextVQA   & .125 & $+34.0$ pp   & \textbf{+40.8} & 2101 & 161  & 54.8 & 39.9 \\
     Qwen3-VL-8B   & DocVQA    & .125 & $+24.9$ pp   & \textbf{+33.1} & 1437 & 127  & 70.8 & 32.1 \\
     Qwen3-VL-8B   & OCR-Bench & .125 & $+297$ pts   & \textbf{+16.0} & 323  & 25   & 65.2 & 17.8 \\
@@ -219,7 +220,7 @@ in both arms; the 200/200 ground-truth self-test is retained in the audit record
     Qwen2.5-VL-7B & TextVQA   & .25  & $+26.1$ pp   & \textbf{+30.8} & 1682 & 309  & 60.2 & 27.3 \\
     Qwen2.5-VL-7B & DocVQA    & .25  & $+11.0$ pp   & \textbf{+15.6} & 1406 & 693  & 60.8 & 11.6 \\
     Qwen2.5-VL-7B & OCR-Bench & .25  & $+293$ pts   & \textbf{+14.6} & 347  & 54   & 59.9 & 14.7 \\
-    Qwen2.5-VL-7B & GQA       & .25  & $-2.6$ pp \dag & \textbf{$-$5.7} & 892 & 1150 & 83.8 & 4.1 \\
+    Qwen2.5-VL-7B & GQA       & .25  & $-2.6$ pp \dag & \textbf{$-$5.7} & 892 & 1150 & 83.8 & $-4.1$ \\
     Qwen2.5-VL-7B & TextVQA   & .125 & $+27.8$ pp   & \textbf{+33.1} & 1836 & 305  & 57.2 & 29.1 \\
     Qwen2.5-VL-7B & DocVQA    & .125 & $+21.0$ pp   & \textbf{+25.6} & 1325 & 294  & 69.7 & 23.3 \\
     Qwen2.5-VL-7B & OCR-Bench & .125 & $+268$ pts   & \textbf{+15.0} & 294  & 26   & 68.0 & 15.9 \\
@@ -232,7 +233,7 @@ deepstack[0]-input (layer-8) pre ranking; a pure-stage control that ranks at
 the main-merger input (pre-final) gives $0.0$~pp on GQA (body \S\,4.2,
 S7b), so the apparent post$>$pre is a layer-8 ranking artifact, not a true
 stage reversal. GQA official
-word-normalized exact-match rescore gives a concordant McNemar $z = 8.1 / 7.1$
+word-normalized exact-match rescore gives a concordant McNemar $z = -8.1 / -7.1$
 (Qwen3-VL / Qwen2.5-VL). Smallest text-dense $\Delta_{25}$ $|z| = 14.6$
 (Qwen2.5-VL OCR-Bench); smallest text-dense $\Delta_{12.5}$ $|z| = 15.0$
 (Qwen2.5-VL OCR-Bench); smallest $|z|$ anywhere $= 5.7$ (Qwen2.5-VL GQA). On
@@ -243,7 +244,7 @@ $\geq$-consistent on every other cell.
 
 \subsection*{S4b. Cascade two-stage gate --- paired McNemar counts (Qwen3-VL-8B, $n = 200$, official rescore)}
 
-Cascade gate (body Table~4 / \S\,6): single budget, Stage~1 $=$ pre-merger RBM
+Cascade gate (body \S\,6): single budget, Stage~1 $=$ pre-merger RBM
 keeping fraction $X$ of merger-input units, Stage~2 $=$ FastV at LLM layer~2
 dropping fraction $Y$ of the survivors; total keep $= X\cdot(1 - Y)$. Three arms
 (pre-alone / fastv-alone / cascade) are compared pairwise on identical images
@@ -301,7 +302,7 @@ audit index entry for the frequency-aware selector.
   \footnotesize
   \begin{tabular}{@{}l r r r r@{}}
     \toprule
-    bench@$\kappa$ & freq($\alpha{=}1,\beta{=}0.6$) & RBM (L2) & FastV (post) & $\Delta$freq$-$RBM \\
+    bench@$\kappa$ & freq($\alpha{=}1,\beta{=}0.6$) & RBM (L2) & Post-L2 & $\Delta$freq$-$RBM \\
     \midrule
     TextVQA   @25\% & 0.6173 & 0.6053 & 0.2073 & $+1.20$ \\
     TextVQA   @50\% & 0.6780 & 0.6733 & 0.3873 & $+0.47$ \\
@@ -322,7 +323,7 @@ audit index entry for the frequency-aware selector.
 per-image workload detector on merger-input features --- high-frequency tail
 ratio $r_{\mathrm{HF}} = \Pr\big[\mathrm{Var}_u > \bar{\mathrm{Var}} +
 \sigma_{\mathrm{Var}}\big]$ and 20-bin L2-entropy $H(\|f_u\|_2)$ --- routing
-each image to PRE (RBM, rank-before-merge) or POST (FastV, merge-then-rank),
+each image to PRE (RBM, rank-before-merge) or POST (post-merger L2),
 both iso-budget. $\kappa$ is the kept fraction; the winner of a
 $\tau_{\mathrm{HF}}{\times}\tau_{\mathrm{ent}}$ grid on TextVQA$_{500}$
 ($\tau_{\mathrm{HF}}{=}0.08$, $\tau_{\mathrm{ent}}{=}2.0$) routes every image to
@@ -372,12 +373,16 @@ trivial ``model did not learn'' explanation. We therefore retain plain L2 and
 do not use the learned scorer in any headline table.
 
 % =============================================================================
-\section*{S5. Binomial stderrs + skip accounting (Table 1 Qwen blocks)}
+\section*{S5. Descriptive rate-scale errors + skip accounting (main full-split Qwen blocks)}
 % =============================================================================
 
-$\sigma = \sqrt{p(1 - p)/n}$, greedy decoding (no temperature variance; error
-bars are binomial only). Evidence record: audit index entry for
-the Qwen full-split table and skip accounting.
+For binary exact-match/containment outcomes,
+$\sigma=\sqrt{p(1-p)/n}$ is the Bernoulli standard error. For VQA accuracy and
+ANLS, which retain partial credit, applying the same expression to the printed
+mean is only a descriptive rate-scale approximation, not an inferential error
+bar. All claims use the paired metric-level bootstrap and sign-flip tests in
+the main paper. Evidence record: audit index entry for the Qwen full-split
+table and skip accounting.
 
 \begin{itemize}
   \item Qwen3-VL none DocVQA: re-run at max-model-len 49,152, native
@@ -391,9 +396,8 @@ the Qwen full-split table and skip accounting.
     exception in the Qwen block of Table~1, note~d).
 \end{itemize}
 
-\noindent Per-cell $\sigma$ values (full splits, computed from the printed
-official metric $p$ and full-split $n$; greedy decoding $\Rightarrow$ binomial
-only):
+\noindent Per-cell descriptive $\sigma$ values (full splits, computed from the
+printed official metric $p$ and full-split $n$):
 
 \begin{table*}[ht]
   \centering
@@ -415,12 +419,11 @@ only):
   \end{tabular}
 \end{table*}
 
-\noindent $\sigma = \sqrt{p(1-p)/n}$; each cell's every text-dense
-$\Delta_{25}$ is $\geq 15\sigma$ of its own cells' pooled stderr, and the
-full-split GQA post lead ($+2.8 / +2.6$~pp) is $\approx 5\sigma$ of the pooled
-GQA stderr ($\approx 0.0063$) --- significant but an order of magnitude smaller
-than any text-dense $\Delta$, and reframed by the pre-final pure-stage control
-(S7b) as a layer-8 ranking artifact rather than a true stage reversal. $^{a}$~Qwen3-VL none-DocVQA native-resolution
+\noindent These values provide scale and skip-accounting context only; they are
+not used to test partial-credit metric differences. The full-split GQA post
+lead is an order of magnitude smaller than the text-dense gaps and is reframed
+by the pre-final control (S7b) as a layer-8 ranking artifact rather than a true
+stage reversal. $^{a}$~Qwen3-VL none-DocVQA native-resolution
 anchor: full-split run partly skipped on context overrun (re-run at
 max-model-len 49,152 gives ANLS 0.956, 0/5349 skips); $\sigma$ not printed for
 the partial native cell. $^{c}$~GQA evaluated at $\kappa = 0.25$ only on the
@@ -436,7 +439,7 @@ full split (no full-split $\kappa = 0.125$ cells; body footnote~c).
 \section*{S6. $n = 200$ cross-split consistency (dev-subset vs full-split direction)}
 % =============================================================================
 
-The $n = 200$ dev scope used by Tables~3--4 and \S\,5.3 is direction-consistent
+The $n = 200$ dev scope used by the regime-map and mechanism probes is direction-consistent
 with the full splits. Evidence record: audit index entry for
 the cross-split consistency campaign.
 $\Delta_{25} =$ pre $-$ post at $\kappa = 0.25$.
@@ -553,7 +556,7 @@ was not re-tested).
     at full retention) makes the Qwen2.5-VL compression path well-formed; the
     block-vs-interleaved contrast is itself a diagnostic of why naive pruning
     collapses one generation and is tolerated by the other.
-  \item \textbf{Table 2 / r2c harness}: HF transformers eager attention,
+  \item \textbf{r2c harness}: HF transformers eager attention,
     \path{--mrope native} (family-agnostic correct positions) on all same-scope
     cells; the Qwen2.5-VL $\times$ pre vllm-mimic positional degeneration
     (repeated ``addCriterion\ldots'' outputs $\to$ pseudo-zero scores) was
@@ -578,12 +581,12 @@ reported cells.
     \toprule
     Body location & Cells & Artifact record & Audit summary \\
     \midrule
-    Table 1 (Qwen blocks)             & 26/26        & audit: table1-qwen & full-split metrics and skip accounting \\
-    Table 1 (InternVL3 block)         & 16/16        & audit: table1-internvl3 & full-split metrics and skip accounting \\
-    Table 2 FastV-k3                  & 8            & audit: table2-fastv-k3 & same-scope rescored cells \\
-    Table 2 RBM same-scope            & 5            & audit: table2-rbm & same-scope rescored cells \\
-    Table 4 cascade gate              & 24/24        & audit: table4-cascade & paired gate statistics \\
-    Table 5 efficiency                & 7 configs    & audit: table5-efficiency & throughput and latency records \\
+    Main full-split Qwen blocks       & 26/26        & audit: main-qwen & full-split metrics and skip accounting \\
+    Main full-split InternVL3 block   & 16/16        & audit: main-internvl3 & full-split metrics and skip accounting \\
+    Regime-map FastV-k3               & 8            & audit: regime-fastv-k3 & same-scope rescored cells \\
+    Regime-map RBM same-scope         & 5            & audit: regime-rbm & same-scope rescored cells \\
+    Cascade gate                      & 24/24        & audit: cascade & paired gate statistics \\
+    Efficiency study                  & 7 configs    & audit: efficiency & throughput and latency records \\
     \S\,5 kept-set Jaccard / swap     & 8            & audit: mechanism-swap & kept-set and ordering audit \\
     \S\,5.1--5.2 M1/M2                & $n=64 \times 3$ & audit: mechanism-m1-m2 & rank and edge-energy measurements \\
     \S\,5.4 retention curve           & $n=200 \times 4$ & audit: retention-curve & depth ablation records \\
@@ -596,7 +599,7 @@ reported cells.
   \end{tabular}
 \end{table*}
 
-\subsection*{S9.1 InternVL3-8B full-split cells (Table 1; 16/16)}
+\subsection*{S9.1 InternVL3-8B full-split cells (16/16)}
 
 Model \texttt{OpenGVLab/InternVL3-8B}, vLLM 0.19, bf16, eager attention, greedy;
 $r =$ TOTAL drop ($0.750 \to \kappa = 25\%$, $0.875 \to \kappa = 12.5\%$); skip
@@ -636,7 +639,7 @@ ANLS 0.7284 vs 0.382 at $\kappa = 25\%$; GQA is the near-null object-centric
 case, 0.5993 vs 0.6031 --- replicating the stage law on the pixel-shuffle merger
 design.)
 
-\subsection*{S9.2 Table 2 FastV-k3 same-scope cells (8/8)}
+\subsection*{S9.2 FastV-k3 same-scope cells (8/8)}
 
 FastV one-shot attention pruning at LLM layer $K = 3$, iso-budget $r = 0.75$
 ($\kappa = 25\%$); HF-transformers 4.57.6 eager harness, official metrics.
@@ -667,7 +670,7 @@ ptid, skip, engine, and per-cell identifiers are audited there. The harness's ra
 cells ran at the $n = 200$ same-scope budget recorded in the JSON \path{n}
 field; OCR-Bench skips are long-OCR context overruns, scored 0.)
 
-\subsection*{S9.3 Table 2 RBM same-scope cells (5/5)}
+\subsection*{S9.3 RBM same-scope cells (5/5)}
 
 RBM (pre-merger L2) at iso-budget $r = 0.75$, HF-transformers eager,
 \path{--mrope native} (family-agnostic correct positions), matched to the
@@ -690,7 +693,7 @@ recorded in the audit index.
   \end{tabular}
 \end{table*}
 
-\subsection*{S9.4 Cascade gate cells (Table 4; 24/24, Qwen3-VL-8B)}
+\subsection*{S9.4 Cascade gate cells (24/24, Qwen3-VL-8B)}
 
 Three arms $\times$ two budgets $\times$ four benchmarks; $n = n_{\mathrm{common}}$
 (matched by question id); official $=$ \path{acc_official} from the paired
@@ -761,8 +764,8 @@ query-conditioned mask cannot be measured without one) and is recorded as
 \texttt{fastv\_status: skipped\_missing\_question}.
 
 The consistently low Jaccard ($0.25$--$0.35$) and moderate Spearman
-($0.30$--$0.48$) across all ten captured inputs (four shown; the remaining six
-ship in the code release) are the image-level signature of the body paper's
+($0.30$--$0.48$) across the four shown inputs are the image-level signature of
+the body paper's
 mechanism result: the learned $2\!\times\!2$ merger \emph{reshuffles} the
 unit ranking, so selecting before versus after it on the same image with the
 same selector and budget keeps largely \emph{different} units. The four-state
@@ -818,10 +821,11 @@ intersection is a sparse minority of the budget.
 \end{figure*}
 
 %──────────────────────────────────────────────────────────────────────────────
-\noindent\footnotesize\textbf{Packaging note:} this file converts to the ACM MM
-supplementary PDF/archive; run JSONs ship in the code release (anonymous archive
-at submission, repository at de-anonymization). Nothing in this supplement
-identifies authors, institutions, or repositories (double-blind).
+\noindent\footnotesize\textbf{Packaging note:} this source package contains
+the rendered summaries above, not the run-level anonymous artifact indexed in
+S9. That archive must be restored, sanitized, checksummed, and verified before
+submission. Nothing in this supplement identifies authors, institutions, or
+repositories (double-blind).
 
 \clearpage
 

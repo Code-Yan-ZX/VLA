@@ -256,3 +256,13 @@
 - RBM 定位为发现的最小 operationalization，不把 L2 top-k 包装成 scorer novelty；论文主贡献是受控 stage effect 与 merger-induced saliency rewrite 机制。
 - 主假设族固定为 Table 1 的 9 个 25% retention text-dense contrasts，paired sign-flip permutation p 值采用 Holm 校正；其他预算、GQA、机制、baseline regime 和 extension gates 均为 secondary/exploratory。
 - 匿名 artifact 在 S9 的 53/53 JSON、14 类 machine-readable audit manifest、S10 六个 panel、匿名扫描和 checksum 全部通过前不得声称可用；当前因服务器凭据/连接阻塞，只有 fail-closed 恢复脚本和计划。
+
+## 2026-08-19 | Figure 2 视觉重绘
+- 保持 `fig2_values.json`、`paired_metric_statistics.json`、符号约定与 caption 统计含义不变；仅重排 forest plot 的留白、方向背景、模型 marker 图例与数值标签。
+- 最终图写入 `drafts/figures/real_data_pipeline/outputs/fig2.{pdf,png}`，并同步至投稿目录 `drafts/overleaf_submission/figs/fig2.pdf`；`latexmk` 编译通过。
+
+## 2026-08-19 | 投稿定义与可复现性诚信修正
+- 不再把 pre/post 写成 identical scorer；精确披露 pre 为四 patch L2 均值、post 为 merged-vector L2，并将 Stage Law 限定为共享 query-blind L2-magnitude family 的受测 cells。
+- Qwen3 主试验的 layer-8 deepstack tap 在方法前置披露；主 merger 边界的 matched-depth pre-final 作为纯 stage control，byte-exact 归因仍仅限 Qwen3-VL。
+- 发现补充 S10 对 6 个未恢复 panel 与 anonymous archive 的承诺后，决定改为仅陈述已渲染的 4 个 panel；S9 工件在 53/53 JSON+manifest+checksum 通过前一律视为未完成。
+- ACM MM'27 正式 metadata 未发布时，禁止保留 acmart 的 `Conference'17`/空 DOI 假字段；审稿 PDF 暂用显式 `Anonymous Review, 2027`，CFP 发布后必须替换。

@@ -2,7 +2,9 @@
 
 ## Upload
 
-1. Zip **this entire directory** (or upload the directory tree as-is).
+1. Build a clean allowlist package containing only `main.tex`, `supp.tex`,
+   `references.bib`, and the ten referenced PDFs listed below. Do **not** zip
+   this working directory: it also contains build files and internal reviews.
 2. In Overleaf, set **Main document** = `main.tex`.
 3. Compiler: **pdfLaTeX** (the `acmart` class with `sigconf` option; no
    XeLaTeX/LuaLaTeX-specific packages are used).
@@ -20,6 +22,9 @@
 | `figs/fig1.pdf` | FIG 1 — method-specific measured masks on one OCRBench case |
 | `figs/fig2.pdf` | FIG 2 — paired pre−post forest plot with 95% CIs |
 | `figs/fig3.pdf` | FIG 3 — shared-panel retention-vs-gap curves (n=200) |
+| `figs/token_survival_combined.pdf` | S2 representative TextVQA/DocVQA survival maps |
+| `figs/token_survival_m1_rank_overlap.pdf` | S3 rank-agreement distributions |
+| `figs/retention_curves.pdf` | S3 Qwen3-VL retention curves |
 | `figs/compare_df7282e1.pdf` | S10 qualitative compare, sample df7282e1 |
 | `figs/compare_img69.pdf` | S10 compare, WeChat-img-69 (alias of `微信图片_…69_123`) |
 | `figs/compare_img72.pdf` | S10 compare, WeChat-img-72 |
@@ -38,9 +43,9 @@ path-encoding issues:
 | `compare_img74.pdf` | `微信图片_20260731144908_74_123` |
 | `compare_df7282e1.pdf` | `df7282e1-f246-4955-9fdb-f65bea9844f1` |
 
-The remaining six compare panels (`img70,71,73,75,76,77`) belong in the
-anonymous artifact release; do not include a repository path in the submission
-PDF or supplement.
+Only the four panels listed above are part of the qualitative supplement. Any
+additional internal panels should be released only after they are recovered,
+sanitized, and added to the verified anonymous artifact manifest.
 
 ## Self-containment
 
