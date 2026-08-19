@@ -20,6 +20,7 @@ os.environ.setdefault("SOURCE_DATE_EPOCH", "0")
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from matplotlib.lines import Line2D
 
 PIPELINE_DIR = Path(__file__).resolve().parents[1]
 REPO_ROOT = PIPELINE_DIR.parents[2]
@@ -151,16 +152,24 @@ def render(data: dict, outdir: Path) -> None:
     stat_keys = ["qwen3vl", "qwen2vl", "internvl3"]
     bench_keys = ["textvqa", "docvqa", "ocrbench", "gqa"]
 
-    fig, ax = plt.subplots(figsize=(7.09, 3.35))
-    fig.subplots_adjust(left=0.17, right=0.985, top=0.80, bottom=0.23)
-    ax.axvspan(-7, 0, color="#F2F1ED", zorder=0)
-    ax.axvspan(0, 50, color="#F7F3E8", zorder=0)
-    ax.axvline(0, color=ZERO_GRAY, linewidth=1.1, zorder=2)
-    ax.xaxis.grid(True, color=GRID_GRAY, linewidth=0.55, zorder=1)
-    ax.set_axisbelow(True)
+    # Full-width ACM figure: compact rows, explicit zero reference, and a
+    # restrained two-sided background make the sign convention readable at
+    # the final paper scale without competing with the data.
+    fig, ax = plt.subplots(figsize=(7.09, 3.02))
+    fig.subplots_adjust(left=0.145, right=0.985, top=0.78, bottom=0.19)
 
     centers = [3.0, 2.0, 1.0, 0.0]
-    offsets = [0.22, 0.0, -0.22]
+    offsets = [0.20, 0.0, -0.20]
+    for i, center in enumerate(centers):
+        if i % 2 == 0:
+            ax.axhspan(center - 0.47, center + 0.47,
+                       color="#FAF9F6", zorder=0)
+
+    ax.axvspan(-6, 0, color="#F1F3F2", zorder=0)
+    ax.axvspan(0, 48, color="#FCF7EE", zorder=0)
+    ax.axvline(0, color=ZERO_GRAY, linewidth=1.25, zorder=2)
+    ax.xaxis.grid(True, color=GRID_GRAY, linewidth=0.55, zorder=1)
+    ax.set_axisbelow(True)
     for mi, (model, skey) in enumerate(zip(EXPECTED_MODELS, stat_keys)):
         xs, ys, loerr, hierr = [], [], [], []
         for center, bench, bkey in zip(centers, EXPECTED_PANELS, bench_keys):
@@ -177,38 +186,45 @@ def render(data: dict, outdir: Path) -> None:
             loerr.append(xval - lo); hierr.append(hi - xval)
         ax.errorbar(xs, ys, xerr=[loerr, hierr], fmt=MARKERS[model],
                     color=COLORS[model], ecolor=COLORS[model],
-                    elinewidth=1.25, capsize=2.2, markersize=5.2,
+                    elinewidth=1.35, capsize=2.5, markersize=5.8,
                     markeredgecolor=darken(COLORS[model]), markeredgewidth=0.7,
                     label=model, zorder=4)
         for xval, yval in zip(xs, ys):
-            ax.text(xval + (0.7 if xval >= 0 else -0.7), yval,
-                    "{:+.1f}".format(xval).replace("-", MINUS),
+            # Keep labels just outside the marker while preserving a stable
+            # model-specific vertical lane within each benchmark row.
+            delta = 0.75 if xval >= 0 else -0.75
+            ax.text(xval + delta, yval, "{:+.1f}".format(xval).replace("-", MINUS),
                     ha="left" if xval >= 0 else "right", va="center",
-                    fontsize=6.8, color=darken(COLORS[model]), zorder=5)
+                    fontsize=6.7, color=darken(COLORS[model]), zorder=5)
 
-    ax.set_xlim(-7, 50)
-    ax.set_ylim(-0.45, 3.45)
+    ax.set_xlim(-6, 48)
+    ax.set_ylim(-0.48, 3.48)
     ax.set_yticks(centers)
     ax.set_yticklabels(["TextVQA", "DocVQA", "OCRBench", "GQA"],
                        fontsize=8.5, fontweight="bold")
     ax.set_xticks([-5, 0, 10, 20, 30, 40, 50])
-    ax.set_xlabel("RBM pre-merger minus post-merger score (percentage points)")
-    ax.tick_params(axis="both", colors=INK, length=2.5)
+    ax.set_xlabel("pre-merger − post-merger score difference  (pp; OCRBench /10)",
+                  labelpad=7, color=INK)
+    ax.tick_params(axis="both", colors=INK, length=2.5, pad=3)
     for side in ("top", "right", "left"):
         ax.spines[side].set_visible(False)
-    ax.text(-5.8, 3.38, "post better", fontsize=7, color=AXIS_GRAY,
+    ax.spines["bottom"].set_color(AXIS_GRAY)
+    ax.spines["bottom"].set_linewidth(0.85)
+    ax.text(-5.5, 3.40, "post-merger better", fontsize=7.2, color=AXIS_GRAY,
             ha="left", va="bottom")
-    ax.text(1.0, 3.38, "RBM better", fontsize=7, color="#8D3D32",
+    ax.text(4.0, 3.40, "RBM / pre-merger better", fontsize=7.2, color="#8D3D32",
             ha="left", va="bottom")
 
-    handles, labels = ax.get_legend_handles_labels()
-    fig.legend(handles, labels, loc="center", bbox_to_anchor=(0.5, 0.925),
-               ncol=3, frameon=False, fontsize=7.5, handlelength=1.8,
-               columnspacing=1.6)
-    fig.text(0.5, 0.04,
-             "25% retention, official full splits; points are paired means, "
-             "whiskers are paired-bootstrap 95% CIs",
-             ha="center", fontsize=7, color=AXIS_GRAY)
+    # Marker-only legend avoids the visually heavy errorbar samples produced
+    # by the default legend handler and remains legible in grayscale.
+    legend_handles = [Line2D([0], [0], marker=MARKERS[m], linestyle="None",
+                             markerfacecolor=COLORS[m],
+                             markeredgecolor=darken(COLORS[m]),
+                             markeredgewidth=0.7, markersize=6.0, label=m)
+                      for m in EXPECTED_MODELS]
+    fig.legend(handles=legend_handles, loc="upper right",
+               bbox_to_anchor=(0.985, 0.965), ncol=3, frameon=False,
+               fontsize=7.2, handletextpad=0.45, columnspacing=1.4)
 
     outdir.mkdir(parents=True, exist_ok=True)
     pdf_path = outdir / "fig2.pdf"
