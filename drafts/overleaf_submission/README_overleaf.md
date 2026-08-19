@@ -7,14 +7,14 @@
 3. Compiler: **pdfLaTeX** (the `acmart` class with `sigconf` option; no
    XeLaTeX/LuaLaTeX-specific packages are used).
 4. Compiling `main.tex` produces one continuous PDF containing the main paper,
-   references, and S1--S11 supplementary material. `supp.tex` remains
+   references, and S1--S10 supplementary material. `supp.tex` remains
    independently compilable when a separate supplementary PDF is required.
 
 ## File map
 
 | file | role |
 |------|------|
-| `main.tex` | main paper plus appended S1--S11 supplement |
+| `main.tex` | main paper plus appended S1--S10 supplement |
 | `supp.tex` | dual-mode supplementary source (included by `main.tex` or compiled alone) |
 | `references.bib` | verified bibliography used by the paper |
 | `figs/fig1.pdf` | FIG 1 — method-specific measured masks on one OCRBench case |
@@ -38,8 +38,9 @@ path-encoding issues:
 | `compare_img74.pdf` | `微信图片_20260731144908_74_123` |
 | `compare_df7282e1.pdf` | `df7282e1-f246-4955-9fdb-f65bea9844f1` |
 
-The remaining six compare panels (`img70,71,73,75,76,77`) ship in the code
-release under `drafts/figures/real_data_pipeline/outputs/`.
+The remaining six compare panels (`img70,71,73,75,76,77`) belong in the
+anonymous artifact release; do not include a repository path in the submission
+PDF or supplement.
 
 ## Self-containment
 
@@ -51,18 +52,27 @@ There are **no** `../` parent-relative paths — verified by
 
 - `acmart.cls` is **not** bundled; Overleaf provides it natively (TeX Live
   ≥ 2020). If compiling locally, install `texlive-publishers`.
-- The compiled review paper uses 8 pages for the body and 1 page for references;
-  the integrated supplementary material follows after a forced page break.
+- This directory does **not yet** contain the run-level anonymous artifact
+  indexed by Supplementary S9. Restore, sanitize, checksum, and verify that
+  archive before submission; do not represent this source package alone as the
+  reproducibility artifact.
+- The compiled review paper uses 8 pages for the body and the references begin
+  after the body; the integrated supplementary material follows after a forced
+  page break. Page accounting for the separate supplement depends on the final
+  submission portal and should be checked against the official ACM MM 2027
+  instructions.
 - `figs/fig1.pdf` uses method-specific measured masks; no mask is reused across
   RBM, post-merger L2, and FastV.
 - The paper is double-blind: no author/institution/repo identifiers appear in
-  either `.tex` or the figure captions.
+  the rendered PDF or figure captions. The release artifact and any internal
+  provenance mapping must be checked separately before submission.
 
 ## Submission-time fields
 
-Before submission, verify the official ACM MM 2027 call and replace the
-provisional `\acmConference` date/location in `main.tex`. Keep `anonymous` review
-mode and the anonymous author block for double-blind review. For the
-camera-ready version, remove `anonymous`, replace the author/affiliation stub,
-and insert the DOI/ISBN/copyright metadata supplied by ACM. The actual upload
-and submission require human confirmation.
+Before submission, verify the official ACM MM 2027 call, template version,
+page limits, supplementary policy, and required metadata. The review source
+currently omits conference date/location rather than carrying provisional
+values. Keep `anonymous` review mode and the anonymous author block for
+double-blind review. For the camera-ready version, remove `anonymous`, replace
+the author/affiliation stub, and insert the DOI/ISBN/copyright metadata supplied
+by ACM. The actual upload and submission require human confirmation.

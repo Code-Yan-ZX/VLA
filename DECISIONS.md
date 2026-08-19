@@ -249,3 +249,10 @@
 ## 2026-08-17 | S6 论文集成 | **Diversity-RBM 仅作为后续探索性扩展写入，不升级核心方法或 SOTA claim** | `n=500` 只覆盖 Qwen3-VL 的 75%/50% retention；固定 DV/Adaptive 各有小幅胜负交换，但对逐格较强 RBM/FastV incumbent 均未建立显著正差。TextVQA@75% 的 0.748 主要是相对 FastV 0.665 的条件收益，和 RBM 0.745 近似；“CI 含 0”也不能证明等价。原报告“达到当前 SOTA 平手”容易把内部逐格 incumbent 误读为外部 published SOTA，故不采用。 | 正文 §6 增加一段 bounded interpretation；补充 S4c.3 增加八格表、缺格说明与单模型/轻压缩限制。plain RBM 继续为论文方法；标题、摘要、贡献列表不变。hook 覆盖率的混合压缩解释未经 cache-disabled 审计，不入稿。 |
 
 ## 2026-08-18 | 方法创新冻结，转入投稿硬化 | **停止开放式新方法搜索；删除稿内 S6 Diversity-RBM，将 D1 learned boundary scorer 仅作为事后 held-out 机制探针写入。** | 六项 prespecified 扩展均未稳定优于更强 constituent；S6 只有轻压缩、单模型的小幅胜负交换，且当前 clone 缺原始工件，不值得为弱结论重跑。D1 在 25% retention 下 TextVQA 0.435 vs L2 0.595（-16.0pp），GQA 0.550 vs L2 0.515（+3.5pp）：说明 scorer 能改变任务行为并学习 POST 排序，但 POST 是 text-dense 输入的反任务 teacher，独立支持 M2 的 text-stroke demotion。 | 正文保留“六项 prespecified extensions”，D1 明确标为 subsequent exploratory probe，不计作第七项；byte-exact 因果归因仅限 Qwen3-VL，InternVL3/Qwen2.5 仅作 accuracy-level directional replication。下一阶段只做评审驱动修改、artifact 恢复、配置审计和投稿终验；实际投稿仍须 user 明确确认。 |
+
+## 2026-08-18 | 评审后叙事、统计与 artifact gate
+
+- 保留标题中的 “Stage Law”，但仅指 tested same-scorer、iso-model、iso-budget pre/post cells；FastV 属不同的 query-conditioned scorer 比较，RBM 明确不是 universal winner。
+- RBM 定位为发现的最小 operationalization，不把 L2 top-k 包装成 scorer novelty；论文主贡献是受控 stage effect 与 merger-induced saliency rewrite 机制。
+- 主假设族固定为 Table 1 的 9 个 25% retention text-dense contrasts，paired sign-flip permutation p 值采用 Holm 校正；其他预算、GQA、机制、baseline regime 和 extension gates 均为 secondary/exploratory。
+- 匿名 artifact 在 S9 的 53/53 JSON、14 类 machine-readable audit manifest、S10 六个 panel、匿名扫描和 checksum 全部通过前不得声称可用；当前因服务器凭据/连接阻塞，只有 fail-closed 恢复脚本和计划。
