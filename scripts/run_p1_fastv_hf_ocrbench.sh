@@ -2,8 +2,10 @@
 # P1: RBM vs FastV-k3 on OCRBench FULL 1000, BOTH models, SAME HF harness.
 #
 # Both arms run under baselines_hf.py (HF transformers eager-attention harness):
-#   RBM   : --mode pre  --r-pre 0.25   (keep 25% of merger-input units, L2,
-#           query-blind -- the paper's Rank-Before-Merge)
+#   RBM   : --mode pre --r-pre 0.25 --mrope native
+#           (keep 25% of merger-input units, L2, query-blind -- the paper's
+#           Rank-Before-Merge; --mrope native is REQUIRED for Qwen2.5-VL x pre,
+#           the vllm-mimic layout is a known-degenerate path -- Table 2 note iii)
 #   FastV : --mode fastv --fastv-k 3 --r 0.75   (keep 25% of image tokens after
 #           LLM layer 3 by last-query attention; K=3 is the paper's best-K)
 # Same processor / pixel cap (max_pixels=4000000, matching P0-2 so both arms of
@@ -60,15 +62,15 @@ smoke(){ # model famtag mode tagx extra
     || { echo "[smoke] $2 $3 $4 FAIL -- see ${SMK%.json}.log"; return 1; }
   return 0
 }
-smoke $Q2 qwen2vl pre r25 "--r-pre 0.25" || exit 1
+smoke $Q2 qwen2vl pre r25 "--r-pre 0.25 --mrope native" || exit 1
 smoke $Q2 qwen2vl fastv k3  "--r 0.75 --fastv-k 3" || exit 1
-smoke $Q3 qwen3vl pre r25 "--r-pre 0.25" || exit 1
+smoke $Q3 qwen3vl pre r25 "--r-pre 0.25 --mrope native" || exit 1
 smoke $Q3 qwen3vl fastv k3  "--r 0.75 --fastv-k 3" || exit 1
 
 # ---- full 1000 cells ----
-hfrun $Q3 qwen3vl pre    r25 "--r-pre 0.25"
+hfrun $Q3 qwen3vl pre    r25 "--r-pre 0.25 --mrope native"
 hfrun $Q3 qwen3vl fastv  k3  "--r 0.75 --fastv-k 3"
-hfrun $Q2 qwen2vl pre    r25 "--r-pre 0.25"
+hfrun $Q2 qwen2vl pre    r25 "--r-pre 0.25 --mrope native"
 hfrun $Q2 qwen2vl fastv  k3  "--r 0.75 --fastv-k 3"
 
 echo "=== P1 DONE $(date -u '+%F %T') ==="
