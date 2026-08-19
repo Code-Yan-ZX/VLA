@@ -29,16 +29,15 @@ EXPECTED_MODELS = ["Qwen3-VL-8B", "Qwen2.5-VL-7B", "InternVL3-8B"]
 EXPECTED_PANELS = ["TextVQA", "DocVQA", "OCRBench", "GQA"]
 EXPECTED_UNITS = {"TextVQA": "pp", "DocVQA": "pp", "OCRBench": "pts", "GQA": "pp"}
 
-# Restrained traditional Chinese palette: dai-qing (ink blue-green), zhu-sha
-# (cinnabar), and qiu-xiang (muted ochre). Distinct marker shapes preserve the
-# model mapping in grayscale and for readers with color-vision deficiencies.
+# High-contrast, print-safe palette. Distinct marker shapes preserve the model
+# mapping in grayscale and for readers with color-vision deficiencies.
 COLORS = {
-    "Qwen3-VL-8B": "#354F52",  # dai-qing / ink blue-green
-    "Qwen2.5-VL-7B": "#B34735",  # zhu-sha / cinnabar
-    "InternVL3-8B": "#9A7B3F",  # qiu-xiang / muted ochre
+    "Qwen3-VL-8B": "#2563EB",
+    "Qwen2.5-VL-7B": "#D1495B",
+    "InternVL3-8B": "#168C83",
 }
 MARKERS = {"Qwen3-VL-8B": "o", "Qwen2.5-VL-7B": "s", "InternVL3-8B": "D"}
-INK, AXIS_GRAY, GRID_GRAY, ZERO_GRAY = "#292724", "#6B6760", "#D8D3C8", "#393733"
+INK, AXIS_GRAY, GRID_GRAY, ZERO_GRAY = "#17202A", "#667085", "#E3E8EF", "#344054"
 MINUS = "−"  # true minus sign
 
 
@@ -152,23 +151,20 @@ def render(data: dict, outdir: Path) -> None:
     stat_keys = ["qwen3vl", "qwen2vl", "internvl3"]
     bench_keys = ["textvqa", "docvqa", "ocrbench", "gqa"]
 
-    # Full-width ACM figure: compact rows, explicit zero reference, and a
-    # restrained two-sided background make the sign convention readable at
-    # the final paper scale without competing with the data.
-    fig, ax = plt.subplots(figsize=(7.09, 3.02))
-    fig.subplots_adjust(left=0.145, right=0.985, top=0.78, bottom=0.19)
+    # Minimalist Cleveland-style forest plot. The benchmark rows are the
+    # visual structure; all decoration is removed so the effect sizes and CIs
+    # remain the only strong marks on the page.
+    fig, ax = plt.subplots(figsize=(7.09, 2.85))
+    fig.subplots_adjust(left=0.145, right=0.985, top=0.80, bottom=0.22)
 
     centers = [3.0, 2.0, 1.0, 0.0]
     offsets = [0.20, 0.0, -0.20]
-    for i, center in enumerate(centers):
-        if i % 2 == 0:
-            ax.axhspan(center - 0.47, center + 0.47,
-                       color="#FAF9F6", zorder=0)
-
-    ax.axvspan(-6, 0, color="#F1F3F2", zorder=0)
-    ax.axvspan(0, 48, color="#FCF7EE", zorder=0)
-    ax.axvline(0, color=ZERO_GRAY, linewidth=1.25, zorder=2)
-    ax.xaxis.grid(True, color=GRID_GRAY, linewidth=0.55, zorder=1)
+    for center in centers:
+        ax.hlines(center, -6, 50, color=GRID_GRAY, linewidth=0.55,
+                  zorder=0)
+    ax.axvline(0, color=ZERO_GRAY, linewidth=1.15, zorder=1)
+    ax.xaxis.grid(True, color=GRID_GRAY, linewidth=0.55, linestyle=(0, (2, 3)),
+                  zorder=0)
     ax.set_axisbelow(True)
     for mi, (model, skey) in enumerate(zip(EXPECTED_MODELS, stat_keys)):
         xs, ys, loerr, hierr = [], [], [], []
@@ -186,34 +182,30 @@ def render(data: dict, outdir: Path) -> None:
             loerr.append(xval - lo); hierr.append(hi - xval)
         ax.errorbar(xs, ys, xerr=[loerr, hierr], fmt=MARKERS[model],
                     color=COLORS[model], ecolor=COLORS[model],
-                    elinewidth=1.35, capsize=2.5, markersize=5.8,
+                    elinewidth=1.15, capsize=2.25, markersize=5.4,
                     markeredgecolor=darken(COLORS[model]), markeredgewidth=0.7,
                     label=model, zorder=4)
         for xval, yval in zip(xs, ys):
             # Keep labels just outside the marker while preserving a stable
             # model-specific vertical lane within each benchmark row.
-            delta = 0.75 if xval >= 0 else -0.75
+            delta = 0.7 if xval >= 0 else -0.7
             ax.text(xval + delta, yval, "{:+.1f}".format(xval).replace("-", MINUS),
                     ha="left" if xval >= 0 else "right", va="center",
-                    fontsize=6.7, color=darken(COLORS[model]), zorder=5)
+                    fontsize=6.5, color=darken(COLORS[model]), zorder=5)
 
-    ax.set_xlim(-6, 48)
+    ax.set_xlim(-6, 50)
     ax.set_ylim(-0.48, 3.48)
     ax.set_yticks(centers)
     ax.set_yticklabels(["TextVQA", "DocVQA", "OCRBench", "GQA"],
-                       fontsize=8.5, fontweight="bold")
+                       fontsize=8.2, fontweight="bold")
     ax.set_xticks([-5, 0, 10, 20, 30, 40, 50])
     ax.set_xlabel("pre-merger − post-merger score difference  (pp; OCRBench /10)",
-                  labelpad=7, color=INK)
+                  labelpad=6, color=INK)
     ax.tick_params(axis="both", colors=INK, length=2.5, pad=3)
     for side in ("top", "right", "left"):
         ax.spines[side].set_visible(False)
     ax.spines["bottom"].set_color(AXIS_GRAY)
-    ax.spines["bottom"].set_linewidth(0.85)
-    ax.text(-5.5, 3.40, "post-merger better", fontsize=7.2, color=AXIS_GRAY,
-            ha="left", va="bottom")
-    ax.text(4.0, 3.40, "RBM / pre-merger better", fontsize=7.2, color="#8D3D32",
-            ha="left", va="bottom")
+    ax.spines["bottom"].set_linewidth(0.75)
 
     # Marker-only legend avoids the visually heavy errorbar samples produced
     # by the default legend handler and remains legible in grayscale.
@@ -222,9 +214,9 @@ def render(data: dict, outdir: Path) -> None:
                              markeredgecolor=darken(COLORS[m]),
                              markeredgewidth=0.7, markersize=6.0, label=m)
                       for m in EXPECTED_MODELS]
-    fig.legend(handles=legend_handles, loc="upper right",
-               bbox_to_anchor=(0.985, 0.965), ncol=3, frameon=False,
-               fontsize=7.2, handletextpad=0.45, columnspacing=1.4)
+    fig.legend(handles=legend_handles, loc="upper center",
+               bbox_to_anchor=(0.57, 0.965), ncol=3, frameon=False,
+               fontsize=7.0, handletextpad=0.42, columnspacing=1.35)
 
     outdir.mkdir(parents=True, exist_ok=True)
     pdf_path = outdir / "fig2.pdf"
