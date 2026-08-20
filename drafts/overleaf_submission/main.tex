@@ -28,7 +28,7 @@
 
 % --- packages actually used in this file -------------------------------------
 \usepackage{booktabs}     % \toprule \midrule \bottomrule (acmart also loads it)
-\usepackage{multirow}     % Table 1 / Table 2 model-column row spans
+\usepackage{multirow}     % Tables 1--3 model-column row spans
 \usepackage{algorithm}    % Algorithm 1 float
 \usepackage{algorithmic}  % Algorithm 1 pseudocode
 \usepackage{pifont}       % \ding{51}=check, \ding{55}=cross (replaces emoji)
@@ -542,7 +542,7 @@ Qwen.
 \textbf{Cross-family directional replication.} InternVL3's pre$-$post text-dense gaps
 ($+37.4 / +34.6$~pp / $+432$~pts) are the same order and direction as
 Qwen3-VL's ($+38.4 / +24.3 / +363$~pts) on all three text-dense benchmarks, and
-GQA stays within the red line --- indistinguishable here ($-0.4$~pp), whereas
+GQA remains near zero and not significant here ($-0.4$~pp), whereas
 Qwen3-VL's matched-boundary control significantly favors post by $5.6$~pp
 (\S\ref{sec:qwen}), with no
 text-dense crossover at either family's native imaging configuration. These
@@ -562,7 +562,7 @@ architecture (pixel-shuffle, not just Qwen's PatchMerger), but the nonzero
 residuals mean that the byte-exact causal attribution remains specific to
 Qwen3-VL.
 
-\subsection{A workload-conditioned regime map --- RBM vs the query-conditioned strong baseline FastV (Table 2)}\label{sec:fastv}
+\subsection{A workload-conditioned regime map --- RBM vs the query-conditioned strong baseline FastV (Table 3)}\label{sec:fastv}
 
 FastV is the query-conditioned strong baseline in this comparison: it selects
 inside the LLM after cross-attention has mixed in the question. We compare RBM
@@ -572,7 +572,7 @@ the result as a \textbf{workload-conditioned regime map} --- where
 query-conditioned selection wins, where it fails, and why --- not as a
 single-winner race. At its canonical progressive schedule
 PyramidDrop is near-lossless but occupies a different budget point (equivalent
-mean retention $0.625 \approx 2.1\times$ ours); at the tested iso-25\%
+mean retention $0.625 = 2.5\times$ ours); at the tested iso-25\%
 schedule it degrades sharply (TextVQA 0.073 / GQA 0.305 / OCR 0.005 on Qwen3-VL),
 whereas RBM holds (0.60 / 0.42 / 0.58). There is therefore no universal winner.
 
@@ -593,13 +593,13 @@ whereas RBM holds (0.60 / 0.42 / 0.58). There is therefore no universal winner.
     TextVQA (full; default)      & 5000  & \textbf{0.7771} & 0.605  & \textbf{+17.2 F} \\
     GQA (full; default)          & 12578 & \textbf{0.5376} & 0.449  & \textbf{+8.9 F} \\
     DocVQA (dev; 600k cap)       & 200   & \textbf{0.5863} & 0.4239 & \textbf{+16.2 F} \\
-    OCR-Bench (full; 4M cap)     & 1000  & 0.413           & \textbf{0.559} & \textbf{+14.6 R} \\
+    OCR-Bench (full; 4M cap)     & 1000  & 413             & \textbf{559} & \textbf{+146 R} \\
     \midrule
     \multicolumn{5}{@{}l}{\textbf{Qwen2.5-VL-7B}} \\
     TextVQA (dev; default)       & 200   & \textbf{0.7467} & 0.6683 & \textbf{+7.8 F} \\
     GQA (dev; default)           & 200   & 0.475           & 0.520 & $+4.5$ R$^{\ddagger}$ \\
     DocVQA (dev; 600k cap)       & 200   & 0.4852          & 0.5062 & $+2.1$ R$^{\ddagger}$ \\
-    OCR-Bench (full; 4M cap)     & 1000  & 0.295           & \textbf{0.382} & \textbf{+8.7 R} \\
+    OCR-Bench (full; 4M cap)     & 1000  & 295             & \textbf{382} & \textbf{+87 R} \\
     \bottomrule
   \end{tabular}
 
@@ -607,6 +607,7 @@ whereas RBM holds (0.60 / 0.42 / 0.58). There is therefore no universal winner.
   \textbf{Notes.} F = FastV; R = RBM. Only the OCRBench rows use the full
   1000-example, 4M-cap, HF eager control: symmetric skips are 79 (Qwen3-VL) and
   88 (Qwen2.5-VL), leaving paired answered sets of 921 and 912 for inference.
+  OCRBench scores and deltas are reported on the /1000-point scale.
   Skips are identical across methods and cannot favor either arm. Other rows
   retain their printed full/dev scopes and configurations. $^{\ddagger}$The
   paired 95\% CI crosses zero; full harness, budget, and skip details are in the
@@ -627,9 +628,10 @@ while it is beneficial on several non-OCR workloads.
 % =============================================================================
 
 We give the pre-vs-post gap a mechanistic account in three parts (M1--M3),
-measured on \textbf{Qwen3-VL-8B} (M1/M2 on a deterministic seed-0 $n = 64$ sample
-per benchmark; M3 on $n = 200$ with the same invocation as the headline cells),
-then state its architectural scope.
+measured on \textbf{Qwen3-VL-8B}. M1/M2 use deterministic seed-0 samples:
+OCRBench has $n=199$, while TextVQA, DocVQA, and GQA each have $n=64$; M3 uses
+$n=200$ with the same invocation as the headline cells. We then state the
+architectural scope.
 
 \subsection{M1 --- the merger reshuffles unit ranks}\label{sec:m1}
 
@@ -695,8 +697,9 @@ without the pre ranking, the same forward path produces the lower accuracy.
 \textbf{Kept-set identity on both architectures.}
 Emitting the kept unit indices from both paths and comparing directly:
 \textbf{Jaccard(swap-kept, pre-top-$\kappa$) $= 1.000$ in all four cells}
-(Qwen3-VL and Qwen2.5-VL $\times$ DocVQA and TextVQA; $n = 32$, chance level
-$\kappa/N = 0.25$). The two paths select \emph{exactly the same units}. The
+(Qwen3-VL and Qwen2.5-VL $\times$ DocVQA and TextVQA; $n = 32$; independent
+random 25\%-retained sets have expected Jaccard $\approx 0.143$). The two paths
+select \emph{exactly the same units}. The
 small swap-vs-pre answer residual on Qwen2.5-VL ($+6.7$~pp DocVQA at $n = 32$)
 traces to an implementation confound of the swap control --- window-attention
 reverse\_indices (three recovery sites on Qwen2.5-VL, zero on Qwen3-VL) map

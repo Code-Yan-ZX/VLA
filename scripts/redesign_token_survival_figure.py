@@ -103,7 +103,7 @@ def main() -> None:
             "key": "textvqa",
             "name": "TextVQA 35174",
             "meta": 'Q: "What is the name of this business?"  GT: Midas / auto service experts',
-            "answers": 'RBM: "Auto Service Experts" (correct)  |  Post: "Krispy Kreme" (wrong)  |  Jaccard 0.257',
+            "answers": 'RBM: "Auto Service Experts" (correct)  |  Post-L2: "Krispy Kreme" (wrong)  |  Jaccard 0.257',
             "text_y": (19, 35),
             "answer_y": (34, 48),
             "panel_box": (48, 119),
@@ -112,7 +112,7 @@ def main() -> None:
             "key": "docvqa",
             "name": "DocVQA 58439",
             "meta": 'Q: "Amount spent on promotional meetings and events, 1998?"  GT: $1.3 billion',
-            "answers": 'RBM: "$1.3 billion" (correct)  |  Post: "$1.3 million" (wrong)  |  Jaccard 0.079',
+            "answers": 'RBM: "$1.3 billion" (correct)  |  Post-L2: "$1.3 million" (wrong)  |  Jaccard 0.079',
             "text_y": (137, 153),
             "answer_y": (152, 166),
             "panel_box": (166, 282),
@@ -123,7 +123,7 @@ def main() -> None:
         put_text(
             page,
             pymupdf.Rect(MARGIN, row["text_y"][0], PAGE_W - MARGIN, row["text_y"][1]),
-            f'{row["name"]}  —  {row["meta"]}',
+            f'{row["name"]}  |  {row["meta"]}',
             5.8,
             (0.08, 0.10, 0.13),
             0,
@@ -143,6 +143,37 @@ def main() -> None:
             target = fit_rect(cell, clip.width / clip.height)
             page.show_pdf_page(target, src, 0, clip=clip, keep_proportion=True)
             page.draw_rect(target, color=(0.65, 0.68, 0.72), width=0.35, overlay=True)
+            if i == 2:
+                # The audited source overlays a three-line Matplotlib legend on
+                # each difference map. Replace that redundant legacy legend
+                # (including its internal "(a)" label) without touching masks.
+                legend_top = 0.61 if row["key"] == "textvqa" else 0.73
+                legend_right = 0.60 if row["key"] == "textvqa" else 0.99
+                legend_box = pymupdf.Rect(
+                    target.x0 + 1.5,
+                    target.y0 + target.height * legend_top,
+                    target.x0 + target.width * legend_right,
+                    target.y1 - 1.5,
+                )
+                page.draw_rect(
+                    legend_box,
+                    color=(0.82, 0.84, 0.87),
+                    fill=(1, 1, 1),
+                    width=0.25,
+                    overlay=True,
+                )
+                put_text(
+                    page,
+                    pymupdf.Rect(
+                        legend_box.x0 + 2,
+                        legend_box.y0 + 2,
+                        legend_box.x1 - 2,
+                        legend_box.y1 - 1,
+                    ),
+                    "RBM kept (solid)\nPost-L2 kept (dashed)",
+                    3.8,
+                    (0.18, 0.20, 0.24),
+                )
 
     # A compact key supplements the solid/dashed outlines and remains
     # distinguishable in grayscale.
