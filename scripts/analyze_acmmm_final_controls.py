@@ -412,10 +412,13 @@ def main():
     print(f"analysis.json written -> {OUTJSON}")
 
     # ------------------------- human report -------------------------------- #
+    # NOTE: the auto-generated table summary is written to the DATA dir, NOT to
+    # reports/acmmm_final_controls.md (which is the curated verification report
+    # and must not be clobbered by re-runs).
     md = report_md(out)
-    with open(os.path.join(REPO, "reports", "acmmm_final_controls.md"), "w") as f:
+    with open(os.path.join(ROOT, "analysis_report.md"), "w") as f:
         f.write(md)
-    print("report skeleton -> reports/acmmm_final_controls.md")
+    print("auto report summary -> results/acmmm_final_controls/analysis_report.md")
 
 
 def report_md(out):
