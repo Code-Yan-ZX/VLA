@@ -87,11 +87,11 @@ above chance but low in absolute terms, with DocVQA closest to chance. Per-image
 Supplementary Figure~\ref{fig:supp_quantitative} (top).
 
 % =============================================================================
-\section*{S2. M2 --- demotion directionality vs text-stroke energy, full table (same sample as S1)}
+\section*{S2. M2 --- demotion directionality vs edge energy, full table (same sample as S1)}
 % =============================================================================
 
 rank\_shift $=$ post\_rank $-$ pre\_rank ($+$ $\Rightarrow$ demoted); per-unit
-Sobel edge energy as the text-stroke proxy. Evidence record: anonymized artifact
+Sobel edge energy as a high-frequency proxy. Evidence record: anonymized artifact
 manifest entry for the M2 mechanism campaign. The per-benchmark Sobel means
 and median fractions are taken from the same audited M2 record.
 
@@ -110,29 +110,12 @@ and median fractions are taken from the same audited M2 record.
   \end{tabular}
 \end{table}
 
-\noindent\textbf{Reading:} the merger preferentially demotes high-edge
-(text-stroke) units ${\sim}12\times$ more strongly on documents than on object
-scenes; on DocVQA the units post drops that pre keeps are the highest-edge of
-all (92\% above the per-image median vs 35\% for the reverse group) ---
-post-merger selection is systematically anti-text on documents. Directionality
-hypothesis (merger trained on natural content attenuates high-frequency stroke
-energy): testable hypothesis, not a measured result. Second text-stroke proxy
-(Laplacian variance): future work (single-proxy disclosure).
-
-\begin{figure*}[p]
-  \centering
-  \includegraphics[width=\textwidth]{figs/token_survival_combined.pdf}
-  \caption{\textbf{Representative token-survival maps at 25\% retention.}
-    TextVQA (top) and DocVQA (bottom) use the same query-blind L2 selector
-    before and after Qwen3-VL's native merger. In each row, the first two panels
-    show the pre- and post-selected units; the third overlays pre-kept (green),
-    post-kept (red dashed), and pre-only/post-dropped units (orange). These are
-    audited single-image mechanism examples, not aggregate accuracy evidence.}
-  \Description{Two rows compare pre-merger and post-merger token selection on
-    one TextVQA street image and one DocVQA document image. The overlap panels
-    expose which spatial units survive only before or only after merging.}
-  \label{fig:supp_token_survival}
-\end{figure*}
+\noindent\textbf{Reading:} high-edge units are demoted ${\sim}12\times$ more
+strongly on documents than on object scenes; on DocVQA, 92\% of the units post
+drops that pre keeps are above the per-image median, versus 35\% for the reverse
+group. This is consistent with structures needed by text-centric recognition,
+but Sobel energy is neither an OCR box nor a text-region mask. The corresponding
+recorded token-survival examples are promoted to body Figure~3.
 
 % =============================================================================
 \section*{S3. Retention curve --- full number strings ($n = 200$, both Qwen models)}
@@ -175,12 +158,13 @@ Supplementary Figure~\ref{fig:supp_quantitative} (bottom).
     mean$\pm$standard deviation annotated. Bottom: normalized accuracy as
     compression deepens on Qwen3-VL-8B ($n=200$ per point). Pre-merger
     selection preserves substantially more text-dense accuracy, while ChartQA
-    is primarily budget-limited and GQA does not exhibit the text-dense stage
-    effect. Error bars are descriptive rate-approximation standard errors;
+    is primarily budget-limited. The stale GQA depth panel is omitted because
+    the final campaign provides only a full-split 25\% point. Error bars are
+    descriptive rate-approximation standard errors;
     primary inference uses paired metric-level bootstrap and sign-flip tests.}
   \Description{The top row contains three rank-agreement distributions for
-    DocVQA, TextVQA, and GQA. The bottom row contains five retention curves for
-    TextVQA, DocVQA, OCR-Bench, ChartQA, and GQA. DocVQA has the strongest rank
+    DocVQA, TextVQA, and GQA. The bottom row contains four retention curves for
+    TextVQA, DocVQA, OCR-Bench, and ChartQA. DocVQA has the strongest rank
     reshuffling, and the pre-merger accuracy advantage grows with compression
     on the three text-dense benchmarks.}
   \label{fig:supp_quantitative}
@@ -219,28 +203,21 @@ in both arms; the 200/200 ground-truth self-test is retained in the audit record
     \midrule
     Qwen2.5-VL-7B & TextVQA   & .25  & $+26.1$ pp   & \textbf{+30.8} & 1682 & 309  & 60.2 & 27.3 \\
     Qwen2.5-VL-7B & DocVQA    & .25  & $+11.0$ pp   & \textbf{+15.6} & 1406 & 693  & 60.8 & 11.6 \\
-    Qwen2.5-VL-7B & OCR-Bench & .25  & $+293$ pts   & \textbf{+14.6} & 347  & 54   & 59.9 & 14.7 \\
+    Qwen2.5-VL-7B & OCR-Bench & .25  & $+298$ pts   & \textbf{+14.9} & 349  & 51   & 60.0 & 14.9 \\
     Qwen2.5-VL-7B & GQA       & .25  & $-2.6$ pp \dag & \textbf{$-$5.7} & 892 & 1150 & 83.8 & $-4.1$ \\
     Qwen2.5-VL-7B & TextVQA   & .125 & $+27.8$ pp   & \textbf{+33.1} & 1836 & 305  & 57.2 & 29.1 \\
     Qwen2.5-VL-7B & DocVQA    & .125 & $+21.0$ pp   & \textbf{+25.6} & 1325 & 294  & 69.7 & 23.3 \\
-    Qwen2.5-VL-7B & OCR-Bench & .125 & $+268$ pts   & \textbf{+15.0} & 294  & 26   & 68.0 & 15.9 \\
+    Qwen2.5-VL-7B & OCR-Bench & .125 & $+258$ pts   & \textbf{+14.3} & 291  & 33   & 67.6 & 15.3 \\
     \bottomrule
   \end{tabular}
 \end{table*}
 
-\noindent\dag\ the only significant post-stage lead. These GQA cells use the
-deepstack[0]-input (layer-8) pre ranking; a pure-stage control that ranks at
-the main-merger input (pre-final) gives $0.0$~pp on GQA (body \S\,4.2,
-S7b), so the apparent post$>$pre is a layer-8 ranking artifact, not a true
-stage reversal. GQA official
-word-normalized exact-match rescore gives a concordant McNemar $z = -8.1 / -7.1$
-(Qwen3-VL / Qwen2.5-VL). Smallest text-dense $\Delta_{25}$ $|z| = 14.6$
-(Qwen2.5-VL OCR-Bench); smallest text-dense $\Delta_{12.5}$ $|z| = 15.0$
-(Qwen2.5-VL OCR-Bench); smallest $|z|$ anywhere $= 5.7$ (Qwen2.5-VL GQA). On
-OCR-Bench @25\% the independent-binomial cross-check (18.2 / 14.7) marginally
-exceeds McNemar (16.7 / 14.6) because the binary correctness indicator coarsens
-the /1000 item score (body footnote~e); McNemar remains a cross-check and is
-$\geq$-consistent on every other cell.
+\noindent\dag\ marks operational layer-8 GQA cells favoring post. The separate
+full-split matched-boundary Qwen3-VL control also favors post ($-5.64$ pp; S7b),
+so GQA is a genuine workload-conditioned reversal rather than a layer-8-only
+artifact. The official word-normalized GQA rescore is concordant. The smallest
+text-dense $|z|$ is 14.9 at 25\% and 14.3 at 12.5\% (Qwen2.5-VL OCRBench);
+McNemar remains an auxiliary binary cross-check to metric-level inference.
 
 \subsection*{S4b. Cascade two-stage gate --- paired McNemar counts (Qwen3-VL-8B, $n = 200$, official rescore)}
 
@@ -330,7 +307,7 @@ $\tau_{\mathrm{HF}}{\times}\tau_{\mathrm{ent}}$ grid on TextVQA$_{500}$
 PRE, reproducing plain RBM bit-for-bit: text benchmarks show $0.00$~pp
 regression but GQA gain is also $+0.00$~pp (below the required $+1$~pp). The
 $\tau_{\mathrm{HF}}{=}0.13$ threshold does route some scene images to POST but
-collapses TextVQA (51/320 flipped, $-7$~pp) while flipping only 22/243 GQA
+reduces TextVQA by 7 pp (51/320 flipped) while flipping only 22/243 GQA
 images ($0.428$ vs RBM $0.438$). GQA and TextVQA $r_{\mathrm{HF}}$ distributions
 overlap (means 0.127 vs 0.142), so no single global threshold reconciles the two
 acceptance criteria. Evidence record: audit index entry for the
@@ -365,8 +342,8 @@ units and otherwise share the same Qwen3-VL-8B inference configuration.
 \end{table}
 
 The asymmetric task result is diagnostic rather than a method improvement.
-M2 independently shows that the post-merger ordering demotes
-text-stroke-rich units; distillation transfers this preference into a
+M2 independently shows that the post-merger ordering demotes edge-rich units;
+distillation transfers this preference into a
 pre-merger scorer and causes a 16.0-pp TextVQA loss. The positive GQA result
 shows that the learned head is capable of changing task behavior, ruling out a
 trivial ``model did not learn'' explanation. We therefore retain plain L2 and
@@ -391,9 +368,9 @@ table and skip accounting.
     (Qwen2.5-VL)} long-OCR images on context overrun, scored 0 (conservative);
     compressed cells skip $\leq 5$. The uncompressed anchor is therefore
     understated and the relative gaps are conservative.
-  \item Qwen2.5-VL OCR-Bench @25\% RBM: 4~M-pixel cap (mean tokens 229.6 vs
-    post 282.0) $\to$ its $+293$-pt gap is conservative (the one iso-token
-    exception in the Qwen block of Table~1, note~d).
+  \item Qwen2.5-VL OCR-Bench uses a common 4~M-pixel cap and equal per-sample
+    token counts in both arms: mean effective prompt length 229.6 at 25\%
+    (480 vs 182, $+298$ points) and 131.5 at 12.5\% (328 vs 70, $+258$ points).
 \end{itemize}
 
 \noindent Per-cell descriptive $\sigma$ values (full splits, computed from the
@@ -413,17 +390,16 @@ printed official metric $p$ and full-split $n$):
     \midrule
     Qwen2.5-VL-7B & TextVQA   & 5000  & 0.0049   & 0.0065 & 0.0070 & 0.0069 & 0.0066 \\
     Qwen2.5-VL-7B & DocVQA    & 5349  & 0.0030   & 0.0066 & 0.0068 & 0.0068 & 0.0059 \\
-    Qwen2.5-VL-7B & OCR-Bench & 1000  & 0.0122   & 0.0158 & 0.0122 & 0.0149 & 0.0079 \\
+    Qwen2.5-VL-7B & OCR-Bench & 1000  & 0.0122   & 0.0158 & 0.0122 & 0.0148 & 0.0081 \\
     Qwen2.5-VL-7B & GQA       & 12578 & 0.0044   & 0.0044 & 0.0044 & --- $^{c}$ & --- $^{c}$ \\
     \bottomrule
   \end{tabular}
 \end{table*}
 
 \noindent These values provide scale and skip-accounting context only; they are
-not used to test partial-credit metric differences. The full-split GQA post
-lead is an order of magnitude smaller than the text-dense gaps and is reframed
-by the pre-final control (S7b) as a layer-8 ranking artifact rather than a true
-stage reversal. $^{a}$~Qwen3-VL none-DocVQA native-resolution
+not used to test partial-credit metric differences. The matched-boundary
+control in S7b confirms that GQA significantly favors post, unlike the three
+text-centric workloads. $^{a}$~Qwen3-VL none-DocVQA native-resolution
 anchor: full-split run partly skipped on context overrun (re-run at
 max-model-len 49,152 gives ANLS 0.956, 0/5349 skips); $\sigma$ not printed for
 the partial native cell. $^{c}$~GQA evaluated at $\kappa = 0.25$ only on the
@@ -462,7 +438,8 @@ $\Delta_{25} =$ pre $-$ post at $\kappa = 0.25$.
 
 \noindent\textbf{Reading:} all four text-dense cells agree in sign (pre-merger
 lead) across the two scopes; magnitudes are within run noise (the $n = 200$
-subset SE is $\approx 8\times$ larger, so the subset is retained only as a
+subset has roughly 25-fold fewer samples and about fivefold larger sampling
+error than the full TextVQA/DocVQA splits, so it is retained only as a
 direction check, never as the headline). The full Qwen3-VL $n = 200$
 cross-method view (RBM vs FastV vs Pyramid) and the compact Qwen2.5-VL
 $n = 200$ cross-generation matrix appear in the main paper's regime table and
@@ -496,44 +473,45 @@ effect is not an L2 artifact. On Qwen2.5-VL the L2 sign is invariant but the
 attention proxy degrades (proxy-family specificity, not a counter-example); L2
 remains the paper's selector, frozen as plain RBM (\S\,3.2).
 
-\subsection*{S7b. Pure-stage confound control --- pre-final (Qwen3-VL-8B, $n = 200$)}
+\subsection*{S7b. Full-split matched-boundary control --- pre-final (Qwen3-VL-8B)}
 
-The body \S\,4.2 pre-final control isolates the \emph{stage} from the
-feature-space confound of the original pre (deepstack[0]-input, layer~8) vs
-post (main-merger output) contrast. pre-final ranks L2 at the main-merger's
-\emph{own input} (final ViT-block features) and selects the top-$\kappa$
-merge-units from the visual output; the deepstack mergers run untouched. The
-only difference from post is then before vs after the lossy $2\!\times\!2$ main
-merger --- a pure stage variable. Iso-token verified (prompt token ids match
-200/200 per benchmark for pre-final vs post). Evidence record: anonymized
-audit index entry for the pre-final control and its per-sample audit.
+The body control separates operational layer-8 RBM from the main-merger stage
+axis. Pre-final ranks L2 on final ViT-block features immediately before the
+main merger; post ranks its output. Deepstack mergers are untouched. Both arms
+use greedy decoding, $\kappa=25\%$, zero skips, identical sample IDs, and equal
+per-sample effective prompt lengths.
 
-\begin{table}[ht]
+\begin{table*}[ht]
   \centering
   \scriptsize
   \setlength{\tabcolsep}{2pt}
-  \begin{tabular}{@{}l r r r r l@{}}
+  \begin{tabular}{@{}l r r r l r@{}}
     \toprule
-    Benchmark (metric) & none & pre-final & post & $\Delta$ (paired mean $\pm$ SE) & verdict \\
+    Benchmark (metric) & none & pre-final & post & $\Delta$ [95\% CI] & $n$ \\
     \midrule
-    TextVQA (VQA-acc) & 0.858 & \textbf{0.515} & 0.215 & \textbf{$+30.0$ pp} ($+0.300 \pm 0.039$) & stage effect \\
-    DocVQA (ANLS)     & 0.976 & \textbf{0.326} & 0.200 & \textbf{$+12.5$ pp} ($+0.125 \pm 0.032$) & stage effect \\
-    GQA (exact match) & 0.605 & 0.450          & 0.450 & $0.0$ pp ($+0.000 \pm 0.032$)           & no stage effect \\
+    TextVQA (VQA-acc) & 0.8443 & \textbf{0.4985} & 0.2217 & $+27.68$ pp $[+26.21,+29.19]$ & 5000 \\
+    DocVQA (ANLS)     & 0.9562 & \textbf{0.2836} & 0.2377 & $+4.59$ pp $[+3.43,+5.78]$ & 5349 \\
+    OCRBench (/1000)  & 760    & \textbf{419}    & 184    & $+235$ pt $[+199,+271]$ & 1000 \\
+    GQA (exact match) & 0.6165 & 0.4207           & \textbf{0.4771} & $-5.64$ pp $[-6.42,-4.86]$ & 12578 \\
     \bottomrule
   \end{tabular}
-\end{table}
+\end{table*}
 
-\noindent\textbf{Reading:} on text-dense benchmarks pre-final still leads post
-by a large margin (the text-dense stage effect is a true stage effect, not a
-deepstack[0]-input vs main-merger-output feature-space artifact). On GQA
-pre-final equals post ($0.0$~pp): there is no stage effect on object-QA, and
-the original pre-vs-post apparent post$>$pre ($-2.8$~pp Qwen3-VL,
-$-2.6$~pp Qwen2.5-VL; S4) was an artifact of the deepstack[0]-input layer-8
-ranking being poorly suited to object-QA, not a true stage reversal. Consistent
-with the mechanism: the merger does not preferentially damage object features
-(M2 $\rho = 0.04$ on GQA, S2). pre-final tested on Qwen3-VL only (the
-deepstack confound is Qwen3-specific; Qwen2.5-VL shares the architecture but
-was not re-tested).
+\noindent\textbf{Reading:} the matched boundary significantly favors pre on
+TextVQA, DocVQA, and OCRBench, but significantly favors post on GQA. All four
+paired tests remain significant after Holm correction within this family.
+Operational layer-8 RBM improves GQA over pre-final (0.4488 vs 0.4207) but
+remains below post (0.4771); the stage preference is workload-conditioned.
+
+\subsection*{S7c. No-merger negative control (LLaVA-1.5)}
+
+LLaVA-1.5-7B uses a per-token MLP projector rather than $2\!\times\!2$ spatial
+merging. At 25\% retention ($n=200$), pre-MLP vs post-MLP ranking shows no
+significant difference: TextVQA $\Delta=-2.17$ pp (none 0.452, pre 0.087, post
+0.108; McNemar $p=0.125$) and GQA $\Delta=-0.5$ pp (none 0.575, pre 0.375,
+post 0.380; $p=1.0$). This single control is consistent with native spatial
+merging being relevant to the large text-centric gaps, but does not establish
+necessity.
 
 % =============================================================================
 \section*{S8. Merger tap points and M-RoPE configuration details (supports \S\,3)}
@@ -554,8 +532,8 @@ was not re-tested).
     an interleaved one; under pruning the position cursor must advance by the
     actual surviving count. A family-scoped fix (bit-degrading to the original
     at full retention) makes the Qwen2.5-VL compression path well-formed; the
-    block-vs-interleaved contrast is itself a diagnostic of why naive pruning
-    collapses one generation and is tolerated by the other.
+    block-vs-interleaved contrast diagnoses why naive pruning degrades one
+    generation more strongly than the other.
   \item \textbf{r2c harness}: HF transformers eager attention,
     \path{--mrope native} (family-agnostic correct positions) on all same-scope
     cells; the Qwen2.5-VL $\times$ pre vllm-mimic positional degeneration
@@ -594,7 +572,7 @@ reported cells.
     Learned-scorer probe                   & $n=200 \times 2$ & audit: learned-scorer & model, held-out splits, predictions, and official rescoring \\
     \S\,8 600k reversal               & 3            & audit: low-cap-reversal & configuration-boundary records \\
     Engine fairness                   & $r{=}0$ 8/8; none 16/16 & audit: engine-parity & zero-drop and none-cell checks \\
-    PyramidDrop iso-25\% collapse     & $n = 500$    & audit: pyramiddrop-iso25 & iso-budget baseline record \\
+    PyramidDrop iso-25\% degradation & $n = 500$    & audit: pyramiddrop-iso25 & iso-budget baseline record \\
     \bottomrule
   \end{tabular}
 \end{table*}
@@ -643,52 +621,53 @@ design.)
 
 FastV one-shot attention pruning at LLM layer $K = 3$, iso-budget $r = 0.75$
 ($\kappa = 25\%$); HF-transformers 4.57.6 eager harness, official metrics.
-Official values are rescored outputs in the audit index; $n$,
-ptid, skip, engine, and per-cell identifiers are audited there. The harness's raw
+Official values are rescored outputs in the audit index; $n$, effective prompt
+length, skip, engine, and per-cell identifiers are audited there. The harness's raw
 \path{acc} field is not used as the official score.
 
 \begin{table*}[ht]
   \centering
   \scriptsize
-  \begin{tabular}{@{}l l r r r r r l l@{}}
+  \begin{tabular}{@{}l l l r r r r l@{}}
     \toprule
-    cell & model & bench & $n$ & official & ptid & skip & engine & JSON \\
+    cell / artifact id & model & bench & $n$ & official & prompt len. & skip & engine \\
     \midrule
-    r2b\_qwen3vl\_fastv\_k3\_textvqa\_r0.75\_full5000  & Qwen3-VL   & textvqa  & 5000  & 0.7771 & 213.7 & 5  & hf eager & \path{r2b_qwen3vl_fastv_k3_textvqa_r0.75_full5000.json} \\
-    r2b\_qwen3vl\_fastv\_k3\_gqa\_r0.75\_full12578     & Qwen3-VL   & gqa      & 12578 & 0.5376 & 96.8  & 0  & hf eager & \path{r2b_qwen3vl_fastv_k3_gqa_r0.75_full12578.json} \\
-    r2b\_qwen3vl\_fastv\_k3\_docvqa\_r0.75\_n500       & Qwen3-VL   & docvqa   & 200   & 0.5863 & 176.0 & 0  & hf eager & \path{r2b_qwen3vl_fastv_k3_docvqa_r0.75_n500.json} \\
-    r2b\_qwen3vl\_fastv\_k3\_ocrbench\_r0.75\_n500     & Qwen3-VL   & ocrbench & 200   & 0.415  & 114.8 & 19 & hf eager & \path{r2b_qwen3vl_fastv_k3_ocrbench_r0.75_n500.json} \\
-    r2b\_qwen2vl\_fastv\_k3\_textvqa\_r0.75\_n200      & Qwen2.5-VL & textvqa  & 200   & 0.7467 & 282.1 & 0  & hf eager & \path{r2b_qwen2vl_fastv_k3_textvqa_r0.75_n200.json} \\
-    r2b\_qwen2vl\_fastv\_k3\_gqa\_r0.75\_n200          & Qwen2.5-VL & gqa      & 200   & 0.475  & 126.8 & 0  & hf eager & \path{r2b_qwen2vl_fastv_k3_gqa_r0.75_n200.json} \\
-    r2b\_qwen2vl\_fastv\_k3\_docvqa\_r0.75\_n200       & Qwen2.5-VL & docvqa   & 200   & 0.4852 & 231.4 & 0  & hf eager & \path{r2b_qwen2vl_fastv_k3_docvqa_r0.75_n200.json} \\
-    r2b\_qwen2vl\_fastv\_k3\_ocrbench\_r0.75\_n200     & Qwen2.5-VL & ocrbench & 200   & 0.285  & 143.6 & 20 & hf eager & \path{r2b_qwen2vl_fastv_k3_ocrbench_r0.75_n200.json} \\
+    r2b\_qwen3vl\_fastv\_k3\_textvqa\_r0.75\_full5000  & Qwen3-VL   & textvqa  & 5000  & 0.7771 & 213.7 & 5  & hf eager \\
+    r2b\_qwen3vl\_fastv\_k3\_gqa\_r0.75\_full12578     & Qwen3-VL   & gqa      & 12578 & 0.5376 & 96.8  & 0  & hf eager \\
+    r2b\_qwen3vl\_fastv\_k3\_docvqa\_r0.75\_n500       & Qwen3-VL   & docvqa   & 200   & 0.5863 & 176.0 & 0  & hf eager \\
+    p1\_qwen3vl\_fastv\_ocrbench\_k3\_full              & Qwen3-VL   & ocrbench & 1000  & 0.413  & 110.7 & 79 & hf eager \\
+    r2b\_qwen2vl\_fastv\_k3\_textvqa\_r0.75\_n200      & Qwen2.5-VL & textvqa  & 200   & 0.7467 & 282.1 & 0  & hf eager \\
+    r2b\_qwen2vl\_fastv\_k3\_gqa\_r0.75\_n200          & Qwen2.5-VL & gqa      & 200   & 0.475  & 126.8 & 0  & hf eager \\
+    r2b\_qwen2vl\_fastv\_k3\_docvqa\_r0.75\_n200       & Qwen2.5-VL & docvqa   & 200   & 0.4852 & 231.4 & 0  & hf eager \\
+    p1\_qwen2vl\_fastv\_ocrbench\_k3\_full              & Qwen2.5-VL & ocrbench & 1000  & 0.295  & 134.7 & 88 & hf eager \\
     \bottomrule
   \end{tabular}
 \end{table*}
 
-\noindent(Filenames marked \path{_n500} for the Qwen3-VL DocVQA / OCR-Bench
-cells ran at the $n = 200$ same-scope budget recorded in the JSON \path{n}
-field; OCR-Bench skips are long-OCR context overruns, scored 0.)
+\noindent(The two OCRBench rows are the final full-1000, 4M-cap controls. Their
+79/88 skips are symmetric with RBM, leaving 921/912 common answered samples for
+paired inference. Non-OCR rows retain their original printed scopes.)
 
 \subsection*{S9.3 RBM same-scope cells (5/5)}
 
 RBM (pre-merger L2) at iso-budget $r = 0.75$, HF-transformers eager,
 \path{--mrope native} (family-agnostic correct positions), matched to the
-FastV-k3 cells above. Official values, ptid, skip, and per-cell identifiers are
+FastV-k3 cells above. Official values, effective prompt lengths, skips, and
+per-cell identifiers are
 recorded in the audit index.
 
 \begin{table*}[ht]
   \centering
   \scriptsize
-  \begin{tabular}{@{}l l r r r r r l l@{}}
+  \begin{tabular}{@{}l l l r r r r l@{}}
     \toprule
-    cell & model & bench & $n$ & official & ptid & skip & engine & JSON \\
+    cell / artifact id & model & bench & $n$ & official & prompt len. & skip & engine \\
     \midrule
-    r2c\_qwen2vl\_pre\_r0.75\_textvqa\_n200  & Qwen2.5-VL & textvqa  & 200 & 0.6683 & 282.1 & 0  & hf eager & \path{r2c_qwen2vl_pre_r0.75_textvqa_n200.json} \\
-    r2c\_qwen2vl\_pre\_r0.75\_gqa\_n200      & Qwen2.5-VL & gqa      & 200 & 0.520  & 126.8 & 0  & hf eager & \path{r2c_qwen2vl_pre_r0.75_gqa_n200.json} \\
-    r2c\_qwen2vl\_pre\_r0.75\_docvqa\_n200   & Qwen2.5-VL & docvqa   & 200 & 0.5062 & 231.4 & 0  & hf eager & \path{r2c_qwen2vl_pre_r0.75_docvqa_n200.json} \\
-    r2c\_qwen2vl\_pre\_r0.75\_ocrbench\_n200 & Qwen2.5-VL & ocrbench & 200 & 0.370  & 143.6 & 20 & hf eager & \path{r2c_qwen2vl_pre_r0.75_ocrbench_n200.json} \\
-    r2c\_qwen3vl\_pre\_r0.75\_ocrbench\_n200 & Qwen3-VL   & ocrbench & 200 & 0.575  & 114.8 & 19 & hf eager & \path{r2c_qwen3vl_pre_r0.75_ocrbench_n200.json} \\
+    r2c\_qwen2vl\_pre\_r0.75\_textvqa\_n200  & Qwen2.5-VL & textvqa  & 200 & 0.6683 & 282.1 & 0  & hf eager \\
+    r2c\_qwen2vl\_pre\_r0.75\_gqa\_n200      & Qwen2.5-VL & gqa      & 200 & 0.520  & 126.8 & 0  & hf eager \\
+    r2c\_qwen2vl\_pre\_r0.75\_docvqa\_n200   & Qwen2.5-VL & docvqa   & 200 & 0.5062 & 231.4 & 0  & hf eager \\
+    p1\_qwen2vl\_pre\_ocrbench\_r25\_full     & Qwen2.5-VL & ocrbench & 1000 & 0.382  & 134.7 & 88 & hf eager \\
+    p1\_qwen3vl\_pre\_ocrbench\_r25\_full     & Qwen3-VL   & ocrbench & 1000 & 0.559  & 110.7 & 79 & hf eager \\
     \bottomrule
   \end{tabular}
 \end{table*}
