@@ -19,10 +19,10 @@
 | `main.tex` | main paper plus appended S1--S10 supplement |
 | `supp.tex` | dual-mode supplementary source (included by `main.tex` or compiled alone) |
 | `references.bib` | verified bibliography used by the paper |
-| `figs/fig1.pdf` | FIG 1 — method-specific measured masks on one OCRBench case |
-| `figs/fig2.pdf` | FIG 2 — paired pre−post forest plot with 95% CIs |
-| `figs/fig3.pdf` | FIG 3 — shared-panel retention-vs-gap curves (n=200) |
-| `figs/token_survival_combined.pdf` | S2 representative TextVQA/DocVQA survival maps |
+| `figs/fig1.pdf` | FIG 1 — method-specific measured masks on two OCRBench cases |
+| `figs/fig2.pdf` | FIG 2 — operational and matched-boundary forest plots with 95% CIs |
+| `figs/fig3_token_survival.pdf` | FIG 3 — measured TextVQA/DocVQA token-survival maps |
+| `figs/fig3.pdf` | FIG 4 — quantitative mechanism evidence |
 | `figs/token_survival_m1_rank_overlap.pdf` | S3 rank-agreement distributions |
 | `figs/retention_curves.pdf` | S3 Qwen3-VL retention curves |
 | `figs/compare_df7282e1.pdf` | S10 qualitative compare, sample df7282e1 |
@@ -61,11 +61,9 @@ There are **no** `../` parent-relative paths — verified by
   indexed by Supplementary S9. Restore, sanitize, checksum, and verify that
   archive before submission; do not represent this source package alone as the
   reproducibility artifact.
-- The compiled review paper uses 8 pages for the body and the references begin
-  after the body; the integrated supplementary material follows after a forced
-  page break. Page accounting for the separate supplement depends on the final
-  submission portal and should be checked against the official ACM MM 2027
-  instructions.
+- The compiled review paper targets 8 body pages and at most 2 reference pages;
+  the integrated supplementary material follows after a forced page break.
+  Page accounting for a separate supplement depends on the final portal.
 - `figs/fig1.pdf` uses method-specific measured masks; no mask is reused across
   RBM, post-merger L2, and FastV.
 - The current PDF is a generic two-column author draft for supervisor review.

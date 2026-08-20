@@ -271,3 +271,11 @@
 - 用户尚未选定投稿期刊/会议，因此不再把当前稿标为 ACM MM'27 review submission。
 - 保留 `acmart` 的稳定双栏排版，但改用 `sigconf,nonacm`，关闭 ACM reference、CCS、DOI、版权和 venue 占位信息。
 - 作者显示为 `Zhengxing Yan`；单位与邮箱未获确认，不自行推断。选定 venue 后再迁移到其官方模板并按匿名规则处理作者块。
+
+## 2026-08-20 | ACMMM 投稿前最终内容与版面重构
+- **科学口径**：明确拆分 operational layer-8 RBM 与 main-merger matched-boundary control；full-split control 改为 workload-conditioned stage law，保留 GQA 对 post-merger ranking 的显著偏好，不再使用旧 n=200 的 0.0 pp/artifact-dissolves 结论。
+- **数字纪律**：所有更新只取 `results/acmmm_final_controls/analysis.json`、`cell_summary.csv` 与 paired-statistics 记录；Qwen2.5 OCRBench 使用 matched 4M cap，FastV OCRBench 使用 full-split HF eager 对照；未运行实验、未推断新 mask。
+- **主稿结构**：Table 1、matched-boundary Table 2 与重绘 Figure 2 固定在 p5；现有 token-survival 矢量测量重排为正文 Figure 3，原定量机制图成为 Figure 4。
+- **补充材料**：删除无法由最终 campaign 可靠重建的 GQA retention panel；同步 full-split matched-boundary、Q2 matched-cap、P1 FastV/RBM 统计，并将 no-merger LLaVA 细节移至 S7c。
+- **范围限制**：Sobel 仅称 edge/high-frequency proxy；ranking-swap 仅隔离固定 token identities 后的 ordering/forward-path placement；RBM 不宣称 universal winner。
+- **仍需作者决定**：venue/template/anonymity 与独立 supplement 上传政策；匿名 artifact 在恢复并完成 53/53 JSON、manifest、checksum 验证前保持 gated。
