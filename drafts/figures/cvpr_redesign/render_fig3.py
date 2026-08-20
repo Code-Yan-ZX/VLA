@@ -115,7 +115,7 @@ def edge_panel(fig: plt.Figure, spec, data) -> None:
     ax.set_xlim(0, max(0.72, dropped.max() * 1.10))
     ax.grid(axis="x", color=GRID, linewidth=0.45)
     ax.set_xlabel("mean Sobel edge energy / unit")
-    ax.set_title("(b) Merger demotes text-stroke units", loc="left", fontweight="bold", color=INK, pad=2)
+    ax.set_title("(b) Edge-rich units are demoted", loc="left", fontweight="bold", color=INK, pad=2)
     ax.legend(loc="lower right", frameon=False, fontsize=5.5, handletextpad=0.4)
 
     lower = fig.add_subplot(grid[1])
@@ -178,7 +178,7 @@ def main() -> None:
     edge_panel(fig, outer[1], data)
     q3 = swap_panel(fig, outer[2])
 
-    fig.text(0.06, 0.975, "What the native merger changes", color=INK, fontweight="bold", fontsize=10.3, va="top")
+    fig.text(0.06, 0.975, "How the native merger reshapes saliency rankings", color=INK, fontweight="bold", fontsize=10.3, va="top")
     fig.text(0.985, 0.975, "per-image distributions | 25% retained", color=MUTED, ha="right", fontsize=6.4, va="top")
 
     for suffix in ("pdf", "svg", "png"):

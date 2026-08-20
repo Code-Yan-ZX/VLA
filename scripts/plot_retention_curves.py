@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """Retention vs compression depth -- small-multiples figure (CPU only).
 
-One panel per benchmark (TextVQA, DocVQA, OCR-Bench, ChartQA, GQA); a sixth
-cell holds the shared legend + a one-paragraph takeaway.  Each panel plots the
+One panel per benchmark (TextVQA, DocVQA, OCR-Bench, ChartQA). Each panel plots the
 *accuracy retention ratio*  acc(keep%) / acc(100%)  against the *visual-token
 retention* keep% of merge-units, for two selector stages:
 
@@ -69,12 +68,11 @@ DATA = {
     "ChartQA":   dict(tier="chart (budget-bound)", base=0.820,
                       pre={50: 0.390, 25: 0.190, 12.5: 0.150},
                       post={50: 0.335, 25: 0.190, 12.5: 0.095}),
-    "GQA":       dict(tier="object",              base=0.415,
-                      pre={50: 0.380, 25: 0.320, 12.5: 0.250},
-                      post={50: 0.405, 25: 0.380, 12.5: 0.305}),
 }
-# Panel order across the 2x3 grid (row-major); 6th cell = legend/takeaway.
-ORDER = ["TextVQA", "DocVQA", "OCR-Bench", "ChartQA", "GQA"]
+# GQA is intentionally omitted: its old n=200 curve used a stale baseline, and
+# the final campaign contains only a full-split 25% point. No missing depth
+# points are inferred.
+ORDER = ["TextVQA", "DocVQA", "OCR-Bench", "ChartQA"]
 
 # --------------------------------------------------------------------------- #
 # Palette / ink  (hex verbatim from drafts/figures/_style.py)
@@ -167,9 +165,9 @@ def configure_x(ax: plt.Axes) -> None:
 
 
 # --------------------------------------------------------------------------- #
-# Build the 2 x 3 grid
+# Build the 2 x 2 grid
 # --------------------------------------------------------------------------- #
-fig, axes = plt.subplots(2, 3, figsize=(7.7, 4.9))
+fig, axes = plt.subplots(2, 2, figsize=(7.0, 4.6))
 flat = axes.ravel()
 
 for idx, name in enumerate(ORDER):
@@ -209,7 +207,7 @@ for idx, name in enumerate(ORDER):
             ha="left", va="top", fontsize=7.6, color=INK_MUTED)
 
     # axis titles only on the outer edges of the small-multiples grid
-    if idx % 3 == 0:
+    if idx % 2 == 0:
         ax.set_ylabel("accuracy retention\n(acc / baseline)", fontsize=9.0,
                       color=INK_SEC)
     if idx >= 3:
@@ -217,14 +215,8 @@ for idx, name in enumerate(ORDER):
                       color=INK_SEC)
 
 # --------------------------------------------------------------------------- #
-# Sixth cell: shared legend + structured takeaway
+# Shared legend
 # --------------------------------------------------------------------------- #
-leg_ax = flat[5]
-leg_ax.set_xticks([])
-leg_ax.set_yticks([])
-for s in leg_ax.spines.values():
-    s.set_visible(False)
-
 handles = [
     Line2D([0], [0], color=PRE_BLUE, linestyle="solid", marker="o",
            markersize=6, markerfacecolor=PRE_BLUE, markeredgecolor="white",
@@ -233,24 +225,10 @@ handles = [
            markersize=6, markerfacecolor=POST_RED, markeredgecolor="white",
            markeredgewidth=0.7, linewidth=1.7),
 ]
-leg = leg_ax.legend(handles, ["pre-merger", "post-merger"],
-                    title="selection stage", loc="upper center",
-                    bbox_to_anchor=(0.5, 0.97), fontsize=9.0,
-                    title_fontsize=9.3, handlelength=2.6,
-                    handletextpad=0.6, labelspacing=0.5)
-leg.get_title().set_color(INK_PRIM)
-
-takeaway = (
-    "By tier:\n"
-    "• Text-dense (TextVQA, DocVQA, OCR-Bench): pre-merger keeps\n"
-    "   ~70–90% of baseline at 25% retention; post-merger collapses.\n"
-    "• ChartQA (budget-bound): both stages collapse — accuracy is\n"
-    "   token-budget limited, not selector-stage limited.\n"
-    "• GQA (object): post-merger is marginally stronger — the only\n"
-    "   tier where merging helps."
-)
-leg_ax.text(0.02, 0.50, takeaway, transform=leg_ax.transAxes, ha="left",
-            va="top", fontsize=8.0, color=INK_SEC, linespacing=1.35)
+fig.legend(handles, ["pre-merger", "post-merger"],
+           title="selection stage", loc="upper center",
+           bbox_to_anchor=(0.5, 0.925), ncol=2, fontsize=8.5,
+           title_fontsize=8.8, handlelength=2.6, handletextpad=0.6)
 
 # --------------------------------------------------------------------------- #
 # Figure-level stats / integrity footnote (part of the figure, per contract)
@@ -262,8 +240,8 @@ fig.text(0.012, 0.012,
          "x-axis is log2 so each halving of retained tokens is one equal step.",
          fontsize=7.0, color=INK_MUTED, ha="left", va="bottom")
 
-fig.subplots_adjust(left=0.075, right=0.988, top=0.85, bottom=0.135,
-                    wspace=0.34, hspace=0.80)
+fig.subplots_adjust(left=0.09, right=0.988, top=0.79, bottom=0.14,
+                    wspace=0.28, hspace=0.75)
 
 # Figure-level title (the manuscript caption will carry the formal legend)
 fig.suptitle("Retention vs compression depth",
