@@ -1,0 +1,110 @@
+{
+  "textvqa": {
+    "n": 200,
+    "K0K1": {
+      "K0C_K1C": 114,
+      "K0C_K1W": 4,
+      "K0W_K1C": 34,
+      "K0W_K1W": 48
+    },
+    "K1K8": {
+      "K1C_K8C": 146,
+      "K1C_K8W": 2,
+      "K1W_K8C": 5,
+      "K1W_K8W": 47
+    },
+    "G0": {
+      "pos_K0correct": 118,
+      "neg_K0W_K1C": 34,
+      "neutral_K0W_K1W": 48,
+      "imbalance_pos/neg": 3.47
+    },
+    "G1": {
+      "pos_K1W_K8C": 5,
+      "neg": 195,
+      "harm_K1C_K8W": 2,
+      "imbalance_pos/neg": 0.026
+    }
+  },
+  "docvqa": {
+    "n": 200,
+    "K0K1": {
+      "K0C_K1C": 89,
+      "K0C_K1W": 5,
+      "K0W_K1C": 42,
+      "K0W_K1W": 64
+    },
+    "K1K8": {
+      "K1C_K8C": 128,
+      "K1C_K8W": 3,
+      "K1W_K8C": 10,
+      "K1W_K8W": 59
+    },
+    "G0": {
+      "pos_K0correct": 94,
+      "neg_K0W_K1C": 42,
+      "neutral_K0W_K1W": 64,
+      "imbalance_pos/neg": 2.24
+    },
+    "G1": {
+      "pos_K1W_K8C": 10,
+      "neg": 190,
+      "harm_K1C_K8W": 3,
+      "imbalance_pos/neg": 0.053
+    }
+  },
+  "ocrbench": {
+    "n": 181,
+    "K0K1": {
+      "K0C_K1C": 97,
+      "K0C_K1W": 8,
+      "K0W_K1C": 18,
+      "K0W_K1W": 58
+    },
+    "K1K8": {
+      "K1C_K8C": 112,
+      "K1C_K8W": 3,
+      "K1W_K8C": 3,
+      "K1W_K8W": 63
+    },
+    "G0": {
+      "pos_K0correct": 105,
+      "neg_K0W_K1C": 18,
+      "neutral_K0W_K1W": 58,
+      "imbalance_pos/neg": 5.83
+    },
+    "G1": {
+      "pos_K1W_K8C": 3,
+      "neg": 178,
+      "harm_K1C_K8W": 3,
+      "imbalance_pos/neg": 0.017
+    }
+  },
+  "gqa": {
+    "n": 200,
+    "K0K1": {
+      "K0C_K1C": 67,
+      "K0C_K1W": 16,
+      "K0W_K1C": 41,
+      "K0W_K1W": 76
+    },
+    "K1K8": {
+      "K1C_K8C": 103,
+      "K1C_K8W": 5,
+      "K1W_K8C": 2,
+      "K1W_K8W": 90
+    },
+    "G0": {
+      "pos_K0correct": 83,
+      "neg_K0W_K1C": 41,
+      "neutral_K0W_K1W": 76,
+      "imbalance_pos/neg": 2.02
+    },
+    "G1": {
+      "pos_K1W_K8C": 2,
+      "neg": 198,
+      "harm_K1C_K8W": 5,
+      "imbalance_pos/neg": 0.01
+    }
+  }
+}

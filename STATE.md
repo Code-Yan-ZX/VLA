@@ -35,6 +35,14 @@
 - 透明披露：OCRBench/GQA McNemar z=+1.40/+1.30 < 旧 pre-registered z≥1.5 杠；逐样本双父 oracle 口径 text-centric 为负。
 - 报告 `experiments/deferred_rbm_n200_gate.md`；数据 `experiments/deferred_rbm_n200_data/`。**未**做 K=1/5/8 扫描、未实现 MALT（等 user 确认）。
 
+## 2026-08-24 MALT adaptive-gate 离线可行性审计（分支 exp/deferred-rbm-n200）
+- **VERDICT: NO-GO（明确）→ 冻结 fixed K=1（MALT-1）**。未实现 MALT-A、未改论文。
+- 转移矩阵（官方 binary rescore，K0∩K1∩K8=781）：K0→K1 主跃迁；K1→K8 挽救仅 2–10 样本/数据集（G1 统计不可靠）；K0C/K1W 与 K1C/K8W 反例 2–16 个。
+- G0（K0 安全删除）不可靠：3/4 数据集 AUROC 0.47–0.59（接近随机），仅 OCRBench 0.72–0.77；G1（K1→K8）rescue precision≈0、unnecessary≥86%。
+- adaptive policy（5-fold OOF）全部 3 模型 macro < fixed K=1（Δ −0.024…−0.081）；θ₀ 敏感性 0.85–0.97 无任何 operating point 通过效率 PASS（保精度则 compute≥K1）；LODO 未崩溃但 logistic@gqa 掉到 0.430。
+- 特征（G0 pre-merger L2 统计 + G1 layer-1 注意力动态）零额外 forward 提取；keep-set 不变性 781/781（100%）；decode 27/781 答案抖动（bf16 边界非确定）不影响审计（标签取 sweep 官方 rescore）。
+- 报告 `experiments/malt_adaptive_gate_feasibility.md`；数据/代码 `experiments/malt_adaptive_gate_feasibility/` + `scripts/audit_malt_*`、`scripts/extract_malt_features.py`。
+
 ## 2026-08-19 acmmm_final_controls（最终实验验证，分支 exp/acmmm-final-controls）
 - **P0-1 纯 stage 控制 full split（Qwen3-VL-8B，native，κ=0.25）**：pre-final vs post → TextVQA +27.7pp、DocVQA +4.6pp、OCRBench +235pts、GQA **-5.6pp**（全 Holm 显著；iso-token 逐样本成立；post 格与 Table 1 bit-for-bit 复现）。
 - **⚠️ CLAIM-LEVEL：GQA**。论文现声称 "pre-final gives 0.0pp on GQA / no detected pure-stage difference"（n=200 子集）。**full-split 显示 -5.64pp（CI[-6.42,-4.86], p=5e-05, McNemar 941/1650）**——纯 stage 效应在 GQA 显著为负，layer-8 仅部分补偿（pre 0.449 vs pre-final 0.421）。投稿前必须修订该表述（未改正文）。
@@ -43,7 +51,7 @@
 - 报告 `reports/acmmm_final_controls.md`；机器可读 `results/acmmm_final_controls/analysis.json`。
 
 ## 下一步
-- **user 决策**：是否批准进入 MALT adaptive-gate 设计（sweep 判定情况 A，oracle−best docvqa/gqa≈+10pp；验收标准=能否逼近 oracle，目标决策=K=0/1 边界 + 长尾 K=8；若失败退回固定 K=1）。
+- **MALT 定稿**：正式方法 = **fixed K=1（MALT-1）**（adaptive gate NO-GO，2026-08-24 审计）。剩余决策：是否在论文/方法文档中写入 MALT-1 命名与固定 K=1 定位；是否保留"长尾 K=8"讨论（oracle ≤5pp 且算力 2.6×，建议不采用）。
 - **user 决策**：GQA claim 修订方式（-5.6pp post-lead vs 现 0.0pp 表述）；是否采用 P0-2 新配对数字替换 Table 1（YES 已给出）。
 - 恢复并核验 53/53 run JSON、14 类 manifest，再解除 artifact gate。
 - 选定 venue 后切换模板并核验页限/匿名/supplement 政策；实际投稿仍须 user 明确确认。
