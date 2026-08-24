@@ -31,11 +31,33 @@
 ## 2. 进度
 - [x] 建 manifest（textvqa/docvqa/gqa/ocrbench × 64，disjoint 已验证）
 - [x] runner 实现 H0–H4（`--malt-ablate`，identity 路径零改动；tiny-model 单测全绿）
-- [ ] Gate A smoke（n=8×4×6 臂，运行中）
-- [ ] n=64×4 全量 + official scorer
+- [x] Gate A smoke PASS（n=8×4×6 臂；keep-set identity、2-block lifetime、H1 复现）
+- [x] n=64×4 全量（24 臂-cell，exit 0；OCRBench 4 个大图样本各臂一致 OOM skip，
+      same-id 配对干净）
+- [ ] h0n 位置对照（运行中）
 - [ ] Phase 2 候选设计
 - [ ] Gate B / Gate C
 - [ ] 最终报告 + novelty audit + GO/NO-GO
+
+## 2d. Phase-1 全量结果（n=64×4，official scorer）
+| bench | H0 | H1 | H2 | H3 | H4 | nb |
+|---|---|---|---|---|---|---|
+| textvqa | .703 | .812 | .828 | .828 | .828 | .828 |
+| docvqa | .406 | .500 | .500 | .516 | .516 | .500 |
+| ocrbench | .550 | .567 | .567 | .567 | .567 | .550 |
+| gqa | .578 | .578 | .609 | .609 | .594 | .578 |
+| **macro** | .559 | .614 | .626 | .630 | .626 | .614 |
+
+**结论（决定性负结果）**：H2/H3/H4/nb 全部保留 ≥100% MALT-1 增益（121% / 128% /
+121% / 100%）。**阻止 text 读取、阻止 anchor 读取、去掉 transient 自更新、
+阻止所有读取——均不消除增益**。→ **增益不来自任何人读取 transient K/V**，
+也**不**来自 transient 自更新。
+5 问回答：Q1 否（H2 保留增益）；Q2 否（H3 保留）；Q3 否（H4 保留）；Q4 是（H4≥H1）；
+Q5 **均不是接收者**（nb 保留 100%）。
+→ 唯一共同剩余差异 = **positional/mrope 布局**（H0 用 vllm-mimic 重编号；所有
+deferred 臂 native 坐标）→ 待 h0n（immediate-RBM + native 坐标）确认。
+答案差异计数：H2/H3/H4/nb vs H1 各臂仅 2–8/252 样本不同（四 bench 合计），
+H1 vs H0 有 108/252 不同 → 增益改变的是大样本集，而消融几乎不动答案。
 
 ## 2b. 实现要点（已在代码验证）
 - H2/H3 = 注意力 mask 屏蔽 (text|anchor query, transient key)，作用于 transient 存活
@@ -45,6 +67,16 @@
   pre-crop 的 layer-1 transient V == v_proj(ln1(raw inputs_embeds))）——证明回退语义
   精确成立；prune 后 cache 被裁剪，transient K/V 已删除（需在写入时捕获）。
 - 纯函数：rb_rho1_keep_set（query-blind anchor set）== rankbridge rho=1 keep set。
+
+## 2c2. textvqa n=64 预览（全部 6 臂完整）
+H0=0.703 / H1=0.812 / H2=0.828 / H3=0.828 / H4=0.828 / nb=0.828。
+**所有消融均 ≈ H1（增益存活于全部因果删除）**；消融确实生效（答案差异
+H2:1/64、H3:4/64、H4:3/64、nb:4/64），但几乎不影响准确率。
+H1 vs H0 有 26/64 答案不同 → +10.9pp 来自改变 26 个样本。
+→ 强提示：textvqa 上增益**不**来自任何人读取 transient K/V，也**不**来自
+transient 自更新。共同剩余差异 = **positional/mrope 混淆**（H0 用 vllm-mimic
+重编号，所有 deferred 臂用 native 坐标）→ 需 h0n（pre native 坐标）对照。
+注意 textvqa 是文本密集、偏好 K=8 长生命周期的数据集，可能不典型。
 
 ## 2c. 效率模型（H4 真实计算节省，与行为模拟严格区分）
 MALT-1：layer 0-1 全部 L token 全量；layer 2+ 仅 n_text+kept。

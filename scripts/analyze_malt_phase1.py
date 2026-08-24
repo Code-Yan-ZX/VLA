@@ -24,9 +24,22 @@ HERE = "/media/disk2/YZX/research/vla"
 OUT = f"{HERE}/runs/malt_goal_mode"
 BENCHES = ["textvqa", "docvqa", "ocrbench", "gqa"]
 ARMS = ["h0", "h1", "h2", "h3", "h4", "nb"]
+# optional diagnostic arms (present only if the runs exist)
+OPT_ARMS = ["h0n"]
 ARM_LABEL = {"h0": "H0 immediate-RBM", "h1": "H1 MALT-1",
              "h2": "H2 no_text_read", "h3": "H3 no_anchor_read",
-             "h4": "H4 kv_only", "nb": "H5 no_both"}
+             "h4": "H4 kv_only", "nb": "H5 no_both",
+             "h0n": "H0n native-coords"}
+
+
+def all_arms():
+    import os
+    arms = list(ARMS)
+    for a in OPT_ARMS:
+        if all(os.path.exists(f"{OUT}/explore_{a}_{b}_n64.json")
+               for b in BENCHES):
+            arms.append(a)
+    return arms
 
 
 def load_arm(arm, bench):
@@ -80,38 +93,43 @@ def agreement(a_ps, b_ps):
 
 def main():
     print("=== MALT Phase-1 causal ablation: accuracy table (n=64 x 4) ===")
-    hdr = f"{'bench':9s}" + "".join(f"{ARM_LABEL[a]:>16s}" for a in ARMS)
+    arms = all_arms()
+    hdr = f"{'bench':9s}" + "".join(f"{ARM_LABEL[a]:>16s}" for a in arms)
     print(hdr)
     tab = {}
     for b in BENCHES:
         row = [f"{b:9s}"]
-        for a in ARMS:
+        for a in arms:
             v = acc(a, b)
             row.append(f"{v:>16.3f}")
             tab[(a, b)] = v
         print("".join(row))
-    mrow = ["macro    "] + [f"{macro(a):>16.3f}" for a in ARMS]
+    mrow = ["macro    "] + [f"{macro(a):>16.3f}" for a in arms]
     print("".join(mrow))
-    for a in ARMS:
+    for a in arms:
         tab[(a, "macro")] = macro(a)
 
     # ---- per-arm gain vs H0 and gap vs H1 ----
     print("\n=== gains vs H0 / gaps vs H1 (macro) ===")
-    for a in ARMS[1:]:
+    for a in arms[1:]:
         print(f"  {ARM_LABEL[a]:>16s}: vsH0 {macro(a)-macro('h0'):+.3f}"
               f"  vsH1 {macro(a)-macro('h1'):+.3f}")
 
     # ---- per-sample comparisons (same-id, official scoring) ----
     print("\n=== paired comparisons (z=McNemar, W/L = discordant pairs) ===")
     summary = {}
-    for name, (x, y) in {"Q1 text<-trans": ("h2", "h1"),
-                         "Q1b text<-trans vsH0": ("h2", "h0"),
-                         "Q2 anchor<-trans": ("h3", "h1"),
-                         "Q2b anchor<-trans vsH0": ("h3", "h0"),
-                         "Q3 self-update": ("h4", "h1"),
-                         "Q4 kv_only vsH0": ("h4", "h0"),
-                         "no_both vsH1": ("nb", "h1"),
-                         "no_both vsH0": ("nb", "h0")}.items():
+    cmp_pairs = {"Q1 text<-trans": ("h2", "h1"),
+                 "Q1b text<-trans vsH0": ("h2", "h0"),
+                 "Q2 anchor<-trans": ("h3", "h1"),
+                 "Q2b anchor<-trans vsH0": ("h3", "h0"),
+                 "Q3 self-update": ("h4", "h1"),
+                 "Q4 kv_only vsH0": ("h4", "h0"),
+                 "no_both vsH1": ("nb", "h1"),
+                 "no_both vsH0": ("nb", "h0")}
+    if "h0n" in arms:
+        cmp_pairs["pos-control h0n vsH1"] = ("h0n", "h1")
+        cmp_pairs["pos-control h0n vsH0"] = ("h0n", "h0")
+    for name, (x, y) in cmp_pairs.items():
         ztot, w_tot, l_tot, n = 0.0, 0, 0, 0
         for b in BENCHES:
             a_ps, b_ps = per_sample(x, b), per_sample(y, b)
