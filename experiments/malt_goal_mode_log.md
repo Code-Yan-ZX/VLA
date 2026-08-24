@@ -28,17 +28,16 @@
 - **探针 manifest**：`eval/subsets/{bench}_explore64.jsonl`，与 n=200 锁 0 重叠，
   固定确定性抽样（id 排序 + 等距 64）。
 
-## 2. 进度
+## 2. 进度（全部完成）
 - [x] 建 manifest（textvqa/docvqa/gqa/ocrbench × 64，disjoint 已验证）
 - [x] runner 实现 H0–H4（`--malt-ablate`，identity 路径零改动；tiny-model 单测全绿）
 - [x] Gate A smoke PASS（n=8×4×6 臂；keep-set identity、2-block lifetime、H1 复现）
 - [x] n=64×4 全量（24 臂-cell，exit 0；OCRBench 4 个大图样本各臂一致 OOM skip，
       same-id 配对干净）
-- [x] h0n 位置对照完成：**H0n（immediate+native coords）macro 0.622 ≥ MALT-1 0.614**，
-      textvqa 0.828≥0.812、docvqa 0.500=0.500、gqa 0.609≥0.578；唯一落后
-      ocrbench -1.7pp = **1 样本**（33/60 vs 34/60，n=64 噪声）。
-- [ ] Gate B 判定 + Gate C n=200 确认（运行中）
-- [ ] 最终报告 + novelty audit + GO/NO-GO
+- [x] h0n 位置对照（immediate+native coords macro 0.622 ≥ MALT-1 0.614）
+- [x] Gate B 判定（条件通过效率杆，1 样本 ocrbench 凹陷记录在案）
+- [x] Gate C n=200 PASS → **GO（MALT-C）**（§2g）
+- [x] 最终报告 + novelty audit + GO/NO-GO（experiments/malt_method_discovery.md）
 
 ## 2g. Gate C n=200 最终判定（H0n vs MALT-1，locked n=200，paired）
 | bench | h0n | MALT-1 | diff | z | W/L | keep=ref |

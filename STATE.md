@@ -51,6 +51,14 @@
 - 报告 `reports/acmmm_final_controls.md`；机器可读 `results/acmmm_final_controls/analysis.json`。
 
 ## 下一步
+- **MALT goal-mode（2026-08-25，分支 exp/deferred-rbm-n200）**：因果消融
+  H2/H3/H4/nb 全保留增益 → **MALT-1 增益 = native 坐标保留，非 transient K/V
+  读取**；h0n（immediate+`--mrope native`）n=200 macro .621≈MALT-1 .625
+  （CI[−.012,+.004]）、keep-set 100% 相同、ΣN_l² −39% → **GO：MALT-C**（K=0
+  算力的 native-coordinate immediate pruning，严格 Pareto）。报告
+  `experiments/malt_method_discovery.md`；日志 `experiments/malt_goal_mode_log.md`。
+  **⚠️ claim-level**：deferred-RBM +12.5pp 主因可能是位置处理而非 deferral；
+  论文 Stage Law / deferred 叙事需 user 决策如何修订（正文未改）。
 - **MALT 定稿**：正式方法 = **fixed K=1（MALT-1）**（adaptive gate NO-GO，2026-08-24 审计）。剩余决策：是否在论文/方法文档中写入 MALT-1 命名与固定 K=1 定位；是否保留"长尾 K=8"讨论（oracle ≤5pp 且算力 2.6×，建议不采用）。
 - **user 决策**：GQA claim 修订方式（-5.6pp post-lead vs 现 0.0pp 表述）；是否采用 P0-2 新配对数字替换 Table 1（YES 已给出）。
 - 恢复并核验 53/53 run JSON、14 类 manifest，再解除 artifact gate。
