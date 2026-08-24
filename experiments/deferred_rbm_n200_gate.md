@@ -235,6 +235,7 @@ SMOKE PASS (0 failing check(s))
 ## 附录
 
 - **实际命令 / 配置 / 路径**：见 §3；脚本 `scripts/run_deferred_n200.sh`、`scripts/smoke_deferred_n200.sh`、`scripts/smoke_deferred_n200_check.py`、`scripts/analyze_deferred_n200.py`。
+- **复现 commit**：运行发生在基线 `feee6ae` + 本分支的诊断性改动上；该精确代码状态已固化为本分支 commit **`9af0682`**（`exp/deferred-rbm-n200`），为四组 n=200 运行的精确复现点。
 - **逐样本结果**：`experiments/deferred_rbm_n200_data/per_sample.json`（sample_id、gt、四 arm answer/correct、anchor_indices_deferred/rbm、n_image_full/kept、n_text、L_after、fired、k_per_image）；原始 Deferred JSON：`experiments/deferred_rbm_n200_data/raw/locked_deferred_{bench}_n200.json`（runs/ 已被 gitignore，故随实验分支提交到此目录）。
 - **机器可读分析**：`experiments/deferred_rbm_n200_data/analysis.json`（含六条判据逐项、macro、paired stats、dev_n64、failure classification）。
 - **GPU 实测**：4 个 locked cell 推理 wall ≈ 8.1 min（textvqa 114s / docvqa 156s / ocrbench 181s / gqa 38s）+ 4×模型加载 ≈ 2 min；含 smoke 与一次 ocrbench 重跑，本会话合计 GPU ≈ 0.35 A40·h。
