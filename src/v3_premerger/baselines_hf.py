@@ -1031,8 +1031,10 @@ def prefill_pruned(model, inputs_embeds: torch.Tensor, position_ids: torch.Tenso
     rb_diag = None
     n_deepstack = len(deepstack) if deepstack is not None else 0
     attn_mask = make_causal_mask(int(hidden.shape[1]), device, dtype)
+    layer_visual_counts = []   # active visual token count during each layer's forward
     for idx, layer in enumerate(LM.layers):
         need = idx in plan
+        layer_visual_counts.append(int(image_mask.sum()))   # BEFORE any prune at this layer
         hidden, attn_w = _layer_step(layer, hidden, attn_mask, pos_emb, cache, need)
         # Qwen3-VL deepstack: native adds visual features after the first
         # n_deepstack layers (at image positions) -- replay before any prune at
@@ -1068,7 +1070,8 @@ def prefill_pruned(model, inputs_embeds: torch.Tensor, position_ids: torch.Tenso
     diag = {"n_image_full": n_image0, "n_image_kept": n_image_kept,
             "n_text": n_text, "L0": L0, "L_after": int(image_mask.numel()),
             "prune_plan": {str(k): v for k, v in plan.items()}, "fired": fired,
-            "n_deepstack": n_deepstack}
+            "n_deepstack": n_deepstack,
+            "layer_visual_counts": layer_visual_counts}
     if rb_diag is not None:
         diag["rb"] = rb_diag
     return hidden, position_ids, cache, image_mask, diag
@@ -1082,11 +1085,14 @@ def generate_pruned(model, inputs_embeds, position_ids, image_mask_1d, mode,
     LM = model.model.language_model
     device = inputs_embeds.device
     dtype = inputs_embeds.dtype
+    _t0 = time.perf_counter()
     hidden, position_ids, cache, image_mask, diag = prefill_pruned(
         model, inputs_embeds, position_ids, image_mask_1d, mode, cfg,
         deepstack=deepstack)
+    diag["prefill_s"] = round(time.perf_counter() - _t0, 5)
     logits = model.lm_head(hidden)
     next_tok = int(logits[0, -1].argmax(-1))
+    diag["ttft_s"] = round(time.perf_counter() - _t0, 5)
     gen = [next_tok]
     cur_pos = int(position_ids.max())
     kv_len = _cache_len(cache)
@@ -1893,6 +1899,8 @@ def main():
     t0 = time.perf_counter()
     for i, s in enumerate(samples):
         try:
+            if torch.cuda.is_available():
+                torch.cuda.reset_peak_memory_stats()
             image = Image.open(s.image).convert("RGB")
             inputs = build_inputs(processor, image, s.question,
                                   args.max_pixels, device)
@@ -2113,6 +2121,12 @@ def main():
                "gt": s.gt, "question": s.question, "prompt_token_ids": ptid,
                "n_image_full": diag["n_image_full"],
                "n_image_kept": diag["n_image_kept"], "n_text": diag["n_text"]}
+        # efficiency diagnostics (recording only; do not affect inference)
+        rec["layer_visual_counts"] = diag.get("layer_visual_counts")
+        rec["prefill_s"] = diag.get("prefill_s")
+        rec["ttft_s"] = diag.get("ttft_s")
+        rec["peak_mem_mb"] = (round(torch.cuda.max_memory_allocated() / 2**20, 1)
+                              if torch.cuda.is_available() else None)
         if args.benchmark == "ocrbench" and "question_type" in s.extra:
             rec["question_type"] = s.extra["question_type"]
         if "pre" in diag:                                      # pre/cascade diag

@@ -22,6 +22,13 @@
 - S9 run JSON 仍为 0/53；不得声称匿名 artifact 已完成。恢复受服务器凭据/连接阻塞。
 - 2026-08-19 官网仅确认 MM'27 在香港、日期待定；正式 CFP/页限/补充政策尚无法核验。
 
+## 2026-08-24 Deferred-RBM 固定生命周期 K sweep（分支 exp/deferred-rbm-n200）
+- **判定：情况 A（qualified）→ 建议进入 MALT adaptive-gate 设计（待 user 确认）**。K=0/1/3/5/8 @ n=200：best fixed K = {textvqa 8, docvqa 8, ocrbench 1, gqa 1}（OCR 短 / 文本长）；oracle−best：docvqa +10.4pp、gqa +10.0pp；K=3 非孤立点（K=1/K=8 同量级），明确否定 C。
+- 稳健结论：**任何 K≥1 的 deferred 均显著优于 RBM**（macro 0.629–0.634 vs 0.504），≥ FastV（textvqa 持平 / docvqa 略优 / ocrbench 大优 +16–18pp / gqa 略优）；K=1 为强 Pareto 点（K=0→1 主跃迁 +12.5pp macro，之后平坦）。
+- 效率：峰值内存对 K 持平（16.9–18.3GB，提前退出省 FLOPs/延迟不省内存）；compute ΣN_l² textvqa 1.27e6→6.05e6。
+- 正确性全量 2343/2343（含 anchor index==immediate-RBM 100%）；重跑 K=3/pre 与复用数据逐样本一致。
+- 报告 `experiments/deferred_rbm_lifetime_sweep.md`；数据 `experiments/deferred_rbm_n200_data/sweep_*`。未实现 MALT、未 per-dataset tuning、未追加 K。
+
 ## 2026-08-24 Deferred-RBM n=200 生死验证（分支 exp/deferred-rbm-n200）
 - **VERDICT: GO**（方向性，非形式显著）：n=64 的 OCRBench/GQA 双超父信号在 n=200 存活——OCRBench +3.9pp、GQA +3.5pp vs 各自 stronger parent；macro 0.6249 ≥ 更强父 macro 0.6087；无数据集低于更强父 5pp；skip 各 arm 一致、0 same-answer 伪影。TextVQA/DocVQA 落于两父之间或持平 FastV。
 - 方法零改动（RankBridge quota rho=1.0 @ K=3，keep 25%）；保留 index 与 immediate-RBM 逐样本一致（781/781 实测）；runner 仅加诊断字段（kept_per_image/fired/L_after），行为不变性经 smoke + 首 64 复现验证。
@@ -36,7 +43,7 @@
 - 报告 `reports/acmmm_final_controls.md`；机器可读 `results/acmmm_final_controls/analysis.json`。
 
 ## 下一步
-- **user 决策**：Deferred-RBM GO 后是否进入 adaptive lifetime 下一阶段（K∈{1,5,8} 扫描 → MALT），及是否需将 OCRBench/GQA z 提升至 ≥1.5。
+- **user 决策**：是否批准进入 MALT adaptive-gate 设计（sweep 判定情况 A，oracle−best docvqa/gqa≈+10pp；验收标准=能否逼近 oracle，目标决策=K=0/1 边界 + 长尾 K=8；若失败退回固定 K=1）。
 - **user 决策**：GQA claim 修订方式（-5.6pp post-lead vs 现 0.0pp 表述）；是否采用 P0-2 新配对数字替换 Table 1（YES 已给出）。
 - 恢复并核验 53/53 run JSON、14 类 manifest，再解除 artifact gate。
 - 选定 venue 后切换模板并核验页限/匿名/supplement 政策；实际投稿仍须 user 明确确认。
