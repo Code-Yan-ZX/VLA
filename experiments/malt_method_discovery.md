@@ -135,4 +135,5 @@ transient K/V memory（被因果消融否决）。
 - 分析：scripts/analyze_malt_phase1.py / analyze_malt_compute.py /
   analyze_malt_gateC.py。
 - 单测：scripts/test_malt_ablations.py。
-- 提交：每 Gate 一次（ff6e594 → ff30ce9 → 9945ac0 → 1eba1b0）。
+- 提交：每 Gate 一次（ff6e594 → ff30ce9 → 9945ac0 → 1eba1b0 → 2e97d30 →
+  a2693a5；已 push origin/exp/deferred-rbm-n200）。
