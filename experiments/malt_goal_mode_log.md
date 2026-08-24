@@ -40,6 +40,28 @@
 - [ ] Gate B 判定 + Gate C n=200 确认（运行中）
 - [ ] 最终报告 + novelty audit + GO/NO-GO
 
+## 2g. Gate C n=200 最终判定（H0n vs MALT-1，locked n=200，paired）
+| bench | h0n | MALT-1 | diff | z | W/L | keep=ref |
+|---|---|---|---|---|---|---|
+| textvqa | .820 | .830 | -.010 | +1.41 | 0/2 | 200/200 |
+| docvqa | .465 | .470 | -.005 | +0.58 | 1/2 | 200/200 |
+| ocrbench | .635 | .635 | .000 | 0.00 | 0/0 | 181/181 |
+| gqa | .565 | .565 | .000 | 0.00 | 3/3 | 200/200 |
+| **macro** | .621 | .625 | **-.004** | | | |
+**paired bootstrap 95% CI: [-.012, +.004]**（含 0，无显著差异）；keep-set 100%
+相同；ΣN_l -11.9%、ΣN_l² -39.1%（repo "compute" 度量）、prefill 一致更快、
+峰值内存相当。无数据集显著落后（textvqa -1.0pp 为边界、z=1.41 不显著）。
+**VERDICT: PASS（效率杆）→ GO（MALT-C）**。n=64 ocrbench 的 1 样本凹陷在 n=200
+完全消失（0.635=0.635）。
+
+## 2h. 最终结论（写入报告）
+- **机制**：MALT-1 增益 = native 坐标保留，非 transient K/V 读取（因果消融
+  H2/H3/H4/nb 全保留增益）。
+- **方法**：MALT-C = native-coordinate immediate pruning（K=0 算力、同精度、
+  keep-set 100% 相同）——严格 Pareto 优于 MALT-1。
+- **对论文**：deferred-RBM 的 +12.5pp 主因可能是位置处理而非 deferral；
+  "transient visual memory" 方向否决。claim-level 发现，需 user 知晓（正文未改）。
+
 ## 2e. Phase-1 最终结论（n=64×4 + h0n 对照）
 **机制 = 位置布局（native mrope 坐标），不是 transient K/V 读取。**
 - H0n（immediate + native coords）macro 0.622 ≥ MALT-1 0.614，K=0 最低算力。

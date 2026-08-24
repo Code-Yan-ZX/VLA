@@ -99,6 +99,14 @@ def eff_stats(tag, bench):
             max((r.get("peak_mem_mb") or 0) for r in recs))
 
 
+def _kept(rec):
+    """kept-per-image from either the rb (deferred) or pre (immediate) diag."""
+    for key in ("rb", "pre"):
+        if rec.get(key, {}).get("kept_per_image"):
+            return frozenset(tuple(x) for x in rec[key]["kept_per_image"])
+    return None
+
+
 def keepset_eq(tag_c, tag_r, bench):
     c, r = ps(tag_c, bench), ps(tag_r, bench)
     n_ok = n = 0
@@ -106,10 +114,9 @@ def keepset_eq(tag_c, tag_r, bench):
         if i not in r:
             continue
         n += 1
-        kc = frozenset(tuple(x) for x in c[i].get("rb", {}).get(
-            "kept_per_image", []))
-        kr = frozenset(tuple(x) for x in r[i].get("rb", {}).get(
-            "kept_per_image", []))
+        kc, kr = _kept(c[i]), _kept(r[i])
+        if kc is None or kr is None:
+            continue          # not comparable (no diag); not a mismatch
         n_ok += int(kc == kr)
     return n_ok, n
 
@@ -128,7 +135,7 @@ def main():
         z, w, l = mcnemar(cand, ref, b)
         k_eq, k_n = keepset_eq(cand, ref, b)
         print(f"{b:9s}{ca:>8.3f}{ra:>8.3f}{ca-ra:>+8.3f}{z:>+8.2f}"
-              f"{w:>4d}{l:>4d}{k_eq}/{k_n:>5d}")
+              f"{w:>4d}{l:>4d}  keep={k_eq}/{k_n}")
     lo, hi, med = paired_bootstrap_ci(cand, ref)
     print(f"\nmacro cand={macro_acc(cand):.3f} ref={macro_acc(ref):.3f} "
           f"diff={macro_acc(cand)-macro_acc(ref):+.3f}")
