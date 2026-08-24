@@ -34,10 +34,33 @@
 - [x] Gate A smoke PASS（n=8×4×6 臂；keep-set identity、2-block lifetime、H1 复现）
 - [x] n=64×4 全量（24 臂-cell，exit 0；OCRBench 4 个大图样本各臂一致 OOM skip，
       same-id 配对干净）
-- [ ] h0n 位置对照（运行中）
-- [ ] Phase 2 候选设计
-- [ ] Gate B / Gate C
+- [x] h0n 位置对照完成：**H0n（immediate+native coords）macro 0.622 ≥ MALT-1 0.614**，
+      textvqa 0.828≥0.812、docvqa 0.500=0.500、gqa 0.609≥0.578；唯一落后
+      ocrbench -1.7pp = **1 样本**（33/60 vs 34/60，n=64 噪声）。
+- [ ] Gate B 判定 + Gate C n=200 确认（运行中）
 - [ ] 最终报告 + novelty audit + GO/NO-GO
+
+## 2e. Phase-1 最终结论（n=64×4 + h0n 对照）
+**机制 = 位置布局（native mrope 坐标），不是 transient K/V 读取。**
+- H0n（immediate + native coords）macro 0.622 ≥ MALT-1 0.614，K=0 最低算力。
+- 全部因果删除（H2/H3/H4/nb）保留 ≥100% 增益 → "transient visual memory"
+  方向（MALT-Memory/KV）被因果消融**否决**。
+- 5 问回答：Q1 否、Q2 否、Q3 否、Q4 是（但 H4≥H1 只因位置、非读取）、
+  Q5 均不是（真实"接收者"= 位置布局）。
+- ocrbench 上 H0n 比 H1 低 1 样本（-1.7pp@n=64，同一 60 样本集，噪声级）。
+- **候选 = H0n（native-coordinate immediate pruning）**：严格 Pareto 优于
+  MALT-1（同精度、K=0 算力）；机制显式、可解释（"剪枝时保留 native 坐标"）。
+- 对论文含义：deferred-RBM 的 +12.5pp 主因可能是位置处理（vllm-mimic 重编号
+  亏损），而非"deferred contextualization"——claim-level 发现，报告重点标注。
+
+## 2f. Gate B 判定（H0n vs MALT-1，n=64）
+- macro +0.8pp（≥ -0.5pp 效率杆 ✓；< +1pp 精度杆 ✗）。
+- 算力：ΣN_l² 降 ~39%（H0n=36×169² vs MALT-1=2×601²+34×169²）；ΣN_l 降 ~12%。
+- 真实实现（非行为模拟）✓。
+- **唯一不达标：ocrbench -1.7pp = 1 样本**（33/60 vs 34/60），n=64 噪声级。
+- **决策：条件通过效率杆，进入 Gate C n=200 正式判定**（Gate C 的 paired
+  bootstrap CI 正是为裁决这种 n=64 单样本噪声而设）。若 n=200 下 ocrbench
+  显著落后 >1pp 或 macro 落后 → H0n 否决、冻结 MALT-1。
 
 ## 2d. Phase-1 全量结果（n=64×4，official scorer）
 | bench | H0 | H1 | H2 | H3 | H4 | nb |
