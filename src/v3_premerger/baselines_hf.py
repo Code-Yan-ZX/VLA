@@ -673,6 +673,53 @@ def rankbridge_keep_indices(attn_w: torch.Tensor, image_mask: torch.Tensor,
                   "kept_per_image": kept_img_local}
 
 
+def rb_rho1_keep_set(image_mask: torch.Tensor, pre_ranks: torch.Tensor,
+                     units_per_image: list, keep_frac: float):
+    """Query-blind keep set for quota rho=1.0 (== pure pre-merger L2 top-k per
+    image; the MALT-1 / frozen-deferred configuration).  rankbridge_keep_indices
+    with rho=1.0 protects ALL k_i seats by pre-rank, so the keep set is fully
+    determined by pre_ranks alone -- this helper computes it WITHOUT needing an
+    attention tensor (used pre-loop by the MALT causal ablations, which must
+    know the anchor/transient split before layer 0).  Returns the sorted
+    full-sequence keep indices."""
+    img_pos = image_mask.nonzero(as_tuple=False).squeeze(-1)
+    keep_img = []
+    off = 0
+    for f in units_per_image:
+        f = int(f)
+        k_i = max(1, int(round(f * float(keep_frac))))
+        prot = pre_ranks[off:off + f].topk(k_i, largest=False).indices
+        keep_img.append(img_pos[off:off + f].index_select(0, prot))
+        off += f
+    non_img = (~image_mask).nonzero(as_tuple=False).squeeze(-1)
+    return torch.cat([non_img, *keep_img]).sort().values
+
+
+def _apply_ablate_mask(mask: torch.Tensor, ablate: str,
+                       text_mask: torch.Tensor, anchor_mask: torch.Tensor,
+                       transient_mask: torch.Tensor) -> torch.Tensor:
+    """MALT causal ablation: zero (add -inf) the attention entries the arm
+    removes.  mask [1,1,L,L] additive causal; ablate in
+    {no_text_read, no_anchor_read, no_both} (kv_only needs no mask change --
+    it only strips the transient self-update, see prefill_pruned).  The
+    text/anchor/transient masks are over the CURRENT (pre-prune) sequence."""
+    m = mask
+    if ablate in ("no_text_read", "no_both"):
+        q = text_mask.nonzero(as_tuple=False).view(-1)
+        k = transient_mask.nonzero(as_tuple=False).view(-1)
+        if q.numel() and k.numel():
+            m = m.clone()
+            # broadcast advanced indexing -> Cartesian product (all q x all k)
+            m[0, 0][q[:, None], k[None, :]] = torch.finfo(m.dtype).min
+    if ablate in ("no_anchor_read", "no_both"):
+        q = anchor_mask.nonzero(as_tuple=False).view(-1)
+        k = transient_mask.nonzero(as_tuple=False).view(-1)
+        if q.numel() and k.numel():
+            m = m.clone()
+            m[0, 0][q[:, None], k[None, :]] = torch.finfo(m.dtype).min
+    return m
+
+
 def mimic_vllm_pre_positions(n_text_pre: int, grid_thw, spatial_merge_size: int,
                              n_units_kept: int, n_text_post: int,
                              ref_position_ids: torch.Tensor) -> torch.Tensor:
@@ -1030,12 +1077,49 @@ def prefill_pruned(model, inputs_embeds: torch.Tensor, position_ids: torch.Tenso
     fired = []
     rb_diag = None
     n_deepstack = len(deepstack) if deepstack is not None else 0
+
+    # ---- MALT causal ablations (task 2026-08-25) ------------------------- #
+    # cfg["ablate"] in {"none","no_text_read","no_anchor_read","no_both",
+    # "kv_only"}.  H2/H3 (mask arms) block (text/anchor query -> transient key)
+    # attention at every layer where transient tokens are alive; H4 (kv_only)
+    # strips the transient SELF-update (revert its hidden to the input embeds
+    # before the next layer + deepstack, so its layer-1 K/V come from the raw
+    # merged features) while keeping all reads.  Requires rankbridge rho=1.0 so
+    # the anchor set is query-blind (deterministic from pre_ranks, pre-loop).
+    ablate = cfg.get("ablate", "none")
+    anchor_mask = transient_mask = None
+    prune_idx = int(next(iter(plan))) if plan else -1
+    if ablate != "none":
+        assert mode == "rankbridge" and cfg.get("rb"), \
+            "malt ablate requires --mode rankbridge with --rb-fuse quota"
+        assert cfg["rb"]["rho"] == 1.0, \
+            "malt ablate requires --rb-rho 1.0 (query-blind anchor set)"
+        _keep = rb_rho1_keep_set(image_mask, cfg["rb"]["pre_ranks"],
+                                 cfg["rb"]["units_per_image"],
+                                 cfg["rb"]["keep_frac"])
+        _am = torch.zeros(L0, dtype=torch.bool, device=device)
+        _am[_keep] = True
+        anchor_mask = _am & image_mask
+        transient_mask = image_mask & ~_am
+    # ---------------------------------------------------------------------- #
+
     attn_mask = make_causal_mask(int(hidden.shape[1]), device, dtype)
+    if ablate in ("no_text_read", "no_anchor_read", "no_both"):
+        text_mask = ~image_mask
+        attn_mask = _apply_ablate_mask(attn_mask, ablate, text_mask,
+                                       anchor_mask, transient_mask)
     layer_visual_counts = []   # active visual token count during each layer's forward
     for idx, layer in enumerate(LM.layers):
         need = idx in plan
         layer_visual_counts.append(int(image_mask.sum()))   # BEFORE any prune at this layer
         hidden, attn_w = _layer_step(layer, hidden, attn_mask, pos_emb, cache, need)
+        # H4 (kv_only): transients provide K/V only -- strip their self-update
+        # by reverting their hidden to the ORIGINAL input embeds while they are
+        # still alive (idx < prune_idx), BEFORE the deepstack injection below so
+        # the transient's layer-(idx+1) K/V are projected from raw features
+        # (+native deepstack), never from its own attention/MLP output.
+        if ablate == "kv_only" and idx < prune_idx:
+            hidden[:, transient_mask] = inputs_embeds[:, transient_mask]
         # Qwen3-VL deepstack: native adds visual features after the first
         # n_deepstack layers (at image positions) -- replay before any prune at
         # this layer so the ranking sees the same hidden the next layer would.
@@ -1071,7 +1155,12 @@ def prefill_pruned(model, inputs_embeds: torch.Tensor, position_ids: torch.Tenso
             "n_text": n_text, "L0": L0, "L_after": int(image_mask.numel()),
             "prune_plan": {str(k): v for k, v in plan.items()}, "fired": fired,
             "n_deepstack": n_deepstack,
-            "layer_visual_counts": layer_visual_counts}
+            "layer_visual_counts": layer_visual_counts,
+            "ablate": ablate,
+            "n_anchor": (int(anchor_mask.sum())
+                         if anchor_mask is not None else None),
+            "n_transient": (int(transient_mask.sum())
+                            if transient_mask is not None else None)}
     if rb_diag is not None:
         diag["rb"] = rb_diag
     return hidden, position_ids, cache, image_mask, diag
@@ -1269,6 +1358,16 @@ def parse_args():
     ap.add_argument("--fastv-k", type=int, default=2,
                     help="FastV prune layer (paper default K=2; attention of this "
                          "layer ranks the image tokens).")
+    ap.add_argument("--malt-ablate", default="none",
+                    choices=["none", "no_text_read", "no_anchor_read",
+                             "no_both", "kv_only"],
+                    help="MALT causal ablation (task 2026-08-25), rankbridge "
+                         "rho=1.0 ONLY: no_text_read = block text-query -> "
+                         "transient-key attention while transients are alive; "
+                         "no_anchor_read = block anchor-query -> transient-key; "
+                         "no_both = both; kv_only = transients provide K/V only "
+                         "(self-update stripped, reads kept -- behavior "
+                         "equivalent, not a compute-saving impl).")
     ap.add_argument("--pyramid-ratios", default="1.0,0.75,0.5,0.25",
                     help="per-band KEEP ratios (4 bands). Official default is "
                          "1.0,0.5,0.25,0.125 (lambda=0.5); we use the fair-budget "
@@ -1889,6 +1988,12 @@ def main():
     else:
         keep_equiv, r_eff = None, 0.0
     cfg = {"r": args.r, "fastv_k": args.fastv_k, "ratios": ratios}
+    if args.malt_ablate != "none":
+        if args.mode != "rankbridge":
+            raise SystemExit("--malt-ablate requires --mode rankbridge")
+        if not (args.rb_fuse == "quota" and args.rb_rho == 1.0):
+            raise SystemExit("--malt-ablate requires --rb-fuse quota --rb-rho 1.0")
+        cfg["ablate"] = args.malt_ablate
 
     samples = load_subset(args.subset)[:args.n]
     scorer = SCORERS[args.benchmark]
@@ -2164,6 +2269,8 @@ def main():
         "rb_fuse": args.rb_fuse if args.mode == "rankbridge" else None,
         "rb_rho": (args.rb_rho if args.mode == "rankbridge"
                    and args.rb_fuse == "quota" else None),
+        "malt_ablate": (args.malt_ablate if args.mode == "rankbridge"
+                        and args.malt_ablate != "none" else None),
         "rb_lambda": (args.rb_lambda if args.mode == "rankbridge"
                       and args.rb_fuse == "rrf" else None),
         "rb_rrf_c": (args.rb_rrf_c if args.mode == "rankbridge"
