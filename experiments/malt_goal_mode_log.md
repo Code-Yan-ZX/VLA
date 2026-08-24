@@ -30,12 +30,30 @@
 
 ## 2. 进度
 - [x] 建 manifest（textvqa/docvqa/gqa/ocrbench × 64，disjoint 已验证）
-- [ ] runner 实现 H0–H4
-- [ ] Gate A smoke（10 samples/arm）
+- [x] runner 实现 H0–H4（`--malt-ablate`，identity 路径零改动；tiny-model 单测全绿）
+- [ ] Gate A smoke（n=8×4×6 臂，运行中）
 - [ ] n=64×4 全量 + official scorer
 - [ ] Phase 2 候选设计
 - [ ] Gate B / Gate C
 - [ ] 最终报告 + novelty audit + GO/NO-GO
 
+## 2b. 实现要点（已在代码验证）
+- H2/H3 = 注意力 mask 屏蔽 (text|anchor query, transient key)，作用于 transient 存活
+  的两层（idx ≤ prune_idx=1）；H4 = layer 0 后把 transient hidden 回退到 inputs_embeds
+  （deepstack 注入之前），使 layer-1 transient K/V 来自 raw features。
+- 验证：`scripts/test_malt_ablations.py` 全绿，含 B4（DynamicCache.update 钩子捕获
+  pre-crop 的 layer-1 transient V == v_proj(ln1(raw inputs_embeds))）——证明回退语义
+  精确成立；prune 后 cache 被裁剪，transient K/V 已删除（需在写入时捕获）。
+- 纯函数：rb_rho1_keep_set（query-blind anchor set）== rankbridge rho=1 keep set。
+
+## 2c. 效率模型（H4 真实计算节省，与行为模拟严格区分）
+MALT-1：layer 0-1 全部 L token 全量；layer 2+ 仅 n_text+kept。
+H4 真实 ragged 实现：transient 每层跳过 Q-proj、自身 query 的整行 attention
+（QK^T 行 + softmax + V 加权行）、o_proj 行、MLP、residual/LN；保留 K/V proj
+（供他人读取）+ 作为 keys 参与他人 attention 的不可跳过部分。
+FLOPs 估算：transformer 层 per-token 约 MLP 2×H×4H + attn（QKV 3×H×d + 2×H×d +
+Oproj H×d）。H4 可省 ~45–55% per-transient-token per-layer FLOPs。准确数字待
+layer_visual_counts 到位后按 ΣN_l、ΣN_l² 与真实实现路径计算。
+
 ## 3. 提交（每 Gate 一次）
-- （尚无）
+- `ff6e594` Phase-1 setup：explore64 manifest + `--malt-ablate` runner + 单测 + 日志。
