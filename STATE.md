@@ -22,6 +22,12 @@
 - S9 run JSON 仍为 0/53；不得声称匿名 artifact 已完成。恢复受服务器凭据/连接阻塞。
 - 2026-08-19 官网仅确认 MM'27 在香港、日期待定；正式 CFP/页限/补充政策尚无法核验。
 
+## 2026-08-24 Deferred-RBM n=200 生死验证（分支 exp/deferred-rbm-n200）
+- **VERDICT: GO**（方向性，非形式显著）：n=64 的 OCRBench/GQA 双超父信号在 n=200 存活——OCRBench +3.9pp、GQA +3.5pp vs 各自 stronger parent；macro 0.6249 ≥ 更强父 macro 0.6087；无数据集低于更强父 5pp；skip 各 arm 一致、0 same-answer 伪影。TextVQA/DocVQA 落于两父之间或持平 FastV。
+- 方法零改动（RankBridge quota rho=1.0 @ K=3，keep 25%）；保留 index 与 immediate-RBM 逐样本一致（781/781 实测）；runner 仅加诊断字段（kept_per_image/fired/L_after），行为不变性经 smoke + 首 64 复现验证。
+- 透明披露：OCRBench/GQA McNemar z=+1.40/+1.30 < 旧 pre-registered z≥1.5 杠；逐样本双父 oracle 口径 text-centric 为负。
+- 报告 `experiments/deferred_rbm_n200_gate.md`；数据 `experiments/deferred_rbm_n200_data/`。**未**做 K=1/5/8 扫描、未实现 MALT（等 user 确认）。
+
 ## 2026-08-19 acmmm_final_controls（最终实验验证，分支 exp/acmmm-final-controls）
 - **P0-1 纯 stage 控制 full split（Qwen3-VL-8B，native，κ=0.25）**：pre-final vs post → TextVQA +27.7pp、DocVQA +4.6pp、OCRBench +235pts、GQA **-5.6pp**（全 Holm 显著；iso-token 逐样本成立；post 格与 Table 1 bit-for-bit 复现）。
 - **⚠️ CLAIM-LEVEL：GQA**。论文现声称 "pre-final gives 0.0pp on GQA / no detected pure-stage difference"（n=200 子集）。**full-split 显示 -5.64pp（CI[-6.42,-4.86], p=5e-05, McNemar 941/1650）**——纯 stage 效应在 GQA 显著为负，layer-8 仅部分补偿（pre 0.449 vs pre-final 0.421）。投稿前必须修订该表述（未改正文）。
@@ -30,6 +36,7 @@
 - 报告 `reports/acmmm_final_controls.md`；机器可读 `results/acmmm_final_controls/analysis.json`。
 
 ## 下一步
+- **user 决策**：Deferred-RBM GO 后是否进入 adaptive lifetime 下一阶段（K∈{1,5,8} 扫描 → MALT），及是否需将 OCRBench/GQA z 提升至 ≥1.5。
 - **user 决策**：GQA claim 修订方式（-5.6pp post-lead vs 现 0.0pp 表述）；是否采用 P0-2 新配对数字替换 Table 1（YES 已给出）。
 - 恢复并核验 53/53 run JSON、14 类 manifest，再解除 artifact gate。
 - 选定 venue 后切换模板并核验页限/匿名/supplement 政策；实际投稿仍须 user 明确确认。
