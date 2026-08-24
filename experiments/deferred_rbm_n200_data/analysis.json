@@ -1,0 +1,289 @@
+{
+  "verdict": "GO (mechanism worth continuing)",
+  "go": true,
+  "criteria": {
+    "c1_macro": true,
+    "c2_hits": [
+      "ocrbench",
+      "gqa"
+    ],
+    "c3_worst": {
+      "textvqa": -0.01333333333333342,
+      "docvqa": 0.00451447599356547,
+      "ocrbench": 0.03867403314917128,
+      "gqa": 0.03500000000000003
+    },
+    "c4_skips_equal": true
+  },
+  "macro": {
+    "full": 0.7943120603028347,
+    "rbm": 0.5039111182439154,
+    "fastv": 0.5783082358987616,
+    "deferred": 0.6249087701826042,
+    "stronger_parent": 0.6086949762302533,
+    "diff_deferred_minus_stronger": 0.016213793952350897
+  },
+  "per_benchmark": {
+    "textvqa": {
+      "mean": {
+        "full": 0.8666666666666666,
+        "rbm": 0.5966666666666667,
+        "fastv": 0.7633333333333333,
+        "deferred": 0.7499999999999999
+      },
+      "se": {
+        "full": 0.022540985686837767,
+        "rbm": 0.0337982651142745,
+        "fastv": 0.028609112103763698,
+        "deferred": 0.02881911859986795
+      },
+      "n_common": 200,
+      "stronger_parent": "fastv",
+      "diff_vs_rbm": 0.15333333333333335,
+      "diff_vs_fastv": -0.01333333333333333,
+      "diff_vs_stronger_per_sample": -0.07333333333333333,
+      "diff_vs_stronger_level": -0.01333333333333342,
+      "ci95_vs_rbm": [
+        0.10166666666666668,
+        0.20504166666666604
+      ],
+      "ci95_vs_fastv": [
+        -0.07166666666666668,
+        0.04333333333333333
+      ],
+      "ci95_vs_stronger_per_sample": [
+        -0.12170833333333332,
+        -0.023333333333333338
+      ],
+      "mcnemar_z_vs_stronger": -0.31622776601683794,
+      "mcnemar_b10": 19,
+      "mcnemar_b01": 21,
+      "win_tie_loss": {
+        "vs_rbm": [
+          35,
+          162,
+          3
+        ],
+        "vs_fastv": [
+          19,
+          160,
+          21
+        ],
+        "vs_stronger": [
+          19,
+          160,
+          21
+        ]
+      }
+    },
+    "docvqa": {
+      "mean": {
+        "full": 0.9486754971966065,
+        "rbm": 0.4238673090714263,
+        "fastv": 0.5863360743501107,
+        "deferred": 0.5908505503436762
+      },
+      "se": {
+        "full": 0.013883026169198207,
+        "rbm": 0.03287733290916129,
+        "fastv": 0.031711006841916856,
+        "deferred": 0.03203966842074899
+      },
+      "n_common": 200,
+      "stronger_parent": "fastv",
+      "diff_vs_rbm": 0.16698324127224975,
+      "diff_vs_fastv": 0.004514475993565306,
+      "diff_vs_stronger_per_sample": -0.10883123056595703,
+      "diff_vs_stronger_level": 0.00451447599356547,
+      "ci95_vs_rbm": [
+        0.11669157164799648,
+        0.21872997370739847
+      ],
+      "ci95_vs_fastv": [
+        -0.07371928111408399,
+        0.08387274185160991
+      ],
+      "ci95_vs_stronger_per_sample": [
+        -0.17422470964315662,
+        -0.04364443911176685
+      ],
+      "mcnemar_z_vs_stronger": -0.10976425998969035,
+      "mcnemar_b10": 41,
+      "mcnemar_b01": 42,
+      "win_tie_loss": {
+        "vs_rbm": [
+          40,
+          156,
+          4
+        ],
+        "vs_fastv": [
+          41,
+          117,
+          42
+        ],
+        "vs_stronger": [
+          41,
+          117,
+          42
+        ]
+      }
+    },
+    "ocrbench": {
+      "mean": {
+        "full": 0.7569060773480663,
+        "rbm": 0.580110497237569,
+        "fastv": 0.4585635359116022,
+        "deferred": 0.6187845303867403
+      },
+      "se": {
+        "full": 0.03197214650820905,
+        "rbm": 0.03678634319601877,
+        "fastv": 0.03713960295993211,
+        "deferred": 0.03620084677806443
+      },
+      "n_common": 181,
+      "stronger_parent": "rbm",
+      "diff_vs_rbm": 0.03867403314917127,
+      "diff_vs_fastv": 0.16022099447513813,
+      "diff_vs_stronger_per_sample": 0.0055248618784530384,
+      "diff_vs_stronger_level": 0.03867403314917128,
+      "ci95_vs_rbm": [
+        -0.011049723756906077,
+        0.09392265193370165
+      ],
+      "ci95_vs_fastv": [
+        0.08839779005524862,
+        0.2265193370165746
+      ],
+      "ci95_vs_stronger_per_sample": [
+        -0.049723756906077346,
+        0.06077348066298342
+      ],
+      "mcnemar_z_vs_stronger": 1.4,
+      "mcnemar_b10": 16,
+      "mcnemar_b01": 9,
+      "win_tie_loss": {
+        "vs_rbm": [
+          16,
+          156,
+          9
+        ],
+        "vs_fastv": [
+          36,
+          138,
+          7
+        ],
+        "vs_stronger": [
+          16,
+          156,
+          9
+        ]
+      }
+    },
+    "gqa": {
+      "mean": {
+        "full": 0.605,
+        "rbm": 0.415,
+        "fastv": 0.505,
+        "deferred": 0.54
+      },
+      "se": {
+        "full": 0.03465370682892271,
+        "rbm": 0.0349281387189735,
+        "fastv": 0.03544228800309698,
+        "deferred": 0.03533045720097817
+      },
+      "n_common": 200,
+      "stronger_parent": "fastv",
+      "diff_vs_rbm": 0.125,
+      "diff_vs_fastv": 0.035,
+      "diff_vs_stronger_per_sample": -0.075,
+      "diff_vs_stronger_level": 0.03500000000000003,
+      "ci95_vs_rbm": [
+        0.05,
+        0.2
+      ],
+      "ci95_vs_fastv": [
+        -0.015,
+        0.09
+      ],
+      "ci95_vs_stronger_per_sample": [
+        -0.135,
+        -0.015
+      ],
+      "mcnemar_z_vs_stronger": 1.299867367239363,
+      "mcnemar_b10": 18,
+      "mcnemar_b01": 11,
+      "win_tie_loss": {
+        "vs_rbm": [
+          43,
+          139,
+          18
+        ],
+        "vs_fastv": [
+          18,
+          171,
+          11
+        ],
+        "vs_stronger": [
+          18,
+          171,
+          11
+        ]
+      }
+    }
+  },
+  "dev_n64": {
+    "textvqa": {
+      "deferred": 0.65625,
+      "stronger": 0.7031249999999999,
+      "n": 64
+    },
+    "docvqa": {
+      "deferred": 0.5167620137299771,
+      "stronger": 0.56074604743083,
+      "n": 64
+    },
+    "ocrbench": {
+      "deferred": 0.5862068965517241,
+      "stronger": 0.4827586206896552,
+      "n": 58
+    },
+    "gqa": {
+      "deferred": 0.578125,
+      "stronger": 0.515625,
+      "n": 64
+    }
+  },
+  "failure_classification": {
+    "textvqa": {
+      "n_win": 19,
+      "n_loss": 21,
+      "win_with_same_answer_as_parent": 0
+    },
+    "docvqa": {
+      "n_win": 41,
+      "n_loss": 42,
+      "win_with_same_answer_as_parent": 0
+    },
+    "ocrbench": {
+      "n_win": 16,
+      "n_loss": 9,
+      "loss_categories": {
+        "Non-Semantic Text Recognition": 1,
+        "Scene Text-centric VQA": 6,
+        "Doc-oriented VQA": 2
+      },
+      "win_with_same_answer_as_parent": 0
+    },
+    "gqa": {
+      "n_win": 18,
+      "n_loss": 11,
+      "win_with_same_answer_as_parent": 0
+    }
+  },
+  "git": {
+    "commit": "feee6ae",
+    "branch": "exp/deferred-rbm-n200"
+  }
+}

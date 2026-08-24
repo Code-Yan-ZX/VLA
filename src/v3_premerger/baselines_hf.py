@@ -629,6 +629,7 @@ def rankbridge_keep_indices(attn_w: torch.Tensor, image_mask: torch.Tensor,
     qrow = a[-1]                                                 # last query row [L]
     qscores = qrow.index_select(0, img_pos)                      # [n_img]
     keep_img = []
+    kept_img_local = []                        # per-image LOCAL kept unit idx (sorted), == pre-mode kept_per_image
     k_per_image = []
     n_protected = 0
     off = 0
@@ -662,12 +663,14 @@ def rankbridge_keep_indices(attn_w: torch.Tensor, image_mask: torch.Tensor,
         else:
             raise ValueError(f"unknown --rb-fuse: {fuse}")
         keep_img.append(img_pos[off:off + f].index_select(0, sel))
+        kept_img_local.append(sorted(sel.tolist()))  # LOCAL, sorted (pre-mode convention)
         k_per_image.append(int(sel.numel()))
         off += f
     non_img = (~image_mask).nonzero(as_tuple=False).squeeze(-1)
     keep = torch.cat([non_img, *keep_img]).sort().values
     return keep, {"k_per_image": k_per_image, "n_protected": n_protected,
-                  "keep_total": int(sum(k_per_image))}
+                  "keep_total": int(sum(k_per_image)),
+                  "kept_per_image": kept_img_local}
 
 
 def mimic_vllm_pre_positions(n_text_pre: int, grid_thw, spatial_merge_size: int,
@@ -2023,7 +2026,9 @@ def main():
                               "rrf_c": (args.rb_rrf_c
                                         if args.rb_fuse == "rrf" else None),
                               "keep_frac": round(1.0 - args.r, 4),
-                              "mask_source": tap.first_tag}
+                              "mask_source": tap.first_tag,
+                              "fired": diag.get("fired"),
+                              "L_after": int(diag.get("L_after", 0))}
                 ans = processor.decode(gen, skip_special_tokens=True).strip()
                 ptid = int(diag["L_after"])
             elif args.mode == "rbmot":
