@@ -5,7 +5,7 @@
 %
 %  DISCIPLINE (do not violate when editing):
 %   - Every NUMBER is copied verbatim from the markdown source. Do not change.
-%   - Red-line wording (scoped claims, the locked cascade-gate quote, the GQA
+%   - Red-line wording (scoped claims, the GQA
 %     single-full-statement, "robust default, not uniformly optimal") is
 %     copied verbatim. Do not weaken.
 %   - Internal repository / digest paths are not typeset. The "Source: *.md"
@@ -97,7 +97,7 @@ pre accuracy with identical selected-unit identities. We turn this finding into
 learned scorer or query input. The gains are against the matched L2-family post arm,
 not a universal method ranking: query-conditioned FastV remains stronger on
 several reference-grounded and object-centric settings, while RBM is the more
-robust OCR-oriented default. Six prespecified extensions do not improve over
+robust OCR-oriented default. Five prespecified extensions do not improve over
 their stronger constituents. At 25\% retention, compression is stage-neutral in
 speed, increasing throughput by $68\%$ on Qwen3-VL and
 $1.8$--$2.5\times$ on InternVL3.
@@ -179,7 +179,7 @@ text-stroke demotion, and ranking-swap control identify the kept set as the
 lever (\S\ref{sec:mechanism}). Second, we establish a workload-conditioned
 stage law across three models and two merger designs under the shared L2 family
 and iso-budget control (\S\ref{sec:experiments}). Third, we derive minimal RBM,
-map its trade-off against FastV, and show that six prespecified extensions do
+map its trade-off against FastV, and show that five prespecified extensions do
 not improve their stronger constituents (\S\ref{sec:fastv}, \S\ref{sec:negative}).
 
 % =============================================================================
@@ -685,7 +685,7 @@ whereas RBM holds (0.60 / 0.42 / 0.58). There is therefore no universal winner.
     \multicolumn{5}{@{}l}{\textbf{Qwen3-VL-8B}} \\
     TextVQA (full; default)      & 5000  & \textbf{0.7771} & 0.605  & \textbf{+17.2 F} \\
     GQA (full; default)          & 12578 & \textbf{0.5376} & 0.449  & \textbf{+8.9 F} \\
-    DocVQA (dev; 600k cap)       & 200   & \textbf{0.5863} & 0.4239 & \textbf{+16.2 F} \\
+    DocVQA (dev; 600k cap)       & 200   & 0.5863          & 0.5924 & $+0.6$ R$^{\ddagger}$ \\
     OCR-Bench (dev; native res.) & 200   & 0.415           & \textbf{0.575} & \textbf{+16.0 R} \\
     \midrule
     \multicolumn{5}{@{}l}{\textbf{Qwen2.5-VL-7B}} \\
@@ -706,8 +706,9 @@ whereas RBM holds (0.60 / 0.42 / 0.58). There is therefore no universal winner.
   (ii)~OCR-Bench skips: native-resolution giant OCR images overrun the context
   on $\approx 10\%$ of the $n = 200$ set (19/200 Qwen3-VL, 20/200 Qwen2.5-VL);
   the \emph{identical} hard samples are skipped under both arms (same paired
-  batch, mode-independent) and scores are over attempted samples ---
-  conservative and symmetric. All other cells skip $\leq 5$ (Qwen3-VL TextVQA
+  batch, mode-independent). Table scores use the nominal $n=200$ denominator
+  and conservatively count skipped samples as zero. All other cells skip
+  $\leq 5$ (Qwen3-VL TextVQA
   FastV, 5/5000) or 0. (iii)~Harness: every $n = 200$ cell on both sides comes
   from the same HF transformers eager-attention harness with family-correct
   native positions; the Qwen3-VL TextVQA/GQA RBM references are the vLLM
@@ -721,8 +722,9 @@ whereas RBM holds (0.60 / 0.42 / 0.58). There is therefore no universal winner.
   $\approx 213$ mean visual tokens/request (Qwen3-VL TextVQA, 25\% retention;
   the $n = 200$ probe measured 208) --- approximately matched, stated per cell;
   this is ``each method at its strong configuration,'' not a byte-iso-budget
-  cell. (v)~$^{\ddagger}$The paired 95\% CI crosses 0 at $n = 200$ (GQA
-  $[-10.5, +1.5]$, DocVQA $[-10.1, +5.8]$); these two cells are
+  cell. (v)~$^{\ddagger}$The Qwen3-VL DocVQA paired difference is inconclusive.
+  For Qwen2.5-VL GQA/DocVQA, the paired 95\% CIs cross 0
+  ($[-10.5, +1.5]$ / $[-10.1, +5.8]$); these cells are
   exploratory/inconclusive, not statistically robust RBM edges.
 \end{table}
 
@@ -732,8 +734,10 @@ whereas RBM holds (0.60 / 0.42 / 0.58). There is therefore no universal winner.
 
 \textbf{Workload-conditioned regime map.}
 \textbf{FastV leads several question-conditioned cells.} FastV-k3 leads RBM on
-all three Qwen3-VL non-OCR cells ($+17.2 / +8.9 / +16.2$~pp) and on
-Qwen2.5-VL TextVQA ($+7.8$~pp). This is the query-dependent
+Qwen3-VL TextVQA and GQA ($+17.2 / +8.9$~pp), while the Qwen3-VL DocVQA
+comparison is statistically indistinguishable (RBM 0.5924 vs FastV 0.5863;
+paired difference inconclusive). FastV also leads on Qwen2.5-VL TextVQA
+($+7.8$~pp). This is the query-dependent
 headroom made reachable: \emph{which} region matters for \emph{this question}
 becomes visible only once cross-attention has seen the question, exactly where
 FastV operates and exactly where the prespecified query-level gate of
@@ -879,11 +883,11 @@ damage from a change in token identity.
 \end{figure*}
 
 % =============================================================================
-\section{Negative Results --- Tested Extensions Do Not Compose}\label{sec:negative}
+\section{Negative Results --- Tested Extensions Do Not Improve Plain RBM}\label{sec:negative}
 % =============================================================================
 
-We prespecified six query-aware, regime-aware, or composite extensions and
-report all six as failures on Qwen3-VL-8B. \textbf{(a) Image-level routing:}
+We prespecified five query-aware or regime-aware extensions and
+report all five as failures on Qwen3-VL-8B. \textbf{(a) Image-level routing:}
 pre is at least as accurate as post on 84--97\% of images per benchmark; the
 best router scores below always-pre (0.484 vs 0.494) and far below the
 per-sample oracle (0.576). On pooled $N=774$, only ${\sim}27\%$ of the oracle
@@ -894,18 +898,14 @@ no candidate passes the no-OCR-regression plus GQA-gain gate.
 \textbf{(c) Query-embedding blending:} on a disjoint development slice every
 $\lambda>0$ underperforms plain L2 ($-1.7/-5.2/-3.3$~pp for
 $\lambda=0.3/0.5/0.7$), so the prespecified rule selects $\lambda=0$.
-\textbf{(d) RBM$\rightarrow$FastV cascade:} for $n=200\times4$ benchmark
-samples and two budgets, it misses the 0.5-pp Pareto margin in all eight cells,
-typically by 8--18~pp, and never significantly beats both arms. Complete gates,
-paired counts, and harness controls are in Supplementary~S4b/S9.3.
-\textbf{(e) A variance-weighted (frequency-aware) selector:} the mechanism-side
+\textbf{(d) A variance-weighted (frequency-aware) selector:} the mechanism-side
 probe of \S\ref{sec:selector} ($\alpha{=}1$, $\beta{=}0.6$, selected in two grid
 rounds on TextVQA-500 at 25\% retention) improves the text-dense cell
 ($+1.2$~pp TextVQA$@25\%$, $+0.5$~pp at 50\%) but regresses $-1.6$ to
 $-2.2$~pp on DocVQA$@25\%$, OCR-Bench$@25\%$, and GQA$@25\%$; no candidate
 passes a no-regression gate across the four benchmarks, so we freeze the L2
 selector and treat the improvement as hypothesis support only.
-\textbf{(f) An adaptive PRE/POST stage router:} a query-blind workload detector
+\textbf{(e) An adaptive PRE/POST stage router:} a query-blind workload detector
 on merger-input features (high-frequency tail ratio + L2-entropy) routes each
 image to the stage predicted to be stronger. Tuned on TextVQA it reduces to
 always-PRE --- statistically indistinguishable from plain RBM on every
@@ -921,15 +921,15 @@ and neighborhood features, but transfers the wrong task bias: at 25\%
 retention, TextVQA falls from 0.595 to 0.435 ($-16.0$~pp) while GQA rises from
 0.515 to 0.550 ($+3.5$~pp). It is therefore not an RBM upgrade; as an
 intervention, its failure is consistent with M2's text-stroke demotion
-(Supplementary~S4c.3).
+(Supplementary~S4b.3).
 
 These results bound, rather than close, the tested design space: image-only
-signals cannot access the query-dependent oracle headroom, cascading discards
-evidence needed by the second selector, and distilling a post-merger teacher
-reproduces its text-dense failure mode. We therefore freeze plain RBM as the
-robust text-dense/OCR default and select a FastV-class method for
-scene-text/object-centric traffic; within the tested configurations, routing,
-cascading, and learned post-order imitation offer no consistent benefit.
+signals cannot access the query-dependent oracle headroom, and distilling a
+post-merger teacher reproduces its text-dense failure mode. We therefore freeze
+plain RBM as the robust text-dense/OCR default and select a FastV-class method
+for scene-text/object-centric traffic; within the tested configurations,
+routing, scorer modification, and learned post-order imitation offer no
+consistent benefit.
 
 % =============================================================================
 \section{Efficiency --- Supporting Evidence}\label{sec:efficiency}
@@ -989,7 +989,7 @@ control attributes the Qwen3-VL gap to merger-induced rank changes. The
 resulting training-free method, RBM, is a
 robust OCR-oriented default rather than a universal winner: query-conditioned
 FastV remains stronger on several scene-text/object-centric settings. RBM adds
-no stage-specific serving cost, and six prespecified Qwen3-VL extensions fail
+no stage-specific serving cost, and five prespecified Qwen3-VL extensions fail
 to improve over their stronger constituents.
 
 % =============================================================================

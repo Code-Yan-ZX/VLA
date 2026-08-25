@@ -5,7 +5,7 @@
 %
 %  DISCIPLINE (do not violate when editing):
 %   - Every NUMBER is copied verbatim from the markdown source. Do not change.
-%   - Red-line wording (scoped claims, the locked cascade-gate quote, the GQA
+%   - Red-line wording (scoped claims, the GQA
 %     single-full-statement, "robust default, not uniformly optimal") is
 %     copied verbatim. Do not weaken.
 %   - Double-blind: NO author / repository / institution / internal digest path
@@ -116,14 +116,13 @@ merger is \emph{necessary} for the pre$>$post effect --- without it the trend
 reverses (post$\gtrsim$pre, n.s.). This turns the stage law into a causal
 characterization: the pre$>$post effect arises iff the model has a lossy spatial
 merger \emph{and} the input is text-dense.
-\textbf{(3) A closed design space and a regime map.} Four pre-registered
-extensions --- QA-gate, hybrid mask, image router, two-stage cascade --- all
-fail on the families/configurations tested (measured on Qwen3-VL, the cascade
-under a locked gate): pre-merger selection behaves as a fixed point that no
-downstream selector we tried improves. The method, Rank-Before-Merge (RBM), is
+\textbf{(3) A closed design space and a regime map.} Three pre-registered
+extensions --- QA-gate, hybrid mask, and image router --- all
+fail on the families/configurations tested (measured on Qwen3-VL): none improves
+plain RBM. The method, Rank-Before-Merge (RBM), is
 a query-blind, OCR-preserving robust default for text-dense workloads --- a
 robust default, not uniformly optimal: the query-conditioned strong baseline
-FastV wins its reference-grounded home regime (TextVQA/GQA/DocVQA cells),
+FastV wins Qwen3-VL TextVQA/GQA, while DocVQA is inconclusive,
 while RBM uniquely retains dense OCR --- and 25\%-retention compression is
 stage-neutral, raising throughput $+68\%$ (Qwen) / $1.8$--$2.5\times$ req/s
 (InternVL3). Code will be released.
@@ -212,13 +211,11 @@ query-blind, OCR-preserving robust default for text-dense workloads --- a
 as \emph{plain} RBM and decorate it with nothing, because every decoration we
 tried is neutral or harmful (\S\ref{sec:negative}).
 
-\textbf{A closed design space.} Four pre-registered extensions that would make
-pre-merger selection query-aware, regime-aware, or composite --- a query-level
-embedding gate, a merger-aware hybrid mask, an image-level router, and a
-two-stage RBM$\to$FastV cascade --- each fail. Together they imply that, within
-the families/configurations tested, pre-merger features are purely visual:
-pre-merger selection behaves as a \textbf{fixed point} that no downstream
-selector we tried improves, and the query-dependent headroom (which FastV
+\textbf{A bounded design space.} Three pre-registered extensions that would make
+pre-merger selection query-aware or regime-aware --- a query-level
+embedding gate, a merger-aware hybrid mask, and an image-level router --- each fail. Together they imply that, within
+the families/configurations tested, none improves plain RBM; the
+query-dependent headroom (which FastV
 captures on scene-text/object benchmarks) is reachable only after the LLM's
 cross-attention layers mix in the question.
 
@@ -249,10 +246,9 @@ cross-attention layers mix in the question.
     dissolved by the pure-stage control to $0.0$~pp; InternVL3
     indistinguishable) (\S\ref{sec:qwen}, \S\ref{sec:internvl}).
   \item \textbf{A closed design space, a regime map, and a robust default.}
-    Four pre-registered extensions (QA-gate, hybrid mask, image router,
-    two-stage cascade) all fail on the families/configurations tested
-    (measured on Qwen3-VL, the cascade under a locked gate), so pre-merger
-    selection behaves as a fixed point within the tested scope;
+    Three pre-registered extensions (QA-gate, hybrid mask, and image router)
+    all fail on the families/configurations tested (measured on Qwen3-VL), so
+    none improves plain RBM within the tested scope;
     25\%-retention compression is stage-neutral and yields $+68\%$ throughput
     (Qwen) / $1.8$--$2.5\times$ req/s (InternVL3); and the same-scope regime
     map has no universal winner --- the query-conditioned strong baseline
@@ -762,7 +758,7 @@ whereas RBM holds (0.60 / 0.42 / 0.58). There is therefore no universal winner.
     \multirow{4}{*}{Qwen3-VL-8B}
       & TextVQA (full; default)      & 5000  & \textbf{0.7771} & 0.605  & \textbf{+17.2 pp (FastV)} \\
       & GQA (full; default)          & 12578 & \textbf{0.5376} & 0.449  & \textbf{+8.9 pp (FastV)} \\
-      & DocVQA (dev; 600k cap)       & 200   & \textbf{0.5863} & 0.4239 & \textbf{+16.2 pp (FastV)} \\
+      & DocVQA (dev; 600k cap)       & 200   & 0.5863          & 0.5924 & $+0.6$ pp (RBM)$^{\ddagger}$ \\
       & OCR-Bench (dev; native res.) & 200   & 0.415           & \textbf{0.575} & \textbf{+16.0 pp (RBM)} \\
     \midrule
     \multirow{4}{*}{Qwen2.5-VL-7B}
@@ -782,8 +778,9 @@ whereas RBM holds (0.60 / 0.42 / 0.58). There is therefore no universal winner.
   (ii)~OCR-Bench skips: native-resolution giant OCR images overrun the context
   on $\approx 10\%$ of the $n = 200$ set (19/200 Qwen3-VL, 20/200 Qwen2.5-VL);
   the \emph{identical} hard samples are skipped under both arms (same paired
-  batch, mode-independent) and scores are over attempted samples ---
-  conservative and symmetric. All other cells skip $\leq 5$ (Qwen3-VL TextVQA
+  batch, mode-independent). Table scores use the nominal $n=200$ denominator
+  and conservatively count skipped samples as zero. All other cells skip
+  $\leq 5$ (Qwen3-VL TextVQA
   FastV, 5/5000) or 0. (iii)~Harness: every $n = 200$ cell on both sides comes
   from the same HF transformers eager-attention harness with family-correct
   native positions; the Qwen3-VL TextVQA/GQA RBM references are the vLLM
@@ -797,8 +794,9 @@ whereas RBM holds (0.60 / 0.42 / 0.58). There is therefore no universal winner.
   $\approx 213$ mean visual tokens/request (Qwen3-VL TextVQA, 25\% retention;
   the $n = 200$ probe measured 208) --- approximately matched, stated per cell;
   this is ``each method at its strong configuration,'' not a byte-iso-budget
-  cell. (v)~$^{\ddagger}$The paired 95\% CI crosses 0 at $n = 200$ (GQA
-  $[-10.5, +1.5]$, DocVQA $[-10.1, +5.8]$); these two cells are
+  cell. (v)~$^{\ddagger}$The Qwen3-VL DocVQA paired difference is inconclusive.
+  For Qwen2.5-VL GQA/DocVQA, the paired 95\% CIs cross 0
+  ($[-10.5, +1.5]$ / $[-10.1, +5.8]$); these cells are
   exploratory/inconclusive, not statistically robust RBM edges.
 \end{table}
 
@@ -808,8 +806,10 @@ whereas RBM holds (0.60 / 0.42 / 0.58). There is therefore no universal winner.
 
 \textbf{Reading --- a workload-conditional regime map, no universal winner.}
 \textbf{FastV wins its home regime.} FastV-k3 (query-conditioned: layer-2
-attention has mixed in the question) leads RBM on all three Qwen3-VL text-dense
-benchmarks ($+17.2 / +8.9 / +16.2$~pp) and on Qwen2.5-VL TextVQA ($+7.8$~pp)
+attention has mixed in the question) leads RBM on Qwen3-VL TextVQA and GQA
+($+17.2 / +8.9$~pp), while Qwen3-VL DocVQA is statistically indistinguishable
+(RBM 0.5924 vs FastV 0.5863; paired difference inconclusive). FastV also leads
+on Qwen2.5-VL TextVQA ($+7.8$~pp)
 --- the reference-grounded, low-OCR workloads. This is the query-dependent
 headroom made reachable: \emph{which} region matters for \emph{this question}
 becomes visible only once cross-attention has seen the question, exactly where
@@ -994,14 +994,14 @@ boundary above.
 \end{figure}
 
 % =============================================================================
-\section{Negative Results --- Pre-Merger Selection Is a Fixed Point}\label{sec:negative}
+\section{Negative Results --- Tested Extensions Do Not Improve Plain RBM}\label{sec:negative}
 % =============================================================================
 
-We pre-registered four extensions that would make pre-merger selection
-query-aware, regime-aware, or composite, and report all four as failures. They
-are the evidence that closes the design space and explains why RBM is frozen as
-a plain query-blind method. \textbf{Evidence scope.} All four extensions below
-are measured on Qwen3-VL-8B (the cascade under the locked gate rule of~(d)); the
+We pre-registered three extensions that would make pre-merger selection
+query-aware or regime-aware, and report all three as failures. They
+bound the tested design space and explain why RBM is frozen as
+a plain query-blind method. \textbf{Evidence scope.} All three extensions below
+are measured on Qwen3-VL-8B; the
 closure they support is scoped to the families/configurations tested ---
 pre-registered negative evidence, not a universal theorem (no decoration
 experiment was run on InternVL3).
@@ -1034,59 +1034,12 @@ mean 0.5772 at $\lambda = 0$; $-1.7$~pp ($\lambda = 0.3$); $-5.2$~pp
 ($\lambda = 0.5$); $-3.3$~pp ($\lambda = 0.7$). By the pre-registered rule we
 select $\lambda = 0$ and freeze plain RBM.
 
-\textbf{(d) Two-stage cascade fails (NO-GO).} The natural composition --- Stage~1
-query-blind RBM (keep fraction $X$) followed by Stage~2 query-conditioned FastV
-(keep fraction $1 - Y$), total keep $X\cdot(1 - Y)$ --- was pre-registered
-against a Pareto gate: GO iff \emph{every} benchmark's cascade is within 0.5~pp
-of max(pre-alone, FastV-alone) \emph{and} at least one benchmark strictly beats
-both arms (paired McNemar $z \geq 1.5$). On Qwen3-VL, $n = 200 \times 4$
-benchmarks, official rescoring (mean token counts identical across the three
-arms in every cell --- same images, same budget, fair pairing):
-
-\begin{table}[t]
-  \centering
-  \small
-  \caption{Cascade two-stage gate, Qwen3-VL-8B, $n = 200$, official metrics.
-    Pareto = within 0.5~pp of max(pre, FastV). \ding{55} = fails the Pareto
-    condition.}
-  \label{tab:tab4}
-  \begin{tabular}{@{}l l r r r c@{}}
-    \toprule
-    Total keep & Benchmark & cascade & pre-alone & FastV-alone & Pareto? \\
-    \midrule
-    25\%   & TextVQA              & 0.595 & 0.597          & \textbf{0.680} & \ding{55} \\
-    25\%   & DocVQA (600k)        & 0.478 & 0.424          & \textbf{0.518} & \ding{55} \\
-    25\%   & OCR-Bench (/1000 est.) & 370 & \textbf{580}   & 171            & \ding{55} \\
-    25\%   & GQA                  & 0.405 & 0.415          & \textbf{0.490} & \ding{55} \\
-    \midrule
-    12.5\% & TextVQA              & 0.405 & \textbf{0.500} & 0.445          & \ding{55} \\
-    12.5\% & DocVQA               & 0.207 & \textbf{0.298} & 0.278          & \ding{55} \\
-    12.5\% & OCR-Bench (/1000 est.) & 160 & \textbf{359}   & 88             & \ding{55} \\
-    12.5\% & GQA                  & 0.350 & 0.395          & \textbf{0.455} & \ding{55} \\
-    \bottomrule
-  \end{tabular}
-\end{table}
-
-Cascade fails condition~1 on \textbf{all 8} budget$\times$benchmark cells ---
-never within 0.5~pp of max(pre, FastV), typically \textbf{8--18~pp below} ---
-and condition~2 holds nowhere. The pattern is structural, not noise: cascade
-sits \emph{between} the two single methods and is dominated by the better one on
-every benchmark (OCR-Bench $370 \approx$ between pre 580 and FastV 171; same
-shape at 12.5\%). Query-blind Stage-1 discards degrade the token set Stage-2
-attends over, while on text-dense/OCR the FastV stage destroys exactly the
-raw-patch information Stage-1 was built to protect. \textbf{Two training-free
-selectors composed in series do not complement.} (The harness was first
-validated: $Y = 0$ cascade $\equiv$ pre-alone and $X = 1$ cascade $\equiv$
-FastV-alone byte-exactly, 8/8 answers each; HF-pre vs vLLM-pre engine
-consistency 14/16 with kept-set Jaccard 0.986.)
-
 \textbf{Closure --- the one-sentence chain.} Pre-merger features are purely
 visual and contain no usable query information, so: query-blending hurts~(c),
 image-level routing cannot beat always-pre because the headroom is
-sample-/query-level~(a), hybrid text-routing trades OCR for nothing~(b), and
-stacking a query-conditioned selector after RBM is dominated by the better
-single stage~(d). \textbf{Within the families/configurations tested, pre-merger
-selection behaves as a fixed point; selectors do not stack.} The
+sample-/query-level~(a), and hybrid text-routing trades OCR for nothing~(b).
+\textbf{Within the families/configurations tested, the evaluated pre-merger
+extensions do not improve plain RBM.} The
 query-dependent headroom (the oracle's $+8.2$~pp, and FastV's wins in
 Table~\ref{tab:tab3}) is reachable \textbf{only after the LLM's cross-attention
 layers mix in the question} --- exactly where FastV operates.
@@ -1095,7 +1048,7 @@ layers mix in the question} --- exactly where FastV operates.
 as the default for text-dense/OCR and unknown/mixed traffic, where never
 collapsing matters more than the last few object-centric points; use a
 FastV-class query-conditioned method when scene-text/object queries dominate and
-dense OCR is absent; do \textbf{not} route or cascade at runtime --- fix the
+dense OCR is absent; do \textbf{not} route at runtime --- fix the
 choice at deployment time by workload.
 
 % =============================================================================
@@ -1113,7 +1066,7 @@ engines with the HF baselines (\S\ref{sec:setup}).
   \caption{Efficiency, Qwen3-VL-8B, TextVQA $n = 200$, vLLM offline, greedy.
     Pre = RBM; pre and post are iso-token at every $\kappa$. The token column is
     the mean post-merger visual-token count per request (ptid).}
-  \label{tab:tab5}
+  \label{tab:tab4}
   \begin{tabular}{@{}l c r r r r@{}}
     \toprule
     Config & retention $\kappa$ & req/s & wall ($n = 200$) & mean visual tokens/req (ptid) & single-req latency \\
@@ -1157,18 +1110,17 @@ VLMs treat their native merger as lossless; across three model families and two
 merger designs we show it is not --- on text-dense workloads it rewrites unit
 saliency in a text-hostile direction, and the \emph{stage} at which a
 training-free selector taps the visual stream dominates the \emph{scorer}. The
-practical consequence is a deliberately minimal default, RBM, plus a closed
-design space within the tested scope: because pre-merger features are purely
-visual (four pre-registered failures on Qwen3-VL, \S\ref{sec:negative}), no
-query-aware or composite decoration we tried helps, and the query-dependent
+practical consequence is a deliberately minimal default, RBM, plus a bounded
+design space within the tested scope: three pre-registered modifications on
+Qwen3-VL do not improve plain RBM (\S\ref{sec:negative}), and the query-dependent
 headroom lives only after cross-attention.
 
 \textbf{Robust default, not uniformly optimal.} RBM never collapses and never
 loses to the post-merger family on text-dense data, and is the only compared
 method that retains dense OCR ($+16.0$~pp over best-$K$ FastV on Qwen3-VL
 OCR-Bench, $+8.5$~pp on Qwen2.5-VL; Table~\ref{tab:tab3}); but the
-query-conditioned strong baseline FastV leads it on TextVQA/GQA/DocVQA
-(Table~\ref{tab:tab3}), and on Qwen GQA the apparent
+query-conditioned strong baseline FastV leads it on Qwen3-VL TextVQA/GQA while
+DocVQA is inconclusive (Table~\ref{tab:tab3}), and on Qwen GQA the apparent
 post-stage edge ($+2.6$--$2.8$~pp) is a deepstack[0]-input layer-8 ranking
 artifact rather than a true stage effect (\S\ref{sec:qwen}).
 There is no universal winner.
@@ -1238,11 +1190,10 @@ forward path (M3 swap $\equiv$ pre). The method that falls out,
 retaining dense OCR (Table~\ref{tab:tab3}: $+16.0 / +8.5$~pp over best-$K$ FastV
 on both families), while conceding scene-text/object benchmarks to
 query-conditioned methods --- and 25\%-retention compression is stage-neutral,
-raising throughput $+68\%$ (Qwen) / $1.8$--$2.5\times$ (InternVL3). Four
-pre-registered negative results (measured on Qwen3-VL, the cascade under a
-locked gate) close the design space within the tested scope: pre-merger
-selection behaves as a fixed point that no downstream selector we tried
-improves, because the query-dependent headroom is reachable only after
+raising throughput $+68\%$ (Qwen) / $1.8$--$2.5\times$ (InternVL3). Three
+pre-registered negative results (measured on Qwen3-VL) bound the design space
+within the tested scope: none improves plain RBM, and the query-dependent
+headroom is reachable only after
 cross-attention. Future work: a kept-set identity on InternVL3, serving-side
 efficiency, and a same-model comparison to Hi-Lo Prune if its code is released.
 Code will be released.

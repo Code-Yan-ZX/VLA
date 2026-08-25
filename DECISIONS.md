@@ -271,3 +271,9 @@
 - 用户尚未选定投稿期刊/会议，因此不再把当前稿标为 ACM MM'27 review submission。
 - 保留 `acmart` 的稳定双栏排版，但改用 `sigconf,nonacm`，关闭 ACM reference、CCS、DOI、版权和 venue 占位信息。
 - 作者显示为 `Zhengxing Yan`；单位与邮箱未获确认，不自行推断。选定 venue 后再迁移到其官方模板并按匿名规则处理作者块。
+
+## 2026-08-25 | native-mRoPE/scorer 正式稿纠错
+- 以 `2ec9d15` 的 provenance audit 为唯一依据，只替换 Table 2 Qwen3 DocVQA RBM 污染格：official ANLS `0.4239→0.5924`；FastV `0.5863` 不变，其余正式主表数字冻结。
+- 两份 exact paired raw run 均 gitignored 且当前缺失，因此不编造 H0n-vs-FastV CI；采用审计支持的 `+0.6pp, paired inconclusive/statistically indistinguishable` 措辞，恢复工件后再用 repo paired-stats 复算。
+- cascade 的 pre25 parent 使用 `vllm-mimic`，不能支持干净 negative claim；从正式 body/supplement 与维护中的 LaTeX 镜像删除其数字、表格、索引和推论，原实验代码/报告保留。
+- `drafts/paper_acmmm.md` 是历史工作稿，不是同步镜像；权威源继续为 `drafts/overleaf_submission/`，故不为本次投稿纠错回写历史稿。

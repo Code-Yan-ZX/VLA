@@ -39,10 +39,10 @@
 
 \noindent\footnotesize Every number is labeled with its source digest
 (\path{experiments/*.md}) or run-JSON path. Tables S1--S3/S7 support
-\S\,5 of the body; S4--S6 support \S\,4 (S4b cascade counts support \S\,6); S8
+\S\,5 of the body; S4--S6 support \S\,4; S8
 supports \S\,3; S9 is the per-cell reproducibility index, with the full
 per-cell listing (cell / $n$ / official / ptid / skip / JSON path) in
-S9.1--S9.4.
+S9.1--S9.3.
 
 % =============================================================================
 \section*{S1. M1 --- merger ranking reshuffle, full table (Qwen3-VL-8B, seed-0, $n = 64$/benchmark)}
@@ -186,49 +186,6 @@ OCR-Bench @25\% the independent-binomial cross-check (18.2 / 14.7) marginally
 exceeds McNemar (16.7 / 14.6) because the binary correctness indicator coarsens
 the /1000 item score (body footnote~e); McNemar remains the primary test and is
 $\geq$-consistent on every other cell.
-
-\subsection*{S4b. Cascade two-stage gate --- paired McNemar counts (Qwen3-VL-8B, $n = 200$, official rescore)}
-
-Cascade gate (body Table~4 / \S\,6): single budget, Stage~1 $=$ pre-merger RBM
-keeping fraction $X$ of merger-input units, Stage~2 $=$ FastV at LLM layer~2
-dropping fraction $Y$ of the survivors; total keep $= X\cdot(1 - Y)$. Three arms
-(pre-alone / fastv-alone / cascade) are compared pairwise on identical images
-($n_{\mathrm{common}}$ matched; mean post-merger token count identical across
-all three arms in every cell, so the comparison is iso-budget). cas\_only /
-pre\_only / fst\_only $=$ per-sample counts correct in only the named arm of the
-pair. Verdict $=$ NO-GO (cascade fails the Pareto rule on all 8
-budget$\times$benchmark cells). Source: \path{runs/cascade/gate_result.json}
-(\path{mcnemar_cas_vs_pre} / \path{mcnemar_cas_vs_fst});
-\path{experiments/cascade_gate.md}.
-
-\begin{table*}[h]
-  \centering
-  \footnotesize
-  \begin{tabular}{@{}c l r r r r r r r r r r@{}}
-    \toprule
-    total keep $\kappa$ & bench & $n$ & pre & fst & cas & $z$ (cas vs pre) & cas\_only & pre\_only & $z$ (cas vs fst) & cas\_only & fst\_only \\
-    \midrule
-    25\%   & TextVQA   & 200 & 0.5967 & 0.6800 & 0.5950 & $-0.152$ & 21 & 22 & $-2.335$ & 18 & 35 \\
-    25\%   & DocVQA    & 200 & 0.4239 & 0.5183 & 0.4779 & $+2.066$ & 38 & 22 & $-1.500$ & 26 & 38 \\
-    25\%   & OCR-Bench & 181 & 0.5801 & 0.1713 & 0.3978 & $-5.154$ & 4  & 37 & $+6.112$ & 43 & 2 \\
-    25\%   & GQA       & 200 & 0.4150 & 0.4900 & 0.4050 & $-0.333$ & 17 & 19 & $-2.429$ & 16 & 33 \\
-    \midrule
-    12.5\% & TextVQA   & 200 & 0.5000 & 0.4450 & 0.4050 & $-2.540$ & 21 & 41 & $-0.896$ & 27 & 34 \\
-    12.5\% & DocVQA    & 200 & 0.2980 & 0.2779 & 0.2070 & $-2.012$ & 31 & 49 & $-2.064$ & 16 & 30 \\
-    12.5\% & OCR-Bench & 181 & 0.3591 & 0.0884 & 0.1713 & $-5.013$ & 6  & 40 & $+3.441$ & 17 & 2 \\
-    12.5\% & GQA       & 200 & 0.3950 & 0.4550 & 0.3500 & $-1.286$ & 20 & 29 & $-3.130$ & 12 & 33 \\
-    \bottomrule
-  \end{tabular}
-\end{table*}
-
-\noindent\textbf{Reading:} cascade sits strictly between the two single methods
-and is dominated by the better arm on every cell --- pre-alone on OCR-Bench
-($z = -5.15 / -5.01$ vs pre at 25\% / 12.5\%; the FastV stage destroys exactly
-the raw-patch information Stage~1 was built to protect) and FastV-alone on
-TextVQA / GQA ($z = -2.34 / -2.43$ vs fst at 25\%). The single positive
-cas-vs-pre $z$ (DocVQA 25\%, $+2.07$) is paired with a loss to FastV
-($-1.50$), so the ``strictly beats both arms'' condition holds nowhere. Two
-training-free selectors composed in series do not complement (body \S\,6).
 
 % =============================================================================
 \section*{S5. Binomial stderrs + skip accounting (Table 1 cells)}
@@ -398,8 +355,7 @@ remains the paper's selector, frozen as plain RBM (\S\,3.2).
     Table 2 (InternVL3)               & 16/16        & \path{runs/internvl3/internvl3_*.json} + \path{internvl3_official_summary.json} & \path{experiments/internvl3_main_matrix.md} \\
     Table 3 FastV-k3                  & 8            & \path{runs/r2_same_scope/r2b_*.json} & \path{experiments/r2b_fastv_k3.md} \\
     Table 3 RBM same-scope            & 5            & \path{runs/r2_same_scope/r2c_*.json} & \path{experiments/r2c_rbm_scope.md} \\
-    Table 4 cascade gate              & 24/24        & \path{runs/cascade/gate_*.json} + \path{gate_result.json} & \path{experiments/cascade_gate.md} \\
-    Table 5 efficiency                & 7 configs    & \path{runs/full_matrix/efficiency/*.eff.json} & \path{experiments/j6_efficiency.md} \\
+    Table 4 efficiency                & 7 configs    & \path{runs/full_matrix/efficiency/*.eff.json} & \path{experiments/j6_efficiency.md} \\
     \S\,5 kept-set Jaccard / swap     & 8            & \path{runs/r1_1_swap_jaccard/*.json} + \path{jaccard_summary.json} & \path{experiments/r1_1_swap_jaccard.md} \\
     \S\,5.1--5.2 M1/M2                & $n=64 \times 3$ & mechanism campaign (released with code) & mechanism\_verification\_report via \path{drafts/paper_v4.md} \S\,4 \\
     \S\,5.4 retention curve           & $n=200 \times 4$ & j8 ablation runs & \path{experiments/j8_ablations.md} \\
@@ -505,56 +461,6 @@ Digest: \path{experiments/r2c_rbm_scope.md}.
     \bottomrule
   \end{tabular}
 \end{table*}
-
-\subsection*{S9.4 Cascade gate cells (Table 4; 24/24, Qwen3-VL-8B)}
-
-Three arms $\times$ two budgets $\times$ four benchmarks; $n = n_{\mathrm{common}}$
-(matched by question id); official $=$ \path{acc_official} from the paired
-rescore; ptid $=$ mean post-merger token count (identical across the three arms
-in every cell). Source: \path{runs/cascade/gate_result.json} (authoritative
-paired summary) with per-arm run cells
-\path{runs/cascade/gate_\{pre,fst,cas\}\{25,12\}_<bench>.json}. Digest:
-\path{experiments/cascade_gate.md}. (McNemar counts for these cells: S4b.)
-
-\begin{table*}[h]
-  \centering
-  \small
-  \begin{tabular}{@{}l c l r r r l@{}}
-    \toprule
-    arm & $\kappa$ & bench & $n$ & official & ptid & JSON \\
-    \midrule
-    pre-alone (RBM) & 25\%   & textvqa  & 200 & 0.5967 & 212.8 & \path{gate_pre25_textvqa.json} \\
-    fastv-alone     & 25\%   & textvqa  & 200 & 0.6800 & 212.8 & \path{gate_fst25_textvqa.json} \\
-    cascade         & 25\%   & textvqa  & 200 & 0.5950 & 212.8 & \path{gate_cas25_textvqa.json} \\
-    pre-alone (RBM) & 25\%   & docvqa   & 200 & 0.4239 & 176.0 & \path{gate_pre25_docvqa.json} \\
-    fastv-alone     & 25\%   & docvqa   & 200 & 0.5183 & 176.0 & \path{gate_fst25_docvqa.json} \\
-    cascade         & 25\%   & docvqa   & 200 & 0.4779 & 176.0 & \path{gate_cas25_docvqa.json} \\
-    pre-alone (RBM) & 25\%   & ocrbench & 181 & 0.5801 & 114.8 & \path{gate_pre25_ocrbench.json} \\
-    fastv-alone     & 25\%   & ocrbench & 181 & 0.1713 & 114.8 & \path{gate_fst25_ocrbench.json} \\
-    cascade         & 25\%   & ocrbench & 181 & 0.3978 & 114.8 & \path{gate_cas25_ocrbench.json} \\
-    pre-alone (RBM) & 25\%   & gqa      & 200 & 0.4150 & 95.4  & \path{gate_pre25_gqa.json} \\
-    fastv-alone     & 25\%   & gqa      & 200 & 0.4900 & 95.4  & \path{gate_fst25_gqa.json} \\
-    cascade         & 25\%   & gqa      & 200 & 0.4050 & 95.4  & \path{gate_cas25_gqa.json} \\
-    \midrule
-    pre-alone (RBM) & 12.5\% & textvqa  & 200 & 0.5000 & 120.7 & \path{gate_pre12_textvqa.json} \\
-    fastv-alone     & 12.5\% & textvqa  & 200 & 0.4450 & 120.7 & \path{gate_fst12_textvqa.json} \\
-    cascade         & 12.5\% & textvqa  & 200 & 0.4050 & 120.7 & \path{gate_cas12_textvqa.json} \\
-    pre-alone (RBM) & 12.5\% & docvqa   & 200 & 0.2980 & 103.7 & \path{gate_pre12_docvqa.json} \\
-    fastv-alone     & 12.5\% & docvqa   & 200 & 0.2779 & 103.7 & \path{gate_fst12_docvqa.json} \\
-    cascade         & 12.5\% & docvqa   & 200 & 0.2070 & 103.7 & \path{gate_cas12_docvqa.json} \\
-    pre-alone (RBM) & 12.5\% & ocrbench & 181 & 0.3591 & 68.7  & \path{gate_pre12_ocrbench.json} \\
-    fastv-alone     & 12.5\% & ocrbench & 181 & 0.0884 & 68.7  & \path{gate_fst12_ocrbench.json} \\
-    cascade         & 12.5\% & ocrbench & 181 & 0.1713 & 68.7  & \path{gate_cas12_ocrbench.json} \\
-    pre-alone (RBM) & 12.5\% & gqa      & 200 & 0.3950 & 62.3  & \path{gate_pre12_gqa.json} \\
-    fastv-alone     & 12.5\% & gqa      & 200 & 0.4550 & 62.3  & \path{gate_fst12_gqa.json} \\
-    cascade         & 12.5\% & gqa      & 200 & 0.3500 & 62.3  & \path{gate_cas12_gqa.json} \\
-    \bottomrule
-  \end{tabular}
-\end{table*}
-
-\noindent(All paths relative to \path{runs/cascade/}. OCR-Bench
-$n_{\mathrm{common}} = 181$ after 19 long-OCR skips; all other cells
-$n = 200$. \path{missing_cells: []} --- 24/24 present.)
 
 \vspace{6pt}
 \noindent\footnotesize\textbf{Packaging note:} this file converts to the ACM MM

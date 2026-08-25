@@ -46,10 +46,10 @@
 \fi
 
 \noindent\footnotesize Every number is indexed by an audit identifier in S9. Tables S1--S3/S7 support
-\S\,5 of the body; S4--S6 support \S\,4 (S4b cascade counts support \S\,6); S8
+\S\,5 of the body; S4--S6 support \S\,4; S8
 supports \S\,3; S9 gives the per-cell artifact index, with cell, sample count,
 official metric, token count, skip accounting, and manifest identifier in
-S9.1--S9.4; S10 is a qualitative same-image pre/post selection comparison
+S9.1--S9.3; S10 is a qualitative same-image pre/post selection comparison
 rendered from measured Qwen3-VL-8B merger features (four panels each, no paired
 question).
 
@@ -242,53 +242,11 @@ exceeds McNemar (16.7 / 14.6) because the binary correctness indicator coarsens
 the /1000 item score (body footnote~e); McNemar remains a cross-check and is
 $\geq$-consistent on every other cell.
 
-\subsection*{S4b. Cascade two-stage gate --- paired McNemar counts (Qwen3-VL-8B, $n = 200$, official rescore)}
-
-Cascade gate (body \S\,6): single budget, Stage~1 $=$ pre-merger RBM
-keeping fraction $X$ of merger-input units, Stage~2 $=$ FastV at LLM layer~2
-dropping fraction $Y$ of the survivors; total keep $= X\cdot(1 - Y)$. Three arms
-(pre-alone / fastv-alone / cascade) are compared pairwise on identical images
-($n_{\mathrm{common}}$ matched; mean post-merger token count identical across
-all three arms in every cell, so the comparison is iso-budget). cas\_only /
-pre\_only / fst\_only $=$ per-sample counts correct in only the named arm of the
-pair. Verdict $=$ NO-GO (cascade fails the Pareto rule on all 8
-budget$\times$benchmark cells). Evidence record: audit index
-entry for the cascade gate and paired McNemar counts.
-
-\begin{table*}[ht]
-  \centering
-  \footnotesize
-  \begin{tabular}{@{}c l r r r r r r r r r r@{}}
-    \toprule
-    total keep $\kappa$ & bench & $n$ & pre & fst & cas & $z$ (cas vs pre) & cas\_only & pre\_only & $z$ (cas vs fst) & cas\_only & fst\_only \\
-    \midrule
-    25\%   & TextVQA   & 200 & 0.5967 & 0.6800 & 0.5950 & $-0.152$ & 21 & 22 & $-2.335$ & 18 & 35 \\
-    25\%   & DocVQA    & 200 & 0.4239 & 0.5183 & 0.4779 & $+2.066$ & 38 & 22 & $-1.500$ & 26 & 38 \\
-    25\%   & OCR-Bench & 181 & 0.5801 & 0.1713 & 0.3978 & $-5.154$ & 4  & 37 & $+6.112$ & 43 & 2 \\
-    25\%   & GQA       & 200 & 0.4150 & 0.4900 & 0.4050 & $-0.333$ & 17 & 19 & $-2.429$ & 16 & 33 \\
-    \midrule
-    12.5\% & TextVQA   & 200 & 0.5000 & 0.4450 & 0.4050 & $-2.540$ & 21 & 41 & $-0.896$ & 27 & 34 \\
-    12.5\% & DocVQA    & 200 & 0.2980 & 0.2779 & 0.2070 & $-2.012$ & 31 & 49 & $-2.064$ & 16 & 30 \\
-    12.5\% & OCR-Bench & 181 & 0.3591 & 0.0884 & 0.1713 & $-5.013$ & 6  & 40 & $+3.441$ & 17 & 2 \\
-    12.5\% & GQA       & 200 & 0.3950 & 0.4550 & 0.3500 & $-1.286$ & 20 & 29 & $-3.130$ & 12 & 33 \\
-    \bottomrule
-  \end{tabular}
-\end{table*}
-
-\noindent\textbf{Reading:} cascade sits strictly between the two single methods
-and is dominated by the better arm on every cell --- pre-alone on OCR-Bench
-($z = -5.15 / -5.01$ vs pre at 25\% / 12.5\%; the FastV stage destroys exactly
-the raw-patch information Stage~1 was built to protect) and FastV-alone on
-TextVQA / GQA ($z = -2.34 / -2.43$ vs fst at 25\%). The single positive
-cas-vs-pre $z$ (DocVQA 25\%, $+2.07$) is paired with a loss to FastV
-($-1.50$), so the ``strictly beats both arms'' condition holds nowhere. Two
-training-free selectors composed in series do not complement (body \S\,6).
-
 % =============================================================================
-\subsection*{S4c. Selector-scorer and stage-router gates (Qwen3-VL-8B, official rescore)}
+\subsection*{S4b. Selector-scorer and stage-router gates (Qwen3-VL-8B, official rescore)}
 % =============================================================================
 
-\noindent\textbf{S4c.1 Frequency-aware selector} (body \S\,6e): the
+\noindent\textbf{S4b.1 Frequency-aware selector} (body \S\,6d): the
 mechanism-side probe of body \S\,3, $s_{\mathrm{freq}}(u) = \alpha\,
 z(\|f_u\|_2) + \beta\, z(\mathrm{Var}_u)$, tuned in two grid rounds on
 TextVQA$_{500}$ at 25\% retention ($\alpha{=}1,\beta{=}0.6$; official VQA-acc).
@@ -319,7 +277,7 @@ audit index entry for the frequency-aware selector.
   other three benchmarks at 25\%).}
 \end{table}
 
-\noindent\textbf{S4c.2 Adaptive stage router} (body \S\,6f): query-blind
+\noindent\textbf{S4b.2 Adaptive stage router} (body \S\,6e): query-blind
 per-image workload detector on merger-input features --- high-frequency tail
 ratio $r_{\mathrm{HF}} = \Pr\big[\mathrm{Var}_u > \bar{\mathrm{Var}} +
 \sigma_{\mathrm{Var}}\big]$ and 20-bin L2-entropy $H(\|f_u\|_2)$ --- routing
@@ -336,7 +294,7 @@ overlap (means 0.127 vs 0.142), so no single global threshold reconciles the two
 acceptance criteria. Evidence record: audit index entry for the
 adaptive stage-router gate and workload-signal analysis.
 
-\noindent\textbf{S4c.3 Exploratory learned boundary scorer} (body \S\,6):
+\noindent\textbf{S4b.3 Exploratory learned boundary scorer} (body \S\,6):
 we test whether a lightweight learned selector can improve on plain L2 without
 moving selection past the merger. A small MLP receives only pre-merger
 boundary features available at inference time: unit L2 norm, Sobel edge energy,
@@ -585,12 +543,11 @@ reported cells.
     Main full-split InternVL3 block   & 16/16        & audit: main-internvl3 & full-split metrics and skip accounting \\
     Regime-map FastV-k3               & 8            & audit: regime-fastv-k3 & same-scope rescored cells \\
     Regime-map RBM same-scope         & 5            & audit: regime-rbm & same-scope rescored cells \\
-    Cascade gate                      & 24/24        & audit: cascade & paired gate statistics \\
     Efficiency study                  & 7 configs    & audit: efficiency & throughput and latency records \\
     \S\,5 kept-set Jaccard / swap     & 8            & audit: mechanism-swap & kept-set and ordering audit \\
     \S\,5.1--5.2 M1/M2                & $n=64 \times 3$ & audit: mechanism-m1-m2 & rank and edge-energy measurements \\
     \S\,5.4 retention curve           & $n=200 \times 4$ & audit: retention-curve & depth ablation records \\
-    \S\,6 (a)--(f) prespecified extensions & ---      & audit: negative-results & gates and extension records \\
+    \S\,6 (a)--(e) prespecified extensions & ---      & audit: negative-results & gates and extension records \\
     Learned-scorer probe                   & $n=200 \times 2$ & audit: learned-scorer & model, held-out splits, predictions, and official rescoring \\
     \S\,8 600k reversal               & 3            & audit: low-cap-reversal & configuration-boundary records \\
     Engine fairness                   & $r{=}0$ 8/8; none 16/16 & audit: engine-parity & zero-drop and none-cell checks \\
@@ -692,54 +649,6 @@ recorded in the audit index.
     \bottomrule
   \end{tabular}
 \end{table*}
-
-\subsection*{S9.4 Cascade gate cells (24/24, Qwen3-VL-8B)}
-
-Three arms $\times$ two budgets $\times$ four benchmarks; $n = n_{\mathrm{common}}$
-(matched by question id); official $=$ \path{acc_official} from the paired
-rescore; ptid $=$ mean post-merger token count (identical across the three arms
-in every cell). Evidence record: audit index entry for the
-cascade paired summary and per-arm cells. (McNemar counts for these cells: S4b.)
-
-\begin{table*}[ht]
-  \centering
-  \small
-  \begin{tabular}{@{}l c l r r r l@{}}
-    \toprule
-    arm & $\kappa$ & bench & $n$ & official & ptid & JSON \\
-    \midrule
-    pre-alone (RBM) & 25\%   & textvqa  & 200 & 0.5967 & 212.8 & \path{gate_pre25_textvqa.json} \\
-    fastv-alone     & 25\%   & textvqa  & 200 & 0.6800 & 212.8 & \path{gate_fst25_textvqa.json} \\
-    cascade         & 25\%   & textvqa  & 200 & 0.5950 & 212.8 & \path{gate_cas25_textvqa.json} \\
-    pre-alone (RBM) & 25\%   & docvqa   & 200 & 0.4239 & 176.0 & \path{gate_pre25_docvqa.json} \\
-    fastv-alone     & 25\%   & docvqa   & 200 & 0.5183 & 176.0 & \path{gate_fst25_docvqa.json} \\
-    cascade         & 25\%   & docvqa   & 200 & 0.4779 & 176.0 & \path{gate_cas25_docvqa.json} \\
-    pre-alone (RBM) & 25\%   & ocrbench & 181 & 0.5801 & 114.8 & \path{gate_pre25_ocrbench.json} \\
-    fastv-alone     & 25\%   & ocrbench & 181 & 0.1713 & 114.8 & \path{gate_fst25_ocrbench.json} \\
-    cascade         & 25\%   & ocrbench & 181 & 0.3978 & 114.8 & \path{gate_cas25_ocrbench.json} \\
-    pre-alone (RBM) & 25\%   & gqa      & 200 & 0.4150 & 95.4  & \path{gate_pre25_gqa.json} \\
-    fastv-alone     & 25\%   & gqa      & 200 & 0.4900 & 95.4  & \path{gate_fst25_gqa.json} \\
-    cascade         & 25\%   & gqa      & 200 & 0.4050 & 95.4  & \path{gate_cas25_gqa.json} \\
-    \midrule
-    pre-alone (RBM) & 12.5\% & textvqa  & 200 & 0.5000 & 120.7 & \path{gate_pre12_textvqa.json} \\
-    fastv-alone     & 12.5\% & textvqa  & 200 & 0.4450 & 120.7 & \path{gate_fst12_textvqa.json} \\
-    cascade         & 12.5\% & textvqa  & 200 & 0.4050 & 120.7 & \path{gate_cas12_textvqa.json} \\
-    pre-alone (RBM) & 12.5\% & docvqa   & 200 & 0.2980 & 103.7 & \path{gate_pre12_docvqa.json} \\
-    fastv-alone     & 12.5\% & docvqa   & 200 & 0.2779 & 103.7 & \path{gate_fst12_docvqa.json} \\
-    cascade         & 12.5\% & docvqa   & 200 & 0.2070 & 103.7 & \path{gate_cas12_docvqa.json} \\
-    pre-alone (RBM) & 12.5\% & ocrbench & 181 & 0.3591 & 68.7  & \path{gate_pre12_ocrbench.json} \\
-    fastv-alone     & 12.5\% & ocrbench & 181 & 0.0884 & 68.7  & \path{gate_fst12_ocrbench.json} \\
-    cascade         & 12.5\% & ocrbench & 181 & 0.1713 & 68.7  & \path{gate_cas12_ocrbench.json} \\
-    pre-alone (RBM) & 12.5\% & gqa      & 200 & 0.3950 & 62.3  & \path{gate_pre12_gqa.json} \\
-    fastv-alone     & 12.5\% & gqa      & 200 & 0.4550 & 62.3  & \path{gate_fst12_gqa.json} \\
-    cascade         & 12.5\% & gqa      & 200 & 0.3500 & 62.3  & \path{gate_cas12_gqa.json} \\
-    \bottomrule
-  \end{tabular}
-\end{table*}
-
-\noindent(Per-cell artifact identifiers are specified by the anonymous manifest.
-OCR-Bench $n_{\mathrm{common}} = 181$ after 19 long-OCR skips; all other cells
-$n = 200$. All 24 expected cells are present.)
 
 %──────────────────────────────────────────────────────────────────────────────
 \section*{S10. Qualitative same-image comparison --- measured pre- vs post-merger L2 selection}
