@@ -2,6 +2,9 @@
 
 > 分支 `exp/deferred-rbm-n200`；开始 2026-08-25。目标：从 MALT-1 已验证机制出发，回答 transient-token 一额外 block 收益的因果来源，并发现更完整的方法结构（如 MALT-Memory/KV）。工作名未锁定。
 > 最终报告：`experiments/malt_method_discovery.md`。
+> **⚠️ 2026-08-25 审计：GO 结论 HOLD。MALT-C = DUPLICATE of native-coordinate
+> RBM；MALT-1 REFUTED（deferred hypothesis）**。详见
+> `experiments/mrope_scorer_provenance_audit.md` 与下方 §2i。
 
 ## 0. 冻结事实与边界（不重述完整，见任务书）
 - MALT-1 精确配置（repo 惯例）：`Qwen/Qwen3-VL-8B-Instruct`, bf16, eager,
@@ -52,6 +55,25 @@
 峰值内存相当。无数据集显著落后（textvqa -1.0pp 为边界、z=1.41 不显著）。
 **VERDICT: PASS（效率杆）→ GO（MALT-C）**。n=64 ocrbench 的 1 样本凹陷在 n=200
 完全消失（0.635=0.635）。
+
+## 2i. 2026-08-25 mRoPE/scorer provenance 审计（HOLD + 结论推翻）
+
+- **MALT-C 命令重复**：H0n = `--mode pre --r-pre 0.25 --mrope native` == 论文
+  正式 native RBM 配置（r2c_qwen3vl_pre / ef72607 / DECISIONS 2026-07-30）；
+  per-sample 答案 ocrbench 181/181 逐字相同 → **不是新方法**。
+- **Gate C scorer 错配**：analyze_malt_gateC.py 读 JSON 的 raw `correct`
+  （baselines_hf 内联 ad-hoc containment），非 official_scorers.py。同文件
+  raw vs official：h1 textvqa .830 vs .7433、docvqa .470 vs .5959 等（±12.7pp）。
+- **Gate C official rescore 重执行**（sweep 同款评测器，脚本
+  `scripts/audit_mrope_gateC_official_rescore.py`）：H1 official
+  .7433/.5959/.6354/.5400 逐位复现 ✓；H0n .7433/.5924/.6354/.5400；
+  **official macro Δ(H0n−H1) = −.0009，paired bootstrap 95% CI
+  [−.0021, +.0016]**（含 0）；OCRBench 五类别两臂逐类相同。
+- **因果**：K0(mimic)→K1(native) 官方 macro +12.47pp 为 mRoPE+timing 混淆；
+  H0n(native imm) vs H1(native def) 才是纯 deletion timing，Δ≈0。
+- **正式结论：Deferred contextualization hypothesis is refuted; the prior
+  K0→K1 gain was caused primarily by inconsistent positional handling.**
+  MALT-1 不得再写成方法；六 Gate PASS 表述撤销（raw-correct 基）。
 
 ## 2h. 最终结论（写入报告）
 - **机制**：MALT-1 增益 = native 坐标保留，非 transient K/V 读取（因果消融

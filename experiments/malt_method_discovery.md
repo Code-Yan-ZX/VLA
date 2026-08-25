@@ -3,6 +3,15 @@
 > 分支 `exp/deferred-rbm-n200`；2026-08-25。工作名：暂用 **MALT-C（Coord-aware）**
 > 描述候选；正式名未锁定。实时日志：`experiments/malt_goal_mode_log.md`；
 > 数据：`runs/malt_goal_mode/`。
+>
+> **⚠️ 2026-08-25 审计修正（mrope_scorer_provenance_audit.md）：本报告的
+> GO 结论已被推翻。MALT-C（H0n）命令 `--mode pre --r-pre 0.25 --mrope native`
+> == 论文正式 native RBM 配置（r2c_qwen3vl_pre / ef72607 / DECISIONS
+> 2026-07-30），per-sample 答案 181/181 相同 → **不是新方法，是 coordinate-
+> correct 的 RBM 实现**。Gate C 数字基于 raw ad-hoc `correct`（非 official）；
+> official-rescore 下 H0n(native imm)≈H1(native def)（macro Δ−.0009，
+> CI[−.0021,+.0016]）→ **deferred contextualization hypothesis REFUTED**；
+> 先前 K0→K1 +12.5pp 主因是 vllm-mimic→native 位置处理不一致，非 deferral。
 
 ## 1. 研究问题
 为什么让最终会被删除的视觉 token 多参与 1–2 个 decoder block，使 macro 相对
@@ -98,6 +107,14 @@ deferred pruning = full-aliveness）。**但**本报告因果消融证明该机�
 MALT-C（native-coordinate immediate pruning）的 novelty 在于**发现**：deferred
 pruning 的增益主因是坐标保留而非 deferral——这是对既有方法的行为归因，非新算子。
 
+**⚠️ 2026-08-25 审计修正**：native-coordinate immediate pruning == 论文正式
+RBM 的坐标处理（DECISIONS 2026-07-30 统一 `--mrope native`；ef72607
+“vllm-mimic position layout is a known-degenerate path”）。外部已有同族
+positional convention：**IVC-Prune**（preserve original position IDs）、
+**Reroute**（keep-index positional convention）。不能以“保留 native
+coordinates”单独提出新方法 claim。本报告的机制归因（增益=坐标）经 official
+rescore 复核成立，但“MALT-C 为新方法”不成立。
+
 ## 9. GO/NO-GO → **GO（MALT-C）**
 Gate C（locked n=200，paired vs MALT-1）：
 
@@ -117,9 +134,22 @@ Gate C（locked n=200，paired vs MALT-1）：
 - 效率杆满足：macro ≥ MALT-1−0.5pp ✓；compute ≥15% 降低（ΣN_l²）✓；
   真实实现 ✓；无数据集 >1pp 落后 ✓。
 
-**VERDICT: PASS（效率杆）→ GO。** 正式候选 = **MALT-C（native-coordinate
-immediate pruning）**：立即剪枝 + 保留 native mrope 坐标，K=0 算力下获得
-MALT-1 精度，是固定 K=1 deferred pruning 的严格 Pareto 改进。
+**~~VERDICT: PASS（效率杆）→ GO~~ 已推翻（2026-08-25 审计）。**
+
+审计修正：Gate C 全部数字来自 JSON 的 raw `correct`（baselines_hf.py 内联
+ad-hoc containment scorer），**不是 official scorer**。用 sweep 同一
+official_scorers.py 对 H0n/H1 原始 answer 重打分：
+- H1 official = .7433/.5959/.6354/.5400（与 sweep_analysis.json 逐位复现 ✓）；
+- H0n official = .7433/.5924/.6354/.5400；
+- **official macro Δ(H0n−H1) = −.0009，paired bootstrap 95% CI [−.0021,
+  +.0016]**（含 0）→ H0n ≈ H1，无显著性差异。
+
+且 **H0n 命令 == 论文正式 native RBM 配置**（`--mode pre --r-pre 0.25
+--mrope native`，== r2c_qwen3vl_pre / ef72607 / DECISIONS 2026-07-30），
+逐样本答案 181/181（ocrbench）相同。**MALT-C is not a new method; it is the
+already-required coordinate-correct implementation of RBM.** “严格 Pareto 改进”
+与“GO”表述不得继续使用；完整审计见
+`experiments/mrope_scorer_provenance_audit.md`。
 
 **失败边界（诚实记录）**：若论文语境要求"deferred 参与即增益"的旧叙事，本
 结果**推翻**该叙事——增益是坐标处理而非 deferral。真实 FLOPs 仅降 ~4–12%

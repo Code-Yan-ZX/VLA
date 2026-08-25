@@ -51,14 +51,16 @@
 - 报告 `reports/acmmm_final_controls.md`；机器可读 `results/acmmm_final_controls/analysis.json`。
 
 ## 下一步
-- **MALT goal-mode（2026-08-25，分支 exp/deferred-rbm-n200）**：因果消融
-  H2/H3/H4/nb 全保留增益 → **MALT-1 增益 = native 坐标保留，非 transient K/V
-  读取**；h0n（immediate+`--mrope native`）n=200 macro .621≈MALT-1 .625
-  （CI[−.012,+.004]）、keep-set 100% 相同、ΣN_l² −39% → **GO：MALT-C**（K=0
-  算力的 native-coordinate immediate pruning，严格 Pareto）。报告
-  `experiments/malt_method_discovery.md`；日志 `experiments/malt_goal_mode_log.md`。
-  **⚠️ claim-level**：deferred-RBM +12.5pp 主因可能是位置处理而非 deferral；
-  论文 Stage Law / deferred 叙事需 user 决策如何修订（正文未改）。
+- **⚠️ HOLD（2026-08-25，审计中）**：**MALT-C = HOLD — possible duplicate of
+  native-coordinate RBM and Gate-C scorer mismatch under audit**。审计前禁止：
+  写 MALT-C=GO、称其严格 Pareto 新方法、称 K0/K1 唯一差别是删除时间、把 raw
+  binary correctness 当 official score。审计进行中
+  （`experiments/mrope_scorer_provenance_audit.md` 将交付结论：DUPLICATE/REFUTED
+  或 small genuine deferred effect 或 UNRESOLVED）。H0n 实际命令
+  `--mode pre --r-pre 0.25 --mrope native` == 论文正式 native RBM 配置
+  （DECISIONS 2026-07-30 / ef72607），不构成新方法；Gate C 分析读 JSON raw
+  `correct`（ad-hoc containment scorer），非 official rescore
+  （sweep 官方 K1：textvqa 0.7433 等），两者不可混用。
 - **MALT 定稿**：正式方法 = **fixed K=1（MALT-1）**（adaptive gate NO-GO，2026-08-24 审计）。剩余决策：是否在论文/方法文档中写入 MALT-1 命名与固定 K=1 定位；是否保留"长尾 K=8"讨论（oracle ≤5pp 且算力 2.6×，建议不采用）。
 - **user 决策**：GQA claim 修订方式（-5.6pp post-lead vs 现 0.0pp 表述）；是否采用 P0-2 新配对数字替换 Table 1（YES 已给出）。
 - 恢复并核验 53/53 run JSON、14 类 manifest，再解除 artifact gate。
