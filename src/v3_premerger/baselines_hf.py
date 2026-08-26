@@ -512,6 +512,194 @@ def apply_premerger(inputs_embeds: torch.Tensor, position_ids: torch.Tensor,
 
 
 # --------------------------------------------------------------------------- #
+# Dual-Granularity representation (base + residual-detail tokens).  Native
+# mRoPE harness: survivors keep their NATIVE coordinates; the residual token of
+# a kept group inherits the group's native coordinate (P2 "duplicate") or the
+# cell immediately right of it (P2 "adjacent").  Residual construction r_b =
+# M(X) - M(Xbar) (X = the MAIN merger's input = the same features the base
+# token b_i = M(X_i) comes from; Xbar = group mean repeated).  Mechanism note:
+# the task-spec'd r_a = M(DeltaX) - M(0) is REFUTED -- the merger LayerNorm
+# amplifies de-meaned patches into 2-7x detail-uncorrelated norms; r_b stays in
+# the base's magnitude regime and correlates with within-unit detail (+0.31
+# spearman on 15.5k units).  Total LLM visual tokens per image = K (fixed):
+#   C1: K_b base (top-K_b by frozen RBM L2) + K_r residual (K_r by residual
+#       energy among the base groups), K_b + K_r = K.
+#   C2: D dual groups (top-D by distortion d_i = ||r_b_i||/||b_i|| over ALL
+#       units) + (K-2D) single groups (top-(K-2D) by L2 among non-dual);
+#       2D + (K-2D) = K tokens.
+# --------------------------------------------------------------------------- #
+def dualrepr_keep_units(hs: torch.Tensor, main_hs: torch.Tensor,
+                        grid_thw: torch.Tensor, keep_frac: float, unit: int,
+                        rho: float, candidate: str, merger):
+    """Select base + residual-carrying units for the dual-granularity
+    representation.  hs = the score-source merger input (tap.first_hs, the
+    same tensor plain RBM ranks); main_hs = the MAIN merger input (final ViT
+    features) used for the residual construction.  Returns
+    (base_units [K_b|K-D global sorted], res_local (kept-local residual unit
+    indices), diag)."""
+    seq = hs.shape[0]
+    ctx = hs.shape[-1]
+    num_units = seq // unit
+    full = (grid_thw.prod(-1) // unit).tolist()
+    feats = hs.reshape(num_units, unit, ctx)
+    scores = feats.float().norm(dim=-1).mean(dim=-1)     # frozen RBM l2
+    k_per = [max(1, int(round(f * keep_frac))) for f in full]
+    assert sum(k_per) == 0 or sum(k_per) <= num_units, (k_per, num_units)
+    off = 0
+    base_units_all, res_local_all = [], []
+    for f, K in zip(full, k_per):
+        s_i = scores[off:off + f]
+        if candidate == "c2":
+            D = max(0, _repr_kr(K, rho))
+            D = min(D, K // 2)
+            # distortion over ALL units via the native main merger (main_hs)
+            mu = main_hs[off * unit:(off + f) * unit].reshape(f, unit, ctx).mean(dim=1, keepdim=True)
+            xbar = mu.expand(-1, unit, -1).reshape(-1, 1, ctx)
+            flat = main_hs[off * unit:(off + f) * unit].reshape(-1, 1, ctx)
+            bM = merger(flat).float().reshape(f, -1).norm(dim=-1)
+            rM = (merger(flat).float() - merger(xbar).float()).reshape(f, -1).norm(dim=-1)
+            d = rM / bM.clamp_min(1e-6)
+            dual = torch.topk(d, D).indices if D > 0 else torch.empty(0, dtype=torch.long)
+            nondual = torch.ones(f, dtype=torch.bool, device=hs.device)
+            nondual[dual] = False
+            n_single = K - 2 * D
+            if n_single > 0 and nondual.any():
+                full_nd = torch.nonzero(nondual).squeeze(1)
+                single = full_nd[torch.topk(s_i[nondual], min(n_single, full_nd.numel())).indices]
+            else:
+                single = torch.empty(0, dtype=torch.long, device=hs.device)
+            idx = torch.cat([dual, single])
+            base_local = sorted(idx.tolist())
+            dual_sorted = sorted(dual.tolist())
+            res_local = [base_local.index(u) for u in dual_sorted]
+        else:                                              # c1
+            K_r = max(0, _repr_kr(K, rho))
+            K_r = min(K_r, max(0, K - 1))
+            K_b = max(1, K - K_r)
+            base_local = torch.topk(s_i, K_b).indices.sort().values.tolist()
+            res_local = []                                 # filled by energy later
+        base_units_all += [off + u for u in base_local]
+        res_local_all.append(res_local)
+        off += f
+    diag = {"n_units_full": num_units, "n_units_kept": len(base_units_all),
+            "full_per_image": full, "k_per_image": k_per,
+            "repr_candidate": candidate, "repr_rho": rho,
+            "res_per_image": [len(r) for r in res_local_all]}
+    return torch.tensor(base_units_all, dtype=torch.long, device=hs.device), \
+        res_local_all, diag
+
+
+def _repr_kr(K: int, rho: float) -> int:
+    """Round-half-up residual count K_r = round(rho*K) (Python round() is
+    banker's half-to-even, which zeroes small-K ratios like round(0.5)=0)."""
+    return int(K * rho + 0.5)
+
+
+def dualrepr_residuals(main_hs: torch.Tensor, base_units: torch.Tensor,
+                       unit: int, merger, rho: float, candidate: str,
+                       full, k_per, res_local_all):
+    """Compute r_b = M(X) - M(Xbar) for the kept units; select the residual-
+    carrying units (C1 by residual energy among the base groups; C2 by the
+    pre-selected dual units).  Returns (res_rows [n_res, H] (kept order),
+    res_kept (per-image kept-local residual unit indices))."""
+    ctx = main_hs.shape[-1]
+    num_units = main_hs.shape[0] // unit
+    kept = main_hs.reshape(num_units, unit, ctx).index_select(0, base_units)
+    mu = kept.mean(dim=1, keepdim=True)
+    xbar = mu.expand(-1, unit, -1).reshape(-1, 1, ctx)
+    b_all = merger(kept.reshape(-1, 1, ctx))               # [K_b, H] == base tokens
+    r_all = b_all - merger(xbar)                           # [K_b, H]
+    res_rows, res_kept = [], []
+    off = 0
+    for i_img, K in enumerate(k_per):
+        n_base = _count_img_kept(base_units, full, i_img)
+        r_i = r_all[off:off + n_base]
+        if candidate == "c1":
+            K_r = max(0, _repr_kr(K, rho))
+            K_r = min(K_r, max(0, K - 1))
+            if K_r == 0:
+                local = []
+            else:
+                local = torch.topk(r_i.float().norm(dim=-1), K_r).indices.tolist()
+        else:
+            local = [j for j in res_local_all[i_img] if j < n_base]
+        if local:
+            res_rows.append(r_i[local])
+        res_kept.append(local)
+        off += n_base
+    out_rows = (torch.cat(res_rows, dim=0) if res_rows
+                else torch.empty(0, r_all.shape[-1], dtype=r_all.dtype,
+                                 device=r_all.device))
+    return out_rows, res_kept
+
+
+def _count_img_kept(base_units: torch.Tensor, full, i_img):
+    """Number of kept (base) units belonging to image i_img (base_units global
+    sorted, units are per-image contiguous)."""
+    lo = int(sum(full[:i_img]))
+    hi = lo + int(full[i_img])
+    return int(((base_units >= lo) & (base_units < hi)).sum())
+
+
+def inject_residual(ie, pos, ds, im, res_rows, res_kept, base_units, full,
+                    grid_thw, unit, pos_mode: str):
+    """Append residual rows to the pruned prepared tensors (native mRoPE).
+    ie [1,L,H], pos [3or4,1,L], im [L] bool, ds list of [n_img,H] (None ok).
+    Each image's residual rows are inserted right after its image block;
+    position = the base group's native cell (pos_mode 'duplicate') or the cell
+    immediately right of it ('adjacent').  deepstack rows are ZERO at residual
+    positions (no deepstack add).  Single contiguous image block per prompt
+    (limit_mm_per_prompt=1); multi-image prompts fall back to plain RBM.
+    Returns (ie', pos', ds', im')."""
+    n_res = int(res_rows.shape[0])
+    img_pos = im.nonzero(as_tuple=False).view(-1)
+    if n_res == 0 or img_pos.numel() == 0:
+        return ie, pos, ds, im
+    if grid_thw.shape[0] != 1:
+        return ie, pos, ds, im                     # multi-image: plain RBM
+    grid_w = int(grid_thw[0, 2]) // 2              # llm grid width (merged)
+    # base image-block rows in kept order == the True positions of im, in order
+    n_img_tok = int(img_pos.numel())
+    assert n_img_tok == int(base_units.numel()), \
+        (n_img_tok, int(base_units.numel()))
+    # collect residual rows + positions per image (single image -> one block)
+    res_positions, res_rows_out = [], []
+    off_rows = 0
+    for i_img, f in enumerate(full):
+        n_base = _count_img_kept(base_units, full, i_img)
+        local = res_kept[i_img] if i_img < len(res_kept) else []
+        if not local:
+            continue
+        rows = res_rows[off_rows:off_rows + len(local)]
+        off_rows += len(local)
+        # base kept-local unit j sits at image-block position j (sorted units)
+        for k, j in enumerate(local):
+            bp = pos[:, 0, int(img_pos[j])]                # base cell (t,h,w)
+            pp = bp.clone()
+            if pos_mode == "adjacent" and grid_w:
+                pp[2] = min(int(pp[2]) + 1, grid_w - 1)
+            res_positions.append(pp)
+            res_rows_out.append(rows[k])
+    if not res_rows_out:
+        return ie, pos, ds, im
+    n_res = len(res_rows_out)
+    res_ie = torch.stack(res_rows_out, dim=0).unsqueeze(0)      # [1, n_res, H]
+    res_pos = torch.stack(res_positions, dim=1).unsqueeze(1)    # [3or4, 1, n_res]
+    res_ds = None if ds is None else [
+        torch.zeros(n_res, e.shape[-1], dtype=e.dtype, device=e.device) for e in ds]
+    res_mask = torch.ones(n_res, dtype=im.dtype, device=im.device)
+    insert_at = int(img_pos[-1]) + 1                   # after the image block
+    ie = torch.cat([ie[:, :insert_at], res_ie.to(ie.dtype), ie[:, insert_at:]], dim=1)
+    pos = torch.cat([pos[:, :, :insert_at], res_pos.to(pos.dtype),
+                     pos[:, :, insert_at:]], dim=2)
+    im = torch.cat([im[:insert_at], res_mask, im[insert_at:]])
+    if ds is not None:
+        ds = [torch.cat([e[:insert_at], r, e[insert_at:]], dim=0)
+              for e, r in zip(ds, res_ds)]
+    return ie, pos, ds, im
+
+
+# --------------------------------------------------------------------------- #
 # POST-merger stage (--mode post).  Pure function: per-image L2 top-k of the
 # post-merge image rows captured by capture_prepared_inputs.  No merger tap
 # needed -- we score the captured inputs_embeds image rows directly.  Same
@@ -805,6 +993,7 @@ class MergerTap:
     def __init__(self, visual):
         self.first_hs = None
         self.first_tag = None
+        self.main_hs = None                # main-merger input (final ViT features)
         self.call_order = []
         self._handles = []
         targets = [("main", visual.merger)]
@@ -818,16 +1007,20 @@ class MergerTap:
     def _make_hook(self, tag):
         def hook(module, args, kwargs):
             self.call_order.append(tag)
+            hs = kwargs.get("hidden_states", args[0] if args else None)
+            if hs is None:
+                return
+            if tag == "main" and self.main_hs is None:
+                self.main_hs = hs.detach()
             if self.first_hs is None:
-                hs = kwargs.get("hidden_states", args[0] if args else None)
-                if hs is not None:
-                    self.first_hs = hs.detach()
-                    self.first_tag = tag
+                self.first_hs = hs.detach()
+                self.first_tag = tag
         return hook
 
     def reset(self):
         self.first_hs = None
         self.first_tag = None
+        self.main_hs = None
         self.call_order = []
 
     def remove(self):
@@ -1243,6 +1436,24 @@ def parse_args():
                          "the reference vLLM pre cells; native keeps each "
                          "survivor's original get_rope_index coordinate "
                          "(diagnostic).")
+    ap.add_argument("--repr", default="none", choices=["none", "dual"],
+                    help="Dual-Granularity representation (mode=pre ONLY): "
+                         "'none' = plain RBM; 'dual' = base + residual-detail "
+                         "tokens (fixed total token budget K). Residual r_b = "
+                         "M(X) - M(Xbar) via the native main merger.")
+    ap.add_argument("--repr-candidate", default="c1", choices=["c1", "c2"],
+                    help="c1: residual units by residual energy among the "
+                         "RBM-kept base groups (K_r = rho*K). c2: dual units "
+                         "by distortion d_i over ALL units, single units fill "
+                         "the rest by RBM (D = rho*K dual groups).")
+    ap.add_argument("--repr-ratio", type=float, default=0.0,
+                    help="rho: K_r/K (c1) or D/K (c2). Pre-registered values "
+                         "only; ratio=0 -> bit-identical plain RBM.")
+    ap.add_argument("--repr-pos", default="duplicate",
+                    choices=["duplicate", "adjacent"],
+                    help="native-harness position of residual tokens: "
+                         "duplicate = inherit the base group's native cell; "
+                         "adjacent = the cell immediately right of the base.")
     ap.add_argument("--rb-fuse", default="quota", choices=["quota", "rrf"],
                     help="rankbridge ONLY: fusion of pre-merger L2 rank and "
                          "layer-K attention rank. quota: rho*k_i protected "
@@ -1918,16 +2129,66 @@ def main():
                     model, {k: v for k, v in inputs.items()})
                 if tap.first_hs is None:
                     raise RuntimeError("merger tap captured nothing (no image?)")
-                kept, dpre = premerger_keep_units(
-                    tap.first_hs, inputs["image_grid_thw"], args.r_pre,
-                    spatial_unit)
-                ie, pos, ds, im2 = apply_premerger(
-                    inputs_embeds, position_ids, deepstack, image_mask, kept)
+                dual_active = (args.mode == "pre" and args.repr == "dual"
+                               and args.repr_ratio > 0.0)
+                if dual_active:
+                    # ---- Dual-Granularity representation (base + residual) ----
+                    # base units by frozen RBM L2 (C1: K_b; C2: dual+single);
+                    # residual rows r_b = M(X)-M(Xbar) injected after the image
+                    # block with native positions (duplicate/adjacent). Total
+                    # LLM visual tokens per image = K (base + residual).
+                    if args.mrope != "native":
+                        raise SystemExit("--repr dual requires --mrope native "
+                                         "(frozen baseline; vllm-mimic 严禁)")
+                    main_hs = (tap.main_hs if tap.main_hs is not None
+                               else tap.first_hs)
+                    base_units, res_local_all, rpre = dualrepr_keep_units(
+                        tap.first_hs, main_hs, inputs["image_grid_thw"],
+                        args.r_pre, spatial_unit, args.repr_ratio,
+                        args.repr_candidate, model.visual.merger)
+                    ie, pos, ds, im2 = apply_premerger(
+                        inputs_embeds, position_ids, deepstack, image_mask,
+                        base_units)
+                    full = (inputs["image_grid_thw"].prod(-1)
+                            // spatial_unit).tolist()
+                    k_per = [max(1, int(round(f * args.r_pre))) for f in full]
+                    res_rows, res_kept = dualrepr_residuals(
+                        main_hs, base_units, spatial_unit, model.visual.merger,
+                        args.repr_ratio, args.repr_candidate, full, k_per,
+                        res_local_all)
+                    ie, pos, ds, im2 = inject_residual(
+                        ie, pos, ds, im2, res_rows, res_kept, base_units, full,
+                        inputs["image_grid_thw"], spatial_unit, args.repr_pos)
+                    if res_rows.numel():
+                        _rn = res_rows.float().norm(dim=-1)
+                        dpre_res_norm = {"mean": float(_rn.mean()),
+                                         "p50": float(_rn.median()),
+                                         "min": float(_rn.min()),
+                                         "max": float(_rn.max()),
+                                         "n": int(_rn.numel())}
+                    else:
+                        dpre_res_norm = None
+                    dpre = {**rpre, "res_per_image_final": [len(x) for x in res_kept],
+                            "n_res_total": int(res_rows.shape[0]),
+                            "n_base_total": int(base_units.numel()),
+                            "res_norm": dpre_res_norm,
+                            "mrope": "native", "repr": args.repr,
+                            "repr_candidate": args.repr_candidate,
+                            "repr_ratio": args.repr_ratio,
+                            "repr_pos": args.repr_pos,
+                            "mask_source": tap.first_tag}
+                else:
+                    kept, dpre = premerger_keep_units(
+                        tap.first_hs, inputs["image_grid_thw"], args.r_pre,
+                        spatial_unit)
+                    ie, pos, ds, im2 = apply_premerger(
+                        inputs_embeds, position_ids, deepstack, image_mask, kept)
                 # mrope: default replicates the vLLM runner's scaled-placeholder
                 # positions (full grid block + truncation to token count); the
                 # survivors then carry row-major first-k grid coords, exactly
-                # as the reference vLLM pre cells did.
-                if args.mrope == "vllm-mimic":
+                # as the reference vLLM pre cells did. (dual_active already set
+                # dpre["mrope"]="native" and skipped the mimic override.)
+                if (not dual_active) and args.mrope == "vllm-mimic":
                     img_run = image_mask.nonzero(as_tuple=False).view(-1)
                     n_full = int(img_run.numel())
                     t1 = int(img_run[0]) if n_full else 0

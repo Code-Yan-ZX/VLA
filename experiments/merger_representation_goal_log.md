@@ -70,6 +70,24 @@
     derived alternatives). Empirical dev test is the arbiter of the redundancy
     concern (cos 0.92).
 
+- 2026-08-26: **HARNESS PIVOT (critical).** The frozen baseline is
+  `baselines_hf.py --mode pre --r-pre 0.25 --mrope NATIVE` (native mRoPE —
+  kept units keep their true native coordinates; the paper's formal config).
+  The vLLM runner's stock positions are first-K COMPACTED (vllm-mimic) —
+  verified: native vs vllm-mimic give different answers on sample 16837
+  ($200 vs $500). 严禁 vllm-mimic ⇒ the candidate MUST be evaluated in the
+  native harness. vLLM-runner dual mode (P1 append) remains mechanically
+  validated (Gate A vLLM: ratio=0 bit-degrades 10/10, token counts exact) but
+  is NOT the evaluation harness.
+  - baselines_hf dual mode implemented: dualrepr_keep_units (C1 K_b by L2,
+    C2 dual+single by distortion), dualrepr_residuals (r_b from MAIN merger
+    input), inject_residual (residuals after image block, native positions:
+    duplicate = base cell, adjacent = cell right of base), CLI
+    --repr/--repr-candidate/--repr-ratio/--repr-pos. Dry-check ALL PASS.
+  - Position schemes for dev-lock: duplicate (P2, task scheme 1) vs adjacent
+    (avoids duplicate-coordinate attention anomalies). Task scheme 2
+    (max-deviation patch coordinate) == group coordinate in the merged grid.
+
 ## Gates
 
 - [ ] Gate A: CPU/10-sample correctness
