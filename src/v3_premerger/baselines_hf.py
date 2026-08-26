@@ -2160,7 +2160,7 @@ def main():
                         ie, pos, ds, im2, res_rows, res_kept, base_units, full,
                         inputs["image_grid_thw"], spatial_unit, args.repr_pos)
                     if res_rows.numel():
-                        _rn = res_rows.float().norm(dim=-1)
+                        _rn = res_rows.detach().float().norm(dim=-1)
                         dpre_res_norm = {"mean": float(_rn.mean()),
                                          "p50": float(_rn.median()),
                                          "min": float(_rn.min()),

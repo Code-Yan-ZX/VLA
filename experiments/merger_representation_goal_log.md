@@ -90,8 +90,15 @@
 
 ## Gates
 
-- [ ] Gate A: CPU/10-sample correctness
-- [ ] Gate B: disjoint exploration n=64×4
+- [x] Gate A: CPU/10-sample correctness — **PASS (baselines_hf native harness)**
+  - Dry-check ALL PASS (qwen3vl): ratio=0 → bit-identical plain RBM; C1/C2
+    split sizes; main-call residuals; base+residual==K accounting.
+  - GPU 10-sample: A1 plain vs A2 c1-ratio=0 → **10/10 identical answers**
+    (bit-degrade); all arms skipped=0; per-image n_base+n_res == K exactly
+    (e.g. 390+98=488, 14+4=18); ptid_mean identical across arms (270.9);
+    residual norms sane (C1 mean 15.7, C2 mean 20-22); official rescore
+    wrapper verified.
+- [ ] Gate B: disjoint exploration n=64×4 (baselines + position lock + C1/C2 ratios)
 - [ ] Gate C: locked n=200×4 confirmation
 - [ ] Final: report + GO/NO-GO
 
