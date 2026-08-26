@@ -8,8 +8,6 @@
 > Qwen3-VL-8B, native mRoPE, official scorer, 25% LLM visual-token budget,
 > pre-native-merger mean-patch L2, native RBM, FastV-k3, Full model.
 
-_(DRAFT — results being filled as Gates complete.)_
-
 ## 1. Research question and candidate
 
 For a native 2×2 merger group X_i = [x_i1..x_i4] with merged token b_i = M(X_i):
@@ -143,7 +141,7 @@ baseline cell (0.5924) exactly. Paired significance (20k bootstrap/sign-flip):
 DocVQA and OCRBench are **significantly negative** (p<0.05); TextVQA/GQA
 directionally negative.
 
-## 7. Verdict
+## 6. Verdict
 
 **NO-GO — confirmed at the locked n=200.** No representation-level extension
 passed the preregistered gate; retain RBM as a finding-driven minimal method
@@ -177,7 +175,7 @@ position schemes (duplicate vs adjacent) are empirically equivalent (≤0.0007 o
 every dev dataset) — the residual's exact mRoPE position has no measurable
 effect.
 
-## 6. Methodological acceptance (for the record — the candidate is fully
+## 7. Methodological acceptance (for the record — the candidate is fully
 specified even though it fails the empirical gate)
 
 - **Problem definition**: the fixed one-token-per-group representation of a
@@ -212,10 +210,11 @@ specified even though it fails the empirical gate)
   vs HybridToken-VLM — training-free, reuses native merger, keeps two
   independent tokens instead of a learned single-token bottleneck.
 
-## 7. Verdict
+## 8. Deliverables
 
-_(GO / NO-GO — to fill after Gate C)_
-
-## 7. Verdict
-
-_(GO / NO-GO — to fill)_
+- Branch `exp/merger-representation-goal`, base `cad68f9`.
+- Live log: `experiments/merger_representation_goal_log.md` (one commit per gate).
+- Final report: this file.
+- Novelty audit matrix (§2), mechanism evidence (§3), candidate definitions (§4),
+  Gate A/B/C results (§5), verdict (§7).
+- Data (gitignored): `runs/merger_repr/{gateA,gateB,gateC}/` + official rescores.
