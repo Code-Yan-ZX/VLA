@@ -90,6 +90,11 @@
 
 ## Gates
 
+- 2026-08-26: **Gate B pre-registration (committed before any Gate B results):**
+  C1 ρ ∈ {0.1, 0.2, 0.3} (task-fixed); C2 ρ ∈ {0.05, 0.1, 0.15} (D = dual
+  groups / K, my pre-registered choice). Positions to compare: duplicate vs
+  adjacent (C1-0.2 probe); ratio search: at most these 3 per candidate, no
+  post-hoc points. One global config, no per-dataset tuning.
 - [x] Gate A: CPU/10-sample correctness — **PASS (baselines_hf native harness)**
   - Dry-check ALL PASS (qwen3vl): ratio=0 → bit-identical plain RBM; C1/C2
     split sizes; main-call residuals; base+residual==K accounting.
