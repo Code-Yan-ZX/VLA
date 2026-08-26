@@ -155,3 +155,22 @@
   already encodes within-group structure; trading K_r spatial groups for
   redundant residual tokens loses coverage.
 - Per protocol: best candidate c1r1_dup enters Gate C (locked n=200) — launched.
+
+## 2026-08-26 Gate C COMPLETE — NO-GO confirmed (locked n=200, official)
+
+| bench | full | RBM | FastV | candidate (C1-ρ=0.1) | cand−RBM |
+|-------|------|-----|-------|---------------------|----------|
+| textvqa | 0.8667 | 0.7433 | 0.7633 | 0.7333 | −1.00pp |
+| docvqa | 0.9487 | 0.5924 | 0.5863 | 0.5501 | −4.23pp (p=0.028) |
+| ocrbench /1000 | 690.5 | 579.1 | 418.3 | 533.8 | −45.3pts (p=0.012) |
+| gqa | 0.6050 | 0.5400 | 0.5050 | 0.5200 | −2.00pp |
+| macro | 0.7943 | 0.6278 | 0.5783 | **0.5973** | **−3.05pp** |
+
+- **Verdict: NO-GO.** Candidate below native RBM on all 4 locked datasets
+  (macro −3.05pp; DocVQA/OCRBench significantly negative). Fails all 8 formal
+  criteria. Mechanism: r_b redundant with base (cos 0.92) + spatial-coverage
+  loss → monotonic degradation with ρ on both dev and locked data.
+- Harness validated: my native-RBM DocVQA 0.5924 == paper frozen cell exactly.
+- **No representation-level extension passed the preregistered gate; retain
+  RBM as the finding-driven minimal method; proceed to submission hardening.
+  Stop this round and all subsequent method-variant search (per task 止损).**

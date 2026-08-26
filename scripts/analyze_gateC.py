@@ -28,11 +28,14 @@ def main():
             continue
         cells[f.replace(".json", "")] = os.path.join(args.dir, f)
 
+    RUNS = os.path.join(REPO, "runs")
+
     def load(tag, bench):
         f = cells.get(f"{bench}_{tag}")
         if not f:
             return None, None, None, False
-        return load_cell_scores(os.path.relpath(f, REPO), bench, False)
+        # load_cell_scores expects a path RELATIVE TO runs/
+        return load_cell_scores(os.path.relpath(f, RUNS), bench, False)
 
     scores = {}
     for b in BENCHES:

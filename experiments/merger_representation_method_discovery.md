@@ -128,9 +128,54 @@ verified.
   and criterion 3 (TextVQA −11pp below the Full parent).
 - ⇒ Per protocol the best candidate (C1-ρ=0.1, duplicate) enters Gate C.
 
-### 5.4 Gate C — locked n=200 × 4 confirmation (C1-ρ=0.1, duplicate)
+### 5.4 Gate C — locked n=200 × 4 confirmation (C1-ρ=0.1, duplicate, official)
 
-_(running — to fill)_
+| bench (official metric) | full | native RBM | FastV-k3 | **candidate** | cand−RBM |
+|---|---|---|---|---|---|
+| TextVQA (VQA-acc) | 0.8667 | 0.7433 | 0.7633 | 0.7333 | **−1.00pp** |
+| DocVQA (ANLS) | 0.9487 | 0.5924 | 0.5863 | 0.5501 | **−4.23pp** (p=0.028) |
+| OCRBench (official /1000) | 690.51 | 579.12 | 418.26 | 533.78 | **−45.3pts** (p=0.012) |
+| GQA (norm EM) | 0.6050 | 0.5400 | 0.5050 | 0.5200 | **−2.00pp** |
+| macro | 0.7943 | 0.6278 | 0.5783 | **0.5973** | **−3.05pp** |
+
+Harness validation: my native-RBM DocVQA ANLS 0.5924 == the paper's frozen
+baseline cell (0.5924) exactly. Paired significance (20k bootstrap/sign-flip):
+DocVQA and OCRBench are **significantly negative** (p<0.05); TextVQA/GQA
+directionally negative.
+
+## 7. Verdict
+
+**NO-GO — confirmed at the locked n=200.** No representation-level extension
+passed the preregistered gate; retain RBM as a finding-driven minimal method
+and proceed to submission hardening.
+
+The candidate (best config C1-ρ=0.1, duplicate position) fails every formal
+criterion:
+1. macro ≥ RBM + 1.5pp: **FAIL** (−3.05pp).
+2. macro ≥ stronger-parent macro: **FAIL** (0.5973 < 0.7943).
+3. no dataset below stronger parent by >1pp: **FAIL** (all 4 datasets below
+   Full by 5.6–39.9pp; candidate also below RBM on all 4).
+4. ≥2 datasets strictly exceed stronger parent by ≥1pp: **FAIL** (0).
+5. paired bootstrap/sign-flip for a positive overall gain: **FAIL** (two
+   datasets significantly negative).
+6–8. moot (the empirical gate failed first).
+
+**Why it fails (mechanism)**: the task-spec'd residual r_a = M(ΔX)−M(0) is
+degenerate (the merger LayerNorm amplifies de-meaned patches into 2–7×,
+detail-uncorrelated norms). The mechanism-derived r_b = M(X)−M(X̄) is viable in
+scale and detail-correlated, but (i) cos(r_b, base) ≈ 0.92 — the native merger
+(norm+MLP) already encodes within-group structure into the base token, so the
+residual is largely redundant; and (ii) RBM at 25% already keeps the high-detail
+units. Trading K_r spatial groups for redundant residual tokens strictly loses
+coverage → monotonic degradation with ρ on both dev (Gate B) and locked (Gate C)
+data.
+
+**Also recorded**: the OCRBench disjoint dev n=64 subset was inadvertently
+Text-Recognition-only (construction flaw); the locked n=200 OCRBench (balanced
+5-category) gives the authoritative negative result (−45 pts, significant). The
+position schemes (duplicate vs adjacent) are empirically equivalent (≤0.0007 on
+every dev dataset) — the residual's exact mRoPE position has no measurable
+effect.
 
 ## 6. Methodological acceptance (for the record — the candidate is fully
 specified even though it fails the empirical gate)
