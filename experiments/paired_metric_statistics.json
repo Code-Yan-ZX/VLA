@@ -583,24 +583,24 @@
             "metric_kind": "binary",
             "label_A": "pre",
             "label_B": "post",
-            "mean_A": 0.476,
-            "mean_B": 0.183,
+            "mean_A": 0.48,
+            "mean_B": 0.182,
             "n_paired": 1000,
             "n_A_total": 1000,
             "n_B_total": 1000,
             "n_only_A": 0,
             "n_only_B": 0,
-            "mean_delta_pp": 29.3,
+            "mean_delta_pp": 29.8,
             "ci95_pp": [
-              25.8,
-              32.7
+              26.4,
+              33.3
             ],
-            "bootstrap_se_pp": 1.7749,
+            "bootstrap_se_pp": 1.765,
             "perm_p_two_sided": 5e-05,
             "mcnemar": {
-              "A_only_correct": 347,
-              "B_only_correct": 54,
-              "z": 14.632,
+              "A_only_correct": 349,
+              "B_only_correct": 51,
+              "z": 14.9,
               "p_exact_two_sided": 0.0
             },
             "verdict": "significant A>B"
@@ -686,11 +686,13 @@
             },
             "verdict": "significant A>B"
           },
-          "mismatch_audit": [],
+          "mismatch_audit": [
+            "The native-resolution none anchor is not iso-configuration with the matched 4M-pixel pre/post pair and is descriptive only."
+          ],
           "cells": {
             "none": "full_matrix/j7_qwen2vl_none_ocrbench_r0.000_full.json",
-            "pre": "full_matrix/j7_qwen2vl_pre_ocrbench_r0.750_full.json",
-            "post": "full_matrix/j7_qwen2vl_post_ocrbench_r0.750_full.json",
+            "pre": "results/acmmm_final_controls/p0_2/p0_2_qwen2_pre_ocrbench_r0.750_full.json",
+            "post": "results/acmmm_final_controls/p0_2/p0_2_qwen2_post_ocrbench_r0.750_full.json",
             "pre875": "full_matrix/j7_qwen2vl_pre_ocrbench_r0.875_full.json",
             "post875": "full_matrix/j7_qwen2vl_post_ocrbench_r0.875_full.json"
           }

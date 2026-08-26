@@ -277,3 +277,10 @@
 - 两份 exact paired raw run 均 gitignored 且当前缺失，因此不编造 H0n-vs-FastV CI；采用审计支持的 `+0.6pp, paired inconclusive/statistically indistinguishable` 措辞，恢复工件后再用 repo paired-stats 复算。
 - cascade 的 pre25 parent 使用 `vllm-mimic`，不能支持干净 negative claim；从正式 body/supplement 与维护中的 LaTeX 镜像删除其数字、表格、索引和推论，原实验代码/报告保留。
 - `drafts/paper_acmmm.md` 是历史工作稿，不是同步镜像；权威源继续为 `drafts/overleaf_submission/`，故不为本次投稿纠错回写历史稿。
+
+## 2026-08-26 | 最终论文同步与证据收敛
+
+- full-split matched-depth GQA (`n=12578`, pre-final 0.4207 vs post 0.4771, -5.64pp) 覆盖旧 `n=200` 0.0pp 估计；正式稿将其写为 workload-conditioned counterexample，不删除不利结果。
+- 采用 Qwen2.5 OCRBench matched-config `480/182`：同模型、4M cap、full1000、iso-token、0 skip、official scorer 与 committed gzip 证据均核验通过；native-resolution none 只作 descriptive anchor。
+- representation candidate 仍为 NO-GO，且相对真正 stronger parent `max(RBM,FastV)` macro 约 -2.14pp；不进入 supplement，避免与最小方法主线混淆。
+- artifact 合同发生漂移：历史 S9 为 53，当前 S9 动态解析为 29；两者本地均为 0 staged files，现有 controls manifest 也不是匿名提交 manifest。未恢复、统一、匿名扫描和校验前不得声称 artifact complete。

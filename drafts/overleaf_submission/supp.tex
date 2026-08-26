@@ -219,7 +219,7 @@ in both arms; the 200/200 ground-truth self-test is retained in the audit record
     \midrule
     Qwen2.5-VL-7B & TextVQA   & .25  & $+26.1$ pp   & \textbf{+30.8} & 1682 & 309  & 60.2 & 27.3 \\
     Qwen2.5-VL-7B & DocVQA    & .25  & $+11.0$ pp   & \textbf{+15.6} & 1406 & 693  & 60.8 & 11.6 \\
-    Qwen2.5-VL-7B & OCR-Bench & .25  & $+293$ pts   & \textbf{+14.6} & 347  & 54   & 59.9 & 14.7 \\
+    Qwen2.5-VL-7B & OCR-Bench & .25  & $+298$ pts   & \textbf{+14.9} & 349  & 51   & 60.0 & 14.9 \\
     Qwen2.5-VL-7B & GQA       & .25  & $-2.6$ pp \dag & \textbf{$-$5.7} & 892 & 1150 & 83.8 & $-4.1$ \\
     Qwen2.5-VL-7B & TextVQA   & .125 & $+27.8$ pp   & \textbf{+33.1} & 1836 & 305  & 57.2 & 29.1 \\
     Qwen2.5-VL-7B & DocVQA    & .125 & $+21.0$ pp   & \textbf{+25.6} & 1325 & 294  & 69.7 & 23.3 \\
@@ -228,13 +228,13 @@ in both arms; the 200/200 ground-truth self-test is retained in the audit record
   \end{tabular}
 \end{table*}
 
-\noindent\dag\ the only significant post-stage lead. These GQA cells use the
-deepstack[0]-input (layer-8) pre ranking; a pure-stage control that ranks at
-the main-merger input (pre-final) gives $0.0$~pp on GQA (body \S\,4.2,
-S7b), so the apparent post$>$pre is a layer-8 ranking artifact, not a true
-stage reversal. GQA official
+\noindent\dag\ the only significant post-stage lead in this table. These GQA
+cells use the deepstack[0]-input (layer-8) pre ranking. The full-split Qwen3
+matched-depth control at the main-merger boundary also favors post by
+$5.64$~pp (S7b), so GQA is a workload-conditioned counterexample rather than
+a layer-8 artifact. No matched-depth Qwen2.5-VL GQA control was run. GQA official
 word-normalized exact-match rescore gives a concordant McNemar $z = -8.1 / -7.1$
-(Qwen3-VL / Qwen2.5-VL). Smallest text-dense $\Delta_{25}$ $|z| = 14.6$
+(Qwen3-VL / Qwen2.5-VL). Smallest text-dense $\Delta_{25}$ $|z| = 14.9$
 (Qwen2.5-VL OCR-Bench); smallest text-dense $\Delta_{12.5}$ $|z| = 15.0$
 (Qwen2.5-VL OCR-Bench); smallest $|z|$ anywhere $= 5.7$ (Qwen2.5-VL GQA). On
 OCR-Bench @25\% the independent-binomial cross-check (18.2 / 14.7) marginally
@@ -349,9 +349,10 @@ table and skip accounting.
     (Qwen2.5-VL)} long-OCR images on context overrun, scored 0 (conservative);
     compressed cells skip $\leq 5$. The uncompressed anchor is therefore
     understated and the relative gaps are conservative.
-  \item Qwen2.5-VL OCR-Bench @25\% RBM: 4~M-pixel cap (mean tokens 229.6 vs
-    post 282.0) $\to$ its $+293$-pt gap is conservative (the one iso-token
-    exception in the Qwen block of Table~1, note~d).
+  \item Qwen2.5-VL OCR-Bench @25\% uses the matched 4~M-pixel rerun in both
+    arms: 480 vs 182 ($+298$ points), mean tokens 229.6 vs 229.6, 0 skips, and
+    identical sample ids and per-sample token counts. The native-resolution
+    none anchor is descriptive rather than an iso-configuration comparator.
 \end{itemize}
 
 \noindent Per-cell descriptive $\sigma$ values (full splits, computed from the
@@ -378,10 +379,10 @@ printed official metric $p$ and full-split $n$):
 \end{table*}
 
 \noindent These values provide scale and skip-accounting context only; they are
-not used to test partial-credit metric differences. The full-split GQA post
-lead is an order of magnitude smaller than the text-dense gaps and is reframed
-by the pre-final control (S7b) as a layer-8 ranking artifact rather than a true
-stage reversal. $^{a}$~Qwen3-VL none-DocVQA native-resolution
+not used to test partial-credit metric differences. The Qwen GQA post leads in
+the main matrix are workload-conditioned counter-directions; the full-split
+Qwen3 matched-depth control independently gives $-5.64$~pp (S7b).
+$^{a}$~Qwen3-VL none-DocVQA native-resolution
 anchor: full-split run partly skipped on context overrun (re-run at
 max-model-len 49,152 gives ANLS 0.956, 0/5349 skips); $\sigma$ not printed for
 the partial native cell. $^{c}$~GQA evaluated at $\kappa = 0.25$ only on the
@@ -424,7 +425,9 @@ subset SE is $\approx 8\times$ larger, so the subset is retained only as a
 direction check, never as the headline). The full Qwen3-VL $n = 200$
 cross-method view (RBM vs FastV vs Pyramid) and the compact Qwen2.5-VL
 $n = 200$ cross-generation matrix appear in the main paper's regime table and
-the archived audit index, respectively.
+the archived audit index, respectively. This statement is restricted to the
+four text-dense cells shown; the $n=200$ matched-depth GQA estimate does not
+generalize to its full split (S7b).
 
 % =============================================================================
 \section*{S7. Selector invariance (second scorer family, Qwen3-VL)}
@@ -454,7 +457,9 @@ effect is not an L2 artifact. On Qwen2.5-VL the L2 sign is invariant but the
 attention proxy degrades (proxy-family specificity, not a counter-example); L2
 remains the paper's selector, frozen as plain RBM (\S\,3.2).
 
-\subsection*{S7b. Pure-stage confound control --- pre-final (Qwen3-VL-8B, $n = 200$)}
+\clearpage
+\begin{table*}[!t]
+\subsection*{S7b. Pure-stage confound control --- pre-final (Qwen3-VL-8B, full splits)}
 
 The body \S\,4.2 pre-final control isolates the \emph{stage} from the
 feature-space confound of the original pre (deepstack[0]-input, layer~8) vs
@@ -462,36 +467,37 @@ post (main-merger output) contrast. pre-final ranks L2 at the main-merger's
 \emph{own input} (final ViT-block features) and selects the top-$\kappa$
 merge-units from the visual output; the deepstack mergers run untouched. The
 only difference from post is then before vs after the lossy $2\!\times\!2$ main
-merger --- a pure stage variable. Iso-token verified (prompt token ids match
-200/200 per benchmark for pre-final vs post). Evidence record: anonymized
-audit index entry for the pre-final control and its per-sample audit.
+merger --- a pure stage variable. Iso-token and sample-id equality are verified
+for every paired item; pre-final and post have 0 skips in all four benchmarks.
+Official rescoring and paired statistics are recomputable from the committed
+compressed raw artifacts under \path{artifacts/acmmm_final_controls/p0_1/}.
 
-\begin{table}[ht]
-  \centering
+\begin{center}
   \scriptsize
   \setlength{\tabcolsep}{2pt}
-  \begin{tabular}{@{}l r r r r l@{}}
+  \begin{tabular}{@{}l r r r r r l l@{}}
     \toprule
-    Benchmark (metric) & none & pre-final & post & $\Delta$ (paired mean $\pm$ SE) & verdict \\
+    Benchmark (metric) & $n$ & none & pre-final & post & $\Delta$ & paired 95\% CI & Holm $p$ \\
     \midrule
-    TextVQA (VQA-acc) & 0.858 & \textbf{0.515} & 0.215 & \textbf{$+30.0$ pp} ($+0.300 \pm 0.039$) & stage effect \\
-    DocVQA (ANLS)     & 0.976 & \textbf{0.326} & 0.200 & \textbf{$+12.5$ pp} ($+0.125 \pm 0.032$) & stage effect \\
-    GQA (exact match) & 0.605 & 0.450          & 0.450 & $0.0$ pp ($+0.000 \pm 0.032$)           & no stage effect \\
+    TextVQA (VQA-acc) & 5000  & 0.8443 & \textbf{0.4985} & 0.2217 & \textbf{$+27.68$ pp} & $[+26.21,+29.19]$ pp & $2.0\!\times\!10^{-4}$ \\
+    DocVQA (ANLS)     & 5349  & 0.9562 & \textbf{0.2836} & 0.2377 & \textbf{$+4.59$ pp}  & $[+3.43,+5.78]$ pp & $1.5\!\times\!10^{-4}$ \\
+    OCR-Bench (/1000) & 1000  & 760    & \textbf{419}    & 184    & \textbf{$+235$ pts}  & $[+199,+271]$ pts & $1.0\!\times\!10^{-4}$ \\
+    GQA (exact match) & 12578 & 0.6165 & 0.4207 & \textbf{0.4771} & \textbf{$-5.64$ pp} & $[-6.42,-4.86]$ pp & $5.0\!\times\!10^{-5}$ \\
     \bottomrule
   \end{tabular}
-\end{table}
+\end{center}
 
-\noindent\textbf{Reading:} on text-dense benchmarks pre-final still leads post
-by a large margin (the text-dense stage effect is a true stage effect, not a
-deepstack[0]-input vs main-merger-output feature-space artifact). On GQA
-pre-final equals post ($0.0$~pp): there is no stage effect on object-QA, and
-the original pre-vs-post apparent post$>$pre ($-2.8$~pp Qwen3-VL,
-$-2.6$~pp Qwen2.5-VL; S4) was an artifact of the deepstack[0]-input layer-8
-ranking being poorly suited to object-QA, not a true stage reversal. Consistent
-with the mechanism: the merger does not preferentially damage object features
-(M2 $\rho = 0.04$ on GQA, S2). pre-final tested on Qwen3-VL only (the
-deepstack confound is Qwen3-specific; Qwen2.5-VL shares the architecture but
-was not re-tested).
+\noindent\textbf{Reading:} pre-final leads post on all three text-dense full
+splits, confirming a stage effect at the main-merger boundary rather than only
+a layer-8 feature-depth effect. Full-split GQA instead significantly favors
+post. The earlier $n=200$ matched-depth estimate (0.450 vs 0.450, $0.0$~pp)
+was a small-subset sampling artifact and is not used for the claim. The
+layer-8 headline pre tap partly compensates on GQA (0.449 vs pre-final 0.421)
+but does not erase the post-stage advantage. This is consistent with near-null
+text-stroke directionality on GQA (M2 $\rho=0.04$, S2), while leaving the
+object-representation mechanism open. pre-final was tested on Qwen3-VL only;
+Qwen2.5-VL was not re-tested at matched depth.
+\end{table*}
 
 % =============================================================================
 \section*{S8. Merger tap points and M-RoPE configuration details (supports \S\,3)}
@@ -527,10 +533,10 @@ was not re-tested).
 \section*{S9. Per-cell reproducibility index}
 % =============================================================================
 
-\noindent The filenames below define the anonymous artifact manifest and the
-audit records required for submission. The archive must be checked against this
-index before external upload; the tables remain self-contained summaries of the
-reported cells.
+\noindent The filenames below define the expected per-cell artifact index, not
+a completed anonymous artifact manifest. The archive must be assembled and
+checked against this index before external upload; the tables remain
+self-contained summaries of the reported cells.
 
 \begin{table*}[ht]
   \centering
@@ -540,6 +546,7 @@ reported cells.
     Body location & Cells & Artifact record & Audit summary \\
     \midrule
     Main full-split Qwen blocks       & 26/26        & audit: main-qwen & full-split metrics and skip accounting \\
+    Full-split matched-depth control  & 8/8          & \path{artifacts/acmmm_final_controls/p0_1/} & raw JSON.gz, official rescore, paired/Holm and iso-token audit \\
     Main full-split InternVL3 block   & 16/16        & audit: main-internvl3 & full-split metrics and skip accounting \\
     Regime-map FastV-k3               & 8            & audit: regime-fastv-k3 & same-scope rescored cells \\
     Regime-map RBM same-scope         & 5            & audit: regime-rbm & same-scope rescored cells \\

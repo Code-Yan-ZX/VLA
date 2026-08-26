@@ -159,9 +159,9 @@ fully reproducible: seed=0, n_resamples=20000 (bootstrap + permutation).
 
 - **pre vs post** (primary, stage law):
   - metric: OCR-containment (binary)  | n_paired=1000  (A_total=1000, B_total=1000, only_A=0, only_B=0)
-    mean pre=0.4760  mean post=0.1830  delta(pre-post)=+29.300 pp  95% CI [+25.800, +32.700] pp  SE=1.7749
+    mean pre=0.4800  mean post=0.1820  delta(pre-post)=+29.800 pp  95% CI [+26.400, +33.300] pp  SE=1.7650
     paired permutation p (two-sided) = 5.00e-05
-    McNemar: pre-only=347  post-only=54  z=+14.63  exact p=0.00e+00
+    McNemar: pre-only=349  post-only=51  z=+14.90  exact p=0.00e+00
     verdict: **significant A>B**
 - pre vs none:
   - metric: OCR-containment (binary)  | n_paired=976  (A_total=1000, B_total=976, only_A=24, only_B=0)
