@@ -177,9 +177,9 @@ def main():
     def qbuckets(x, y):
         idx = sorted(range(n), key=lambda i: x[i])
         out = []
-        for a, b in zip([0,.25,.5,.75,1], [.25,.5,.75,1,1.0001]):
+        for a, b in zip([0,.25,.5,.75], [.25,.5,.75,1]):
             grp = [y[i] for i in idx[int(a*n):int(b*n)]]
-            out.append(round(st.mean(grp), 3))
+            out.append(round(st.mean(grp), 3) if grp else None)
         return out
 
     ra = [r["r_a_norm"] for r in rows]; rb = [r["r_b_norm"] for r in rows]

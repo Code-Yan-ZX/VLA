@@ -51,6 +51,25 @@
     `src/v3_premerger/v3_premerger_runner.py` invocation. Env: qwen3vl_clean
     (vLLM 0.19), model at /data/models/huggingface/hub (HF_HUB_CACHE).
 
+- 2026-08-26: **Mechanism pre-check COMPLETE (n=15501 units, 12 mixed samples).**
+  - Task-spec'd r_a = M(ΔX) − M(0): **REFUTED.** LayerNorm inside native merger
+    normalizes de-meaned patches to ~unit variance → r_a norms 2–7× base
+    (p50 ratio 2.22, p90 7.35), and UNcorrelated with detail (spearman vs
+    within-var −0.26, vs edge +0.03, vs demotion −0.28). M(0) is a large
+    constant (norm 34.5). No NaN/explosion, but severe distribution shift.
+  - Mechanism-derived r_b = M(X) − M(X̄) (X̄ = group-mean repeated): **VIABLE.**
+    Same magnitude regime as base (ratio p10 0.32, p50 0.81, p90 0.95),
+    positively correlated with within-var (+0.31) and edge (+0.24), max-abs
+    mean 0.75. Caveat: cos(r_b, base) ≈ 0.92 → residual largely parallel to
+    base (39% orthogonal). Base token b_i = M(X_i) ALREADY encodes within-group
+    structure (the merger is norm+MLP, not an average).
+  - RBM at 25% already keeps high-detail units (kept within-var 1.36–1.64× image
+    mean) → residuals add detail on top of already-detail-rich kept units.
+  - DECISION: implement C1/C2 with **r_b** (r_a mechanism-refuted; r_b is the
+    mechanism-derived representation — falls under C3 allowance for mechanism-
+    derived alternatives). Empirical dev test is the arbiter of the redundancy
+    concern (cos 0.92).
+
 ## Gates
 
 - [ ] Gate A: CPU/10-sample correctness

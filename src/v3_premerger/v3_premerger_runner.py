@@ -1046,6 +1046,22 @@ def parse_args():
                     help="HF model id override. If given, family is auto-detected "
                          "from the id (Qwen2* -> qwen2vl, else qwen3vl), overriding "
                          "--model-family. Default = MODELS[family].")
+    ap.add_argument("--repr", default="none", choices=["none", "dual"],
+                    help="Dual-Granularity representation: 'none' = plain RBM; "
+                         "'dual' = base + residual-detail tokens (fixed total "
+                         "token budget K). Residual r_b = M(X) - M(Xbar).")
+    ap.add_argument("--repr-candidate", default="c1", choices=["c1", "c2"],
+                    help="c1: residual units by residual energy among the "
+                         "RBM-kept base groups (K_r = rho*K). c2: dual units "
+                         "by distortion d_i over ALL units, single units fill "
+                         "the rest by RBM (D = rho*K dual groups).")
+    ap.add_argument("--repr-ratio", type=float, default=0.0,
+                    help="rho: K_r/K (c1) or D/K (c2). Pre-registered values "
+                         "only; ratio=0 -> bit-identical plain RBM.")
+    ap.add_argument("--repr-pos", default="append", choices=["append", "duplicate"],
+                    help="append = stock rank-mapped tail cells (P1); "
+                         "duplicate = residual inherits its base token's "
+                         "coordinate (P2, EVS per-token position override).")
     ap.add_argument("--dry-check", action="store_true",
                     help="No-GPU path: import-check + construct hook setup on a "
                          "dummy model object for the chosen family, then exit. "
@@ -1088,6 +1104,12 @@ def detect_family(model_id: str) -> str:
 # in the runner diag) rather than crashing the engine.
 # --------------------------------------------------------------------------- #
 BUDGET = {"k": None, "frac": None, "pos": 0, "hits": 0, "fallbacks": 0}
+
+
+def _repr_kr(K: int, rho: float) -> int:
+    """Round-half-up residual count K_r = round(rho*K) (Python's round() is
+    banker's half-to-even, which zeroes small-K ratios like round(0.5)=0)."""
+    return int(K * rho + 0.5)
 
 
 def _budget_next(f: int, r: float) -> int:
@@ -2393,7 +2415,9 @@ class PreMergerPruner:
                  hf_var_mode: str = "mean",
                  diversity: str = "none", div_gamma: float = 1.5,
                  div_tau: float = 0.75, div_adaptive: bool = False,
-                 div_scale: float = 25.0, learned_scorer=None):
+                 div_scale: float = 25.0, learned_scorer=None,
+                 repr_mode: str = "none", repr_candidate: str = "c1",
+                 repr_ratio: float = 0.0, repr_pos: str = "append"):
         self.r = r
         self.sm = spatial_merge_size
         self.unit = spatial_merge_size ** 2          # 4
@@ -2423,6 +2447,27 @@ class PreMergerPruner:
         self.k_units = None                           # list[int] per image
         self.learned_scorer = None                    # D1: loaded LearnedScorer
         self.grids = []                               # D1: per-image (h,w) patches
+        # ---- Dual-Granularity Merger Representation (base + residual) ----
+        # repr_mode "dual": keep K_b base tokens (top-K_b by frozen RBM score)
+        # PLUS K_r residual-detail tokens (from the base groups, selected by
+        # residual energy or distortion). Total LLM visual tokens = K (fixed).
+        # Residual construction r_b = M(X_i) - M(Xbar_i) (Xbar = group mean
+        # repeated) -- mechanism-derived (r_a = M(DeltaX)-M(0) refuted: the
+        # merger LayerNorm amplifies de-meaned patches into 2-7x detail-
+        # uncorrelated norms). repr_pos "append" = stock rank-mapped tail cells;
+        # "duplicate" = residual inherits base token's coordinate (P2, EVS
+        # override implemented in setup_pre_merger).
+        self.repr_mode = repr_mode
+        self.repr_candidate = repr_candidate          # "c1" (energy) | "c2" (distortion)
+        self.repr_ratio = float(repr_ratio)           # rho: K_r/K (c1) or D/K (c2)
+        self.repr_pos = repr_pos                      # "append" | "duplicate"
+        self.repr_active = (repr_mode == "dual" and self.repr_ratio > 0.0)
+        self.repr_split_sizes = []      # per-image units through the merger
+        self.repr_base_units = []       # per-image kept (base) unit idx (image-local)
+        self.repr_res_units = []        # per-image residual unit idx (kept-local)
+        self.repr_res_by_f = {}         # f -> FIFO of [K_r, hidden] residual rows
+        self.repr_res_rank_by_f = {}    # f -> FIFO of base-row ranks per residual (P2)
+        self.repr_mzero = None          # M(0) not needed for r_b (bias cancels)
         self._mask = None                             # cached token mask
         self.merger_origs = {}                        # tag -> orig forward (swap)
         self.diag = {"visual_calls": 0, "merger_calls": 0,
@@ -2452,6 +2497,11 @@ class PreMergerPruner:
             self.k_units = [max(1, int(round(f * (1.0 - self.r))))
                             for f in self.full_units]
         self._mask = None
+        self.repr_split_sizes = []
+        self.repr_base_units = []
+        self.repr_res_units = []
+        self.repr_res_by_f = {}          # reset per visual pass (warmup discard)
+        self.repr_res_rank_by_f = {}
         self.diag["visual_calls"] += 1
         if len(self.diag["nk"]) < 8:
             self.diag["nk"].append((self.full_units[0], self.k_units[0]))
@@ -2561,7 +2611,38 @@ class PreMergerPruner:
                         continue
                 s_i = scores[off:off + f]
                 kk = min(k, f)                            # k<=f: never over-ask
-                if self.diversity == "nms" and kk < f:
+                if self.repr_active:
+                    # ---- Dual-Granularity representation (base+residual) ----
+                    # Total LLM visual tokens per image stays EXACTLY K = kk.
+                    # C1: base = top-K_b by frozen RBM score; residual units
+                    #     selected at the main-merger call by residual energy
+                    #     among the base groups. K_r = round(rho*K), K_b=K-K_r.
+                    # C2: dual units = top-D by distortion d_i over ALL units;
+                    #     single units = top-(K-2D) by score among non-dual.
+                    #     Units through the merger = K-D (dual + single).
+                    K_budget = int(kk)
+                    if self.repr_candidate == "c2":
+                        D = max(0, _repr_kr(K_budget, self.repr_ratio))
+                        D = min(D, K_budget // 2)
+                        dual_idx, single_idx = self._repr_c2_select(
+                            s_i, feats[off:off + f], K_budget, D)
+                        idx = torch.cat([dual_idx, single_idx])
+                        mask_units = sorted(idx.tolist())
+                        dual_sorted = sorted(dual_idx.tolist())
+                        self.repr_base_units.append(mask_units)
+                        self.repr_res_units.append(
+                            [mask_units.index(u) for u in dual_sorted])
+                        kk = int(idx.numel())      # units through merger = K-D
+                    else:                           # c1
+                        K_r = max(0, _repr_kr(K_budget, self.repr_ratio))
+                        K_r = min(K_r, max(0, K_budget - 1))
+                        K_b = max(1, K_budget - K_r)
+                        idx = torch.topk(s_i, K_b).indices
+                        self.repr_base_units.append(sorted(idx.tolist()))
+                        self.repr_res_units.append([])   # filled at main call
+                        kk = int(idx.numel())
+                    self.repr_split_sizes.append(kk)
+                elif self.diversity == "nms" and kk < f:
                     # S6 (PRUNESID stitch): importance-first + intra-group NMS.
                     # Adaptive mode computes the per-image erank for the
                     # AgilePruner-style tau_r (added SVD cost only when active).
@@ -2594,6 +2675,12 @@ class PreMergerPruner:
             self.diag["mask_compute_count"] += 1
             self.diag["vz_dom"].clear()
             self.diag["vz_ctx"].clear()
+        # ---- Dual-Granularity: compute residual rows at the MAIN merger call ----
+        # visual.merger's input is the FINAL ViT features the base tokens come
+        # from, so r_b = M(X) - M(Xbar) is computed on the SAME features as b_i.
+        # Cached per image (keyed by f, FIFO) for _patched_pii to append.
+        if self.repr_active and tag == "main":
+            self._repr_compute_main_residuals(hs)
         # ---- VisionZip-style: dominant + context split ----
         # Runs on EVERY merger call (not just first): context tokens are
         # recomputed from the current merger's input features, using the
@@ -2642,6 +2729,103 @@ class PreMergerPruner:
                 return combined_out
         # ---- standard pre-merger (dominant-only) ----
         return hs[self._mask]                           # [num_kept, 1, ctx]
+
+    # ---- Dual-Granularity helpers (only active when repr_active) ----------- #
+    def _repr_c2_select(self, s_i, feats_i, K_budget, D):
+        """C2: dual units = top-D by distortion d_i over ALL units; single
+        units = top-(K-2D) by RBM score among the non-dual. d_i computed with
+        the NATIVE main merger on the mask-call features:
+            b_i = ||M(X_i)||,  r_i = ||M(X_i) - M(Xbar_i)||,  d_i = r_i/(b_i+eps)
+        (r_b numerator -- the mechanism-viable residual; the r_a = M(DeltaX)-M(0)
+        numerator is refuted by the merger-LayerNorm amplification). Returns
+        (dual_idx, single_idx), both image-local unit indices."""
+        orig_main = self.merger_origs.get("main")
+        if orig_main is None:
+            # no merger access: feature-space relative deviation fallback
+            mu = feats_i.mean(dim=1, keepdim=True)
+            delta = feats_i - mu
+            r = delta.norm(dim=-1).sum(dim=1)
+            b = mu.norm(dim=-1).squeeze(1).clamp_min(1e-6)
+        else:
+            f = feats_i.shape[0]
+            flat = feats_i.reshape(-1, 1, feats_i.shape[-1])
+            mu = feats_i.mean(dim=1, keepdim=True)
+            xbar = mu.expand(-1, feats_i.shape[1], -1).reshape(-1, 1, feats_i.shape[-1])
+            bM = orig_main(flat).float().reshape(f, -1).norm(dim=-1)
+            rM = (orig_main(flat).float() - orig_main(xbar).float()).reshape(f, -1).norm(dim=-1)
+            r = rM
+            b = bM.clamp_min(1e-6)
+        d = r / b
+        if D <= 0:
+            dual_idx = torch.empty(0, dtype=torch.long, device=feats_i.device)
+        else:
+            dual_idx = torch.topk(d, D).indices
+        n_single = K_budget - 2 * D
+        nondual = torch.ones(feats_i.shape[0], dtype=torch.bool, device=feats_i.device)
+        nondual[dual_idx] = False
+        if n_single > 0 and nondual.any():
+            full_idx = torch.nonzero(nondual).squeeze(1)
+            s_nd = s_i[nondual]
+            single_idx = full_idx[torch.topk(s_nd, min(n_single, full_idx.numel())).indices]
+        else:
+            single_idx = torch.empty(0, dtype=torch.long, device=feats_i.device)
+        return dual_idx, single_idx
+
+    def _repr_compute_main_residuals(self, hs):
+        """At the main-merger call compute r_b = M(X) - M(Xbar) for each image's
+        kept units; select residual-carrying units (C1 by residual energy among
+        the base groups; C2 by the pre-selected dual units); cache [K_r, hidden]
+        rows keyed by f (FIFO; _patched_pii pops per split, replay-robust)."""
+        ctx = hs.shape[-1]
+        seq = hs.shape[0]
+        num_units = seq // self.unit
+        if num_units == 0:
+            return
+        feats = hs[:num_units * self.unit].reshape(num_units, self.unit, ctx)
+        if self._mask is None:
+            return
+        keep = self._mask.reshape(num_units, self.unit)[:, 0].bool()
+        if not keep.any():
+            return
+        kept = feats[keep]                               # [sum_keep, unit, ctx]
+        mu = kept.mean(dim=1, keepdim=True)
+        xbar = mu.expand(-1, self.unit, -1)
+        orig_main = self.merger_origs.get("main")
+        if orig_main is None:
+            raise RuntimeError("dual-granularity requires the native main "
+                               "merger (pruner.merger_origs['main'])")
+        n_kept_all = int(kept.shape[0])
+        b_all = orig_main(kept.reshape(-1, 1, ctx)).reshape(n_kept_all, -1)
+        r_all = b_all - orig_main(xbar.reshape(-1, 1, ctx)).reshape(n_kept_all, -1)
+        off = 0
+        for i_img, n_kept in enumerate(self.repr_split_sizes):
+            f = self.full_units[i_img] if i_img < len(self.full_units) else 0
+            if n_kept <= 0 or n_kept > n_kept_all - off:
+                continue
+            r_i = r_all[off:off + n_kept]
+            off += n_kept
+            K = int(min(self.k_units[i_img], f)) if i_img < len(self.k_units) else n_kept
+            if self.repr_candidate == "c1":
+                K_r = max(0, _repr_kr(K, self.repr_ratio))
+                K_r = min(K_r, max(0, K - 1))
+                if K_r == 0:
+                    self._repr_push(f, torch.empty(
+                        0, r_i.shape[-1], dtype=r_i.dtype, device=r_i.device), [])
+                    continue
+                res_local = torch.topk(r_i.float().norm(dim=-1), K_r).indices.tolist()
+            else:                                        # c2
+                res_local = (self.repr_res_units[i_img]
+                             if i_img < len(self.repr_res_units) else [])
+                res_local = [j for j in res_local if j < n_kept]
+            if not res_local:
+                self._repr_push(f, torch.empty(
+                    0, r_i.shape[-1], dtype=r_i.dtype, device=r_i.device), [])
+                continue
+            self._repr_push(f, r_i[res_local].contiguous(), res_local)
+
+    def _repr_push(self, f, rows, ranks):
+        self.repr_res_by_f.setdefault(int(f), []).append(rows)
+        self.repr_res_rank_by_f.setdefault(int(f), []).append(ranks)
 
     # ---- J5 QA-pre helpers (only active when qa_lambda>0) ------------------ #
     def _qa_pop_embedding(self, f: int):
@@ -2990,7 +3174,9 @@ def setup_pre_merger(model, r: float, selector: str = "l2", family: str = "qwen3
                       diversity: str = "none", div_gamma: float = 1.5,
                       div_tau: float = 0.75, div_adaptive: bool = False,
                       div_scale: float = 25.0,
-                      learned_scorer=None):
+                      learned_scorer=None,
+                      repr_mode: str = "none", repr_candidate: str = "c1",
+                      repr_ratio: float = 0.0, repr_pos: str = "append"):
     if mask_ranking == "swap" and visionzip_style:
         raise SystemExit("--mask-ranking swap is not supported with "
                          "--visionzip-style (dominant-only standard path only).")
@@ -3006,7 +3192,9 @@ def setup_pre_merger(model, r: float, selector: str = "l2", family: str = "qwen3
                              diversity=diversity, div_gamma=div_gamma,
                              div_tau=div_tau, div_adaptive=div_adaptive,
                              div_scale=div_scale,
-                             learned_scorer=learned_scorer)
+                             learned_scorer=learned_scorer,
+                             repr_mode=repr_mode, repr_candidate=repr_candidate,
+                             repr_ratio=repr_ratio, repr_pos=repr_pos)
     if learned_scorer is not None:
         pruner.learned_scorer = learned_scorer
 
@@ -3082,7 +3270,13 @@ def setup_pre_merger(model, r: float, selector: str = "l2", family: str = "qwen3
         _install_qwen2vl_pre_visual_forward(visual, pruner)
 
     # (3) replace _process_image_input: split by PRUNED counts (k_units).
+    #     Dual-Granularity: split by the units-through-merger (K_b or K-D) and
+    #     APPEND the cached residual rows (FIFO by f) so each image ends with
+    #     EXACTLY K tokens (= the placeholder count). Residual rows carry
+    #     [main-channel | zero deepstack channels] so _compute_deepstack_embeds
+    #     adds 0 at residual positions (no shape mismatch).
     _orig_pii = model._process_image_input
+    repr_active = (repr_mode == "dual" and repr_ratio > 0.0)
 
     def _patched_pii(image_input):
         grid_thw = image_input["image_grid_thw"]
@@ -3092,6 +3286,27 @@ def setup_pre_merger(model, r: float, selector: str = "l2", family: str = "qwen3
         else:
             pixel_values = image_input["pixel_values"].type(visual.dtype)
             image_embeds = visual(pixel_values, grid_thw=grid_thw)
+        if repr_active and pruner.repr_split_sizes and \
+                len(pruner.repr_split_sizes) == int(grid_thw.shape[0]):
+            sizes = pruner.repr_split_sizes
+            f_sizes = (grid_thw.prod(-1) // pruner.unit).tolist()
+            out = []
+            for i, s in enumerate(image_embeds.split(sizes)):
+                f = f_sizes[i]
+                q = pruner.repr_res_by_f.get(f, [])
+                rows = q.pop(0) if q else None
+                pruner.diag["repr_res_pops"] = \
+                    pruner.diag.get("repr_res_pops", 0) + 1
+                if rows is None or rows.shape[0] == 0:
+                    out.append(s)
+                    continue
+                zdim = s.shape[-1] - rows.shape[-1]
+                res_full = torch.cat([
+                    rows.to(s.dtype),
+                    torch.zeros(rows.shape[0], zdim, dtype=s.dtype,
+                                device=s.device)], dim=-1)
+                out.append(torch.cat([s, res_full], dim=0))
+            return tuple(out)
         if (r == 0.0) or (pruner.k_units is None):
             sizes = (grid_thw.prod(-1) // pruner.unit).tolist()
         else:
@@ -3705,6 +3920,63 @@ def run_dry_check(family: str, selector: str = "l2",
     print("[dry-check]   OK budget: cursor hit/fallback, per-image k_units "
           f"= [2,1], calib f={calib['f']} svd_len={len(calib['svd_desc'])}")
 
+    # (c5) Dual-Granularity representation (base + residual). grid (1,4,8)=8
+    #      units + (1,4,4)=4 units, r=0.75 -> K=[2,1].
+    #      ratio=0 -> bit-identical plain RBM (repr_active=False).
+    #      FRESH dummy models per setup: setup_pre_merger re-wraps the merger,
+    #      so reusing `model` would make merger_origs['main'] chain into an
+    #      earlier pruner's wrap (residual computation must call the TRUE
+    #      original forward).
+    def _fresh():
+        return _DummyModel(family)
+
+    m_r0 = _fresh()
+    pruner_r0, _ = setup_pre_merger(m_r0, 0.75, "l2", family,
+                                    repr_mode="dual", repr_ratio=0.0,
+                                    repr_candidate="c1")
+    assert not pruner_r0.repr_active, "ratio=0 must deactivate dual mode"
+    pruner_r0.begin_pass(grid_thw)
+    out_r0 = pruner_r0.slice_input(hs, m_r0.visual.merger)
+    assert out_r0.shape[0] == 12, out_r0.shape   # == plain RBM (k_units [2,1])
+    print("[dry-check]   OK dual ratio=0 -> bit-identical plain RBM "
+          "(repr_active=False, kept 12)")
+    #      C1: f=8 K=2 rho=0.25 -> K_r=round(0.5)=1, K_b=1. f=4 K=1 ->
+    #      K_r=0, K_b=1. Units through merger = [1,1]; residuals = [1,0]
+    #      -> total tokens [2,1] == K.
+    m_c1 = _fresh()
+    pruner_c1, _ = setup_pre_merger(m_c1, 0.75, "l2", family,
+                                    repr_mode="dual", repr_ratio=0.25,
+                                    repr_candidate="c1")
+    pruner_c1.begin_pass(grid_thw)
+    assert pruner_c1.repr_active
+    out_c1 = pruner_c1.slice_input(hs, m_c1.visual.merger)
+    assert pruner_c1.repr_split_sizes == [1, 1], pruner_c1.repr_split_sizes
+    assert out_c1.shape[0] == (1 + 1) * 4 == 8, out_c1.shape  # units through merger
+    # main-call residual computation (tag="main" on the dummy = visual.merger):
+    _ = pruner_c1.slice_input(hs, m_c1.visual.merger)
+    res_q8 = pruner_c1.repr_res_by_f.get(8, [])
+    assert len(res_q8) >= 1 and res_q8[-1].shape[0] == 1, \
+        (len(res_q8), [r.shape for r in res_q8])
+    #      C2: f=8, K=2, rho=0.25 -> D=1, units through merger = K-D = 1.
+    m_c2 = _fresh()
+    pruner_c2, _ = setup_pre_merger(m_c2, 0.75, "l2", family,
+                                    repr_mode="dual", repr_ratio=0.25,
+                                    repr_candidate="c2")
+    pruner_c2.begin_pass(grid_thw)
+    out_c2 = pruner_c2.slice_input(hs, m_c2.visual.merger)
+    assert pruner_c2.repr_split_sizes[0] == 1, pruner_c2.repr_split_sizes
+    _ = pruner_c2.slice_input(hs, m_c2.visual.merger)
+    resq8_2 = pruner_c2.repr_res_by_f.get(8, [])
+    assert len(resq8_2) >= 1 and resq8_2[-1].shape[0] == 1, \
+        (len(resq8_2), [r.shape for r in resq8_2])
+    #      End-to-end token accounting: base + residual == K per image.
+    base8 = pruner_c1.repr_split_sizes[0]
+    res8 = res_q8[-1].shape[0]
+    assert base8 + res8 == 2, (base8, res8)   # K=2 for f=8 at r=0.75
+    print("[dry-check]   OK dual-granularity: C1/C2 split sizes, main-call "
+          f"residuals (f=8 -> {res8} residual rows), base+residual == K "
+          "(f=8: 1+1=2; f=4: 1+0=1)")
+
     # (c2) freq scorer (Direction B): alpha*z(l2) + beta*z(var) on the SAME feats.
     feats_test = torch.randn(8, unit, 768)
     ft = feats_test.float()
@@ -4285,7 +4557,11 @@ def main():
                                                  div_tau=args.div_tau,
                                                  div_adaptive=args.div_adaptive,
                                                  div_scale=args.div_scale,
-                                                 learned_scorer=learned_scorer)
+                                                 learned_scorer=learned_scorer,
+                                                 repr_mode=args.repr,
+                                                 repr_candidate=args.repr_candidate,
+                                                 repr_ratio=args.repr_ratio,
+                                                 repr_pos=args.repr_pos)
             # S6 Phase-2: collect per-image spectral stats (calib dump: gated
             # by --budget-calib -- the list stays None otherwise). The budget
             # cursor itself was loaded MODE-AGNOSTICALLY before the mode chain.
