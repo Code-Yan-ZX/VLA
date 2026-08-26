@@ -174,3 +174,13 @@
 - **No representation-level extension passed the preregistered gate; retain
   RBM as the finding-driven minimal method; proceed to submission hardening.
   Stop this round and all subsequent method-variant search (per task 止损).**
+
+## 2026-08-26 FINAL — branch pushed
+- `exp/merger-representation-goal` pushed to origin (13 commits, base cad68f9).
+- Commits: d23ba82 (audit+map+mech), ec09971 (vLLM dual impl), b54dd04 (native
+  harness), b880acf (Gate A), 586c23d/0a8c2cd (runners+pre-reg), f01f354 (Gate C
+  analysis), 5288bba (Gate B P1), cea397c (Gate B), 8001970/4e73e2d/9571e03
+  (report/state), 329c001 (final report).
+- **GO/NO-GO: NO-GO** (locked n=200, macro -3.05pp below RBM, 2 datasets
+  significantly negative). Retain RBM as the finding-driven minimal method.
+- **是否替换 RBM: 否** — no representation-level extension passed the gate.
