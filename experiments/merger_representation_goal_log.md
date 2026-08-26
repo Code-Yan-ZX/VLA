@@ -111,3 +111,23 @@
 
 - (pending audit) 如果 "native merged semantic token + independent within-group
   residual-detail token" 已被现有工作完全覆盖 → 立即停止该候选。
+
+## 2026-08-26 Gate B Phase 1 COMPLETE (disjoint dev n=64 × 4, official metrics)
+
+| arm | textvqa | docvqa | ocrbench | gqa | macro |
+|-----|---------|--------|----------|-----|-------|
+| full | 0.8281 | 0.9573 | 0.1969 | 0.6406 | 0.6557 |
+| rbm_native | 0.7188 | 0.5497 | 0.1906 | 0.6406 | 0.5249 |
+| fastv_k3 | 0.6667 | 0.5917 | 0.1844 | 0.5938 | 0.5091 |
+| c1r2_dup | 0.7083 | 0.4678 | 0.1906 | 0.6406 | 0.5018 |
+| c1r2_adj | 0.7083 | 0.4671 | 0.1906 | 0.6406 | 0.5017 |
+
+- **Position lock: duplicate ≡ adjacent** (all datasets within 0.0007) — locked
+  duplicate (task scheme 1, principled). The mRoPE position of the residual
+  token has no measurable dev effect (novel token type).
+- **C1-0.2 is WORSE than plain RBM**: macro 0.5018 vs 0.5249 (−2.3pp); DocVQA
+  −8.2pp; textvqa −1.1pp; ocrbench/gqa 0. Mechanism prediction confirmed:
+  r_b is redundant with the base (cos 0.92), and the base token already encodes
+  within-group structure; trading K_r spatial groups for redundant residual
+  tokens loses coverage.
+- Phase 2 (C1 {0.1,0.3}, C2 {0.05,0.1,0.15}, duplicate) launched.
