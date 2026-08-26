@@ -109,16 +109,67 @@ verified.
   OCRBench/GQA 0). Confirms the mechanism prediction (redundancy + loss of
   spatial coverage).
 
-### 5.3 Gate B Phase 2 — ratio sweep (C1 {0.1,0.3}, C2 {0.05,0.1,0.15})
+### 5.3 Gate B — full ratio sweep (C1 {0.1,0.2,0.3}, C2 {0.05,0.1,0.15}, duplicate)
 
-_(to fill)_
+| arm | textvqa | docvqa | ocrbench | gqa | macro | Δmacro vs RBM |
+|-----|---------|--------|----------|-----|-------|---------------|
+| rbm_native | 0.7188 | 0.5497 | 0.1906 | 0.6406 | 0.5249 | — |
+| **c1r1_dup** | 0.7188 | 0.5539 | 0.1875 | 0.6562 | **0.5291** | **+0.42** |
+| c1r2_dup | 0.7083 | 0.4678 | 0.1906 | 0.6406 | 0.5018 | −2.31 |
+| c1r3_dup | 0.6875 | 0.4847 | 0.1875 | 0.6094 | 0.4923 | −3.26 |
+| c2r05_dup | 0.7083 | 0.5382 | 0.1875 | 0.6406 | 0.5187 | −0.62 |
+| c2r1_dup | 0.7083 | 0.4842 | 0.1906 | 0.6719 | 0.5138 | −1.11 |
+| c2r15_dup | 0.6823 | 0.4457 | 0.1906 | 0.6250 | 0.4859 | −3.90 |
 
-## 6. Methodological acceptance
+- **Monotonic degradation with residual ratio**: candidate ≈ RBM at ρ→0,
+  strictly worse as ρ grows (DocVQA −6.5pp at C1-0.3, −10.4pp at C2-0.15).
+- Best config C1-ρ=0.1: macro +0.42pp vs RBM (within noise). Fails criterion 1
+  (needs +1.5pp), criterion 4 (only GQA strictly exceeds its parent by ≥1pp),
+  and criterion 3 (TextVQA −11pp below the Full parent).
+- ⇒ Per protocol the best candidate (C1-ρ=0.1, duplicate) enters Gate C.
 
-- New problem definition, design principle (semantic/detail decoupling), clear
-  algorithm, fixed token budget, complexity analysis, causal ablation,
-  cross-architecture path, and explicit distinction from RBM/VisionZip/Nüwa/
-  DUET/HybridToken — all documented here.
+### 5.4 Gate C — locked n=200 × 4 confirmation (C1-ρ=0.1, duplicate)
+
+_(running — to fill)_
+
+## 6. Methodological acceptance (for the record — the candidate is fully
+specified even though it fails the empirical gate)
+
+- **Problem definition**: the fixed one-token-per-group representation of a
+  pre-merger compression scheme forces each kept 2×2 group into a single merged
+  token; we ask whether the *representation action* (not the selection) can be
+  changed — under a strictly fixed LLM token budget — to carry both semantic
+  and within-group detail.
+- **Design principle**: semantic/detail decoupling — a base token for the group's
+  semantic content and an independent residual-detail token for the within-group
+  structure the base might lose.
+- **Algorithm** (C1, the best config): (1) score groups by frozen pre-merger
+  mean-patch L2; (2) keep K_b = K − round(ρK) groups; (3) compute
+  r_b = M(X) − M(X̄) via the native main merger; (4) pick K_r = ρK of the kept
+  groups by ||r_b||; (5) inject the residual rows after the image block with the
+  base group's native coordinate (duplicate); (6) zero deepstack channels.
+- **Fixed budget**: K_b + K_r = K per image, K = round(f·(1−r)) — byte-exact
+  (Gate A). No per-dataset tuning.
+- **Complexity**: per image, C1 adds O(1) extra merger forwards (a norm + 2
+  linear + GELU on the K_b kept units ≈ O(K_b·d²) ≈ small fraction of the ViT);
+  C2 adds O(1) merger forwards on the full unit set for the distortion. Both are
+  counted in the selection/representation overhead (criterion 7).
+- **Causal ablation**: ratio sweep {0.1,0.2,0.3} / {0.05,0.1,0.15} is the causal
+  knob — the method is neutral at ρ→0 and strictly worse as ρ grows, isolating
+  the residual tokens as the (negative) causal factor.
+- **Cross-architecture path**: the construction reuses any native merger with
+  the block-major 2×2 contract (Qwen2.5-VL's single merger, InternVL3's
+  pixel-shuffle+mlp1, GLM-4.1V's conv+merger); only the merger handle and the
+  deepstack-zero-padding differ.
+- **Distinctions**: vs RBM — changes the representation action, not the
+  selection; vs VisionZip — residual is within-group and independent, not
+  cross-group context pooling; vs Nüwa/DUET — representation not lifetime/stage;
+  vs HybridToken-VLM — training-free, reuses native merger, keeps two
+  independent tokens instead of a learned single-token bottleneck.
+
+## 7. Verdict
+
+_(GO / NO-GO — to fill after Gate C)_
 
 ## 7. Verdict
 
