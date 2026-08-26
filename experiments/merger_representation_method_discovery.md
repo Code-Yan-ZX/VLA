@@ -82,7 +82,36 @@ GMC aggregates into the base; VisionZip cross-group; RBM-OT one-stream).
 
 ## 5. Results
 
-_(to fill from Gate B / Gate C)_
+### 5.1 Gate A — correctness (PASS)
+
+Dry-check ALL PASS (qwen3vl); GPU 10-sample: `--repr dual --repr-ratio 0.0`
+is **bit-identical to plain native RBM (10/10 answers)**, per-image
+`n_base + n_res == K` exactly (e.g. 390+98=488, 14+4=18), `skipped=0`,
+`ptid_mean` identical across arms, residual norms sane, official rescore
+verified.
+
+### 5.2 Gate B Phase 1 — baselines + position lock (disjoint dev n=64 × 4, official)
+
+| arm | textvqa | docvqa | ocrbench | gqa | macro |
+|-----|---------|--------|----------|-----|-------|
+| full | 0.8281 | 0.9573 | 0.1969 | 0.6406 | 0.6557 |
+| rbm_native | 0.7188 | 0.5497 | 0.1906 | 0.6406 | 0.5249 |
+| fastv_k3 | 0.6667 | 0.5917 | 0.1844 | 0.5938 | 0.5091 |
+| **C1-0.2 duplicate** | 0.7083 | 0.4678 | 0.1906 | 0.6406 | **0.5018** |
+| C1-0.2 adjacent | 0.7083 | 0.4671 | 0.1906 | 0.6406 | 0.5017 |
+
+- **Position lock: duplicate ≡ adjacent** (all datasets within 0.0007) →
+  locked **duplicate** (task scheme 1: residual inherits the base group's
+  native cell). No duplicate-coordinate attention anomaly beyond this (the
+  residual is a novel token type; its exact mRoPE position has no measurable
+  dev effect).
+- **C1-0.2 is below plain RBM** (macro −2.3pp; DocVQA −8.2pp, TextVQA −1.1pp,
+  OCRBench/GQA 0). Confirms the mechanism prediction (redundancy + loss of
+  spatial coverage).
+
+### 5.3 Gate B Phase 2 — ratio sweep (C1 {0.1,0.3}, C2 {0.05,0.1,0.15})
+
+_(to fill)_
 
 ## 6. Methodological acceptance
 

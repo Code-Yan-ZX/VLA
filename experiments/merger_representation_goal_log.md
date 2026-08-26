@@ -131,3 +131,27 @@
   within-group structure; trading K_r spatial groups for redundant residual
   tokens loses coverage.
 - Phase 2 (C1 {0.1,0.3}, C2 {0.05,0.1,0.15}, duplicate) launched.
+
+## 2026-08-26 Gate B COMPLETE — NO candidate passes the bar
+
+| arm | textvqa | docvqa | ocrbench | gqa | macro | Δmacro vs RBM |
+|-----|---------|--------|----------|-----|-------|---------------|
+| rbm_native | 0.7188 | 0.5497 | 0.1906 | 0.6406 | 0.5249 | — |
+| c1r1_dup | 0.7188 | 0.5539 | 0.1875 | 0.6562 | 0.5291 | **+0.42** |
+| c1r2_dup | 0.7083 | 0.4678 | 0.1906 | 0.6406 | 0.5018 | −2.31 |
+| c1r3_dup | 0.6875 | 0.4847 | 0.1875 | 0.6094 | 0.4923 | −3.26 |
+| c2r05_dup | 0.7083 | 0.5382 | 0.1875 | 0.6406 | 0.5187 | −0.62 |
+| c2r1_dup | 0.7083 | 0.4842 | 0.1906 | 0.6719 | 0.5138 | −1.11 |
+| c2r15_dup | 0.6823 | 0.4457 | 0.1906 | 0.6250 | 0.4859 | −3.90 |
+
+- **Monotonic degradation with residual ratio** (all datasets): candidate ≈ RBM at
+  ρ→0, worse as ρ grows (DocVQA −6.5 to −10.4pp at higher ratios). No config
+  beats RBM on any dataset by a meaningful margin.
+- **Best = c1r1 (ρ=0.1)**: macro 0.5291 vs RBM 0.5249 (+0.42pp, within noise).
+  FAILS criterion 1 (needs +1.5pp macro); FAILS criterion 4 (only gqa +1.56pp
+  ≥1pp, needs ≥2 datasets); FAILS criterion 3 (textvqa 0.7188 vs full 0.8281
+  = −11pp below stronger parent).
+- Mechanism fully explains: r_b redundant with base (cos 0.92); base token
+  already encodes within-group structure; trading K_r spatial groups for
+  redundant residual tokens loses coverage.
+- Per protocol: best candidate c1r1_dup enters Gate C (locked n=200) — launched.
