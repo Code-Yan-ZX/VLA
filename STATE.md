@@ -4,7 +4,7 @@
 
 ## 当前论文
 - 内容权威入口：`drafts/overleaf_submission/main.tex`；TCSVT 投稿包：`drafts/ieee_tcsvt_submission/`。
-- IEEEtran 双栏正文含参考文献 10 页（TCSVT Transactions Paper 上限 14 页）；补充材料独立 11 页。
+- IEEEtran 双栏正文含参考文献 12 页（TCSVT Transactions Paper 上限 14 页）；补充材料独立 8 页；原补图 1/2 已迁入正文第 4/5 页。
 - 定位：RBM 是最小 stage operationalization 与 OCR-oriented 鲁棒默认；FastV 是 query-conditioned 强 baseline；不宣通用胜出/scorer novelty。
 - “Stage Law” 仅指 tested text-dense、iso-model、iso-budget、共享 query-blind L2-magnitude family 的 pre/post cells；byte-exact 仅限 Qwen3-VL。
 - 五项干净的 prespecified 扩展未稳定优于 stronger constituent；learned scorer 仅作 exploratory mechanism probe；受污染 cascade 已从正式材料移除。
