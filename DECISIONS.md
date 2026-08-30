@@ -277,3 +277,11 @@
 - 两份 exact paired raw run 均 gitignored 且当前缺失，因此不编造 H0n-vs-FastV CI；采用审计支持的 `+0.6pp, paired inconclusive/statistically indistinguishable` 措辞，恢复工件后再用 repo paired-stats 复算。
 - cascade 的 pre25 parent 使用 `vllm-mimic`，不能支持干净 negative claim；从正式 body/supplement 与维护中的 LaTeX 镜像删除其数字、表格、索引和推论，原实验代码/报告保留。
 - `drafts/paper_acmmm.md` 是历史工作稿，不是同步镜像；权威源继续为 `drafts/overleaf_submission/`，故不为本次投稿纠错回写历史稿。
+
+## 2026-08-30 | RBM 方法包装：从 stage ablation 升级为 selection--merger ordering
+
+- **决定**：不发明新模块或新结果；把核心方法表述为表示依赖的 Top-k 与原生 merger 的算子顺序问题，并将 RBM 定义为 stage-consistent design。
+- **形式化**：新增 pre/post kept-set 定义、确定性破同分下的 kept-set 等价条件、严格单调映射的充分条件，以及 Jaccard 补量形式的阶段分歧；明确固定 mask 与逐单元 merger 本身兼容，失配来自 merger 前后 saliency ranking 改写。
+- **方法契约**：完整 native merge-unit 粒度、逐图精确 top-k、main/deepstack 共享 mask、native merger/visual interface 不变；补充评分与 top-k 复杂度，同时明确不减少 tap 前 ViT 计算。
+- **claim 纪律**：不写 scorer-independent theorem，不扩大到无 merger 模型；byte-exact 因果归因仍仅限 Qwen3-VL，FastV 的适用优势与未解决 GQA gate 均保留。
+- **排版结果**：TCSVT 主稿仍为 12 页，实测图位于第 2/4/6/8/10 页；0 undefined、0 overfull、0 Type 3。
