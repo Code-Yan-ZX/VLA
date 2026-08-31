@@ -285,3 +285,11 @@
 - **方法契约**：完整 native merge-unit 粒度、逐图精确 top-k、main/deepstack 共享 mask、native merger/visual interface 不变；补充评分与 top-k 复杂度，同时明确不减少 tap 前 ViT 计算。
 - **claim 纪律**：不写 scorer-independent theorem，不扩大到无 merger 模型；byte-exact 因果归因仍仅限 Qwen3-VL，FastV 的适用优势与未解决 GQA gate 均保留。
 - **排版结果**：TCSVT 主稿仍为 12 页，实测图位于第 2/4/6/8/10 页；0 undefined、0 overfull、0 Type 3。
+
+## 2026-09-01 | 用户明确新方向：Q-RBM（Query-Conditioned Pre-Merger Utility Ranking），重启 P2 方法创新
+
+- **决定**：保留 RBM 投稿稿作 fallback，重启 P2 方法创新；覆盖 STATE.md 2026-08-25 的"方法创新冻结"。不继续 frequency/edge/diversity/image-only router/cascade/OT/RankBridge 等 training-free 拼装。新分支 `exp/qrbm-e1` 以 origin/main `370fb7b` 为基（现有 34 项未提交/gitignored 服务器产物全部保留，禁 reset/clean）。
+- **边界审计结论（子 agent A）**：唯一未被证伪的单元 = 训练式 query-conditioned pre-merger ranker + **causal-utility（occlusion ΔLL）监督**。J5 手调 query-cosine 混合（λ>0 全负，DECISIONS:120）与 D1 post-L2 蒸馏（TextVQA −16pp）均已 NO-GO；Q-RBM 的 E1 形态（learned predictor + causal 监督 + query-conditioning）与所有失败 run 三特征均不同 → 合法可测。
+- **E1（causal-importance gate，预注册）**：Qwen3-VL-8B 全冻结 forward-only；4 基准 × 64 样本 dev_64（runs/merger_repr/dev_*_64，与 gate_200 不相交）+ 新 held-out_64（build_e1_splits.py，与 dev_64 及 gate_200 全不相交，审计 PASS）；G=8 raster 块 drop-out occlusion，teacher-forced GT-LL（a* 全 pass 选一次）；比较 pre-L2/post-L2/FastV/qsim 与 causal utility。判据（locked，notes/qrbm_e1_plan.md §4）：G1 KEY=held-out ΔnDCG@25%（predictor B [pre,post,qsim] − A [pre,post]）≥+0.05 且 CI 不含 0 且 ≥3/4 正；G2 三基准 answer-bearing Recall@25% ≥ RBM；G3 GQA causal nDCG 优于 RBM；G4 逐样本 alignment 预测 RBM/FastV 胜负 acc>0.60。**G1 失败即 NO-GO，不进入 scorer 训练**。
+- **GPU 预算（跑前估）**：G=8 → 4,608 passes ≈ 0.5–1.1 A40·h（<6 ✓，可自主）。实现=build_e1_splits.py（完成）+ e1_causal_import.py（开发中）+ e1_metrics.py（完成，synthetic 验证过）。
+- **GQA claim 冲突（user 第 9 项，记录不改，投稿前必修）**：现稿 main.tex:557 的 n=200 "pre-final==post 0.0pp" 与 full-split n=12578 的 pre-final 0.4207 vs post 0.4771（Δ=−5.64pp，CI[−6.42,−4.86]，p=5e-05，McNemar 941/1650，reports/acmmm_final_controls_artifacts.md:83）冲突——full-n 是显著负 stage effect，0.0pp 是采样假象，必须修订。
