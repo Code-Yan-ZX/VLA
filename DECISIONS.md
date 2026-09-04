@@ -285,3 +285,11 @@
 - **方法契约**：完整 native merge-unit 粒度、逐图精确 top-k、main/deepstack 共享 mask、native merger/visual interface 不变；补充评分与 top-k 复杂度，同时明确不减少 tap 前 ViT 计算。
 - **claim 纪律**：不写 scorer-independent theorem，不扩大到无 merger 模型；byte-exact 因果归因仍仅限 Qwen3-VL，FastV 的适用优势与未解决 GQA gate 均保留。
 - **排版结果**：TCSVT 主稿仍为 12 页，实测图位于第 2/4/6/8/10 页；0 undefined、0 overfull、0 Type 3。
+
+## 2026-09-04 | TCSVT 投稿硬化与 artifact 恢复
+
+- **Table I**：采用服务器核验的 Qwen2.5-VL OCRBench matched-config 数字：25% 为 480 vs. 182（+298 pts），12.5% 为 328 vs. 70（+258 pts）；两者均注明统一 4M-pixel cap，删除旧的不公平 exception 脚注。
+- **Table II**：保留原 native-resolution $n=200$ regime-map cells，同时加入同 HF eager harness、4M-pixel cap、full-1000 OCRBench confirmation：Qwen3-VL 559 vs. 413，Qwen2.5-VL 382 vs. 295；明确其为 confirmation 而非配置不一致的静默替换。
+- **标题/摘要**：标题改为 “Rank Before You Merge: Stage-Consistent Visual Token Selection for Merger-Equipped Vision-Language Models”；摘要压至约 199 个英文词，保留问题、RBM、三模型 text-dense 结果、GQA 边界、ranking-swap 和效率结论。
+- **图表**：主文 Figure 2 改为去除样本元数据/调试框的纯视觉 TextVQA pre/post 对比；rank-overlap 分布和完整调试图移至 supplement，避免与 Figure 5 重复。
+- **Artifact**：当前投稿 S9 以 supplement 中明确列出的 29 个 cell 为权威索引；服务器找回的 24 个历史 `gate_*.json` 保留在匿名包 `audit/legacy_gates/`，不伪装成当前 S9。服务器原始导出保留不改，匿名包单独清理绝对路径并重新生成 checksum。

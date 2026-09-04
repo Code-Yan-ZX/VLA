@@ -22,9 +22,8 @@
 \usepackage[hidelinks]{hyperref}
 \providecommand{\Description}[1]{}
 
-\title{Supplementary Material --- Rank Before You Merge: A Stage Law for
-  Training-Free Visual Token Compression in Merger-Equipped Vision-Language
-  Models}
+\title{Supplementary Material --- Rank Before You Merge: Stage-Consistent
+  Visual Token Selection for Merger-Equipped Vision-Language Models}
 
 \author{Zhengxing Yan}
 \hypersetup{pdfauthor={Zhengxing Yan}}
@@ -72,8 +71,20 @@ $\rho = 0.137 < 0.332 < 0.360$; Jaccard $= 0.180 < 0.243 < 0.278$. For two
 independent size-$\kappa N$ subsets, the large-$N$ chance reference is
 $\kappa/(2-\kappa)=1/7\approx0.143$ at $\kappa=25\%$. All three overlaps are
 above chance but low in absolute terms, with DocVQA closest to chance. The
-corresponding per-image distributions are visualized in the main paper's
-quantitative mechanism-and-depth figure (top).
+corresponding per-image distributions are retained below as a supplementary
+diagnostic, separate from the main paper's depth-response figure.
+
+\begin{figure*}[ht]
+  \centering
+  \includegraphics[width=\textwidth]{figs/token_survival_m1_rank_overlap.pdf}
+  \caption{Supplementary per-image rank-agreement distributions for the
+    deterministic seed-0 M1 sample ($n=64$ per benchmark). Boxes, points, and
+    mean$\pm$standard-deviation annotations report Spearman correlation,
+    Kendall correlation, and top-25\% kept-set Jaccard.}
+  \Description{Three groups of box plots compare pre- and post-merger rank
+    agreement for document, text, and object question-answering benchmarks.}
+  \label{fig:supp_rank_overlap}
+\end{figure*}
 
 % =============================================================================
 \section*{S2. M2 --- demotion directionality vs text-stroke energy, full table (same sample as S1)}
@@ -107,6 +118,17 @@ post-merger selection is systematically anti-text on documents. Directionality
 hypothesis (merger trained on natural content attenuates high-frequency stroke
 energy): testable hypothesis, not a measured result. Second text-stroke proxy
 (Laplacian variance): future work (single-proxy disclosure).
+
+\begin{figure*}[ht]
+  \centering
+  \includegraphics[width=\textwidth]{figs/token_survival_combined.pdf}
+  \caption{Supplementary detailed visual audit. The two audited examples retain
+    the sample identifiers, prompts, score-source metadata, selector statistics,
+    and overlap/debug annotations omitted from the cleaner main-paper visual.}
+  \Description{Detailed TextVQA and DocVQA pre- and post-merger token-survival
+    maps with their audit metadata and overlap diagnostics.}
+  \label{fig:supp_token_survival_detail}
+\end{figure*}
 
 % =============================================================================
 \section*{S3. Retention curve --- full number strings ($n = 200$, both Qwen models)}
@@ -168,11 +190,11 @@ in both arms; the 200/200 ground-truth self-test is retained in the audit record
     \midrule
     Qwen2.5-VL-7B & TextVQA   & .25  & $+26.1$ pp   & \textbf{+30.8} & 1682 & 309  & 60.2 & 27.3 \\
     Qwen2.5-VL-7B & DocVQA    & .25  & $+11.0$ pp   & \textbf{+15.6} & 1406 & 693  & 60.8 & 11.6 \\
-    Qwen2.5-VL-7B & OCR-Bench & .25  & $+293$ pts   & \textbf{+14.6} & 347  & 54   & 59.9 & 14.7 \\
+    Qwen2.5-VL-7B & OCR-Bench & .25  & $+298$ pts   & \textbf{+14.9} & 349  & 51   & 59.9 & 14.7 \\
     Qwen2.5-VL-7B & GQA       & .25  & $-2.6$ pp \dag & \textbf{$-$5.7} & 892 & 1150 & 83.8 & $-4.1$ \\
     Qwen2.5-VL-7B & TextVQA   & .125 & $+27.8$ pp   & \textbf{+33.1} & 1836 & 305  & 57.2 & 29.1 \\
     Qwen2.5-VL-7B & DocVQA    & .125 & $+21.0$ pp   & \textbf{+25.6} & 1325 & 294  & 69.7 & 23.3 \\
-    Qwen2.5-VL-7B & OCR-Bench & .125 & $+268$ pts   & \textbf{+15.0} & 294  & 26   & 68.0 & 15.9 \\
+    Qwen2.5-VL-7B & OCR-Bench & .125 & $+258$ pts   & \textbf{+14.3} & 291  & 33   & 68.0 & 15.9 \\
     \bottomrule
   \end{tabular}
 \end{table*}
@@ -299,9 +321,10 @@ table and skip accounting.
     (Qwen2.5-VL)} long-OCR images on context overrun, scored 0 (conservative);
     compressed cells skip $\leq 5$. The uncompressed anchor is therefore
     understated and the relative gaps are conservative.
-  \item Qwen2.5-VL OCR-Bench @25\% RBM: 4~M-pixel cap (mean tokens 229.6 vs
-    post 282.0) $\to$ its $+293$-pt gap is conservative (the one iso-token
-    exception in the Qwen block of Table~1, note~d).
+  \item Qwen2.5-VL OCR-Bench uses a matched 4~M-pixel cap for both arms at
+    both budgets: mean post-merger tokens are 229.6 at 25\% and 131.5 at
+    12.5\%, with identical per-sample token counts. The matched gaps are
+    $+298$ and $+258$ points, respectively.
 \end{itemize}
 
 \noindent Per-cell descriptive $\sigma$ values (full splits, computed from the
@@ -380,7 +403,7 @@ the archived audit index, respectively.
 \section*{S7. Selector invariance (second scorer family, Qwen3-VL)}
 % =============================================================================
 
-The stage law under a second, non-L2 scorer (global-centroid attention).
+The stage-consistent effect under a second, non-L2 scorer (global-centroid attention).
 Evidence record: audit index entry for the selector-invariance
 campaign.
 
@@ -479,9 +502,9 @@ the broad architecture but was not re-tested at this matched boundary.
 % =============================================================================
 
 \noindent The filenames below define the anonymous artifact manifest and the
-audit records required for submission. The archive must be checked against this
-index before external upload; the tables remain self-contained summaries of the
-reported cells.
+audit records required for submission. The companion artifact package contains
+the indexed records and its post-sanitization checksum manifest; the tables
+remain self-contained summaries of the reported cells.
 
 \begin{table*}[ht]
   \centering
@@ -544,7 +567,7 @@ entry for the InternVL3 full-split metrics and per-cell skip accounting.
 \noindent(Per-cell artifact identifiers are specified by the anonymous manifest.
 Pre-merger leads on every text-dense benchmark at both budgets --- e.g.\ DocVQA
 ANLS 0.7284 vs 0.382 at $\kappa = 25\%$; GQA is the near-null object-centric
-case, 0.5993 vs 0.6031 --- replicating the stage law on the pixel-shuffle merger
+case, 0.5993 vs 0.6031 --- replicating the stage-consistent effect on the pixel-shuffle merger
 design.)
 
 \subsection*{S9.2 FastV-k3 same-scope cells (8/8)}
@@ -684,10 +707,10 @@ intersection is a sparse minority of the budget.
 
 %──────────────────────────────────────────────────────────────────────────────
 \noindent\footnotesize\textbf{Packaging note:} this source package contains
-the rendered summaries above, not the run-level anonymous artifact indexed in
-S9. That archive must be restored, sanitized, checksummed, and verified before
-submission. This supervisor-review draft identifies Zhengxing Yan but includes
-no affiliation or repository identifier; a future anonymous submission requires
-a separate anonymization pass.
+the rendered summaries above; the separate anonymous artifact package supplied
+with it contains the run-level records indexed in S9, the recovered S10 panels,
+and a post-sanitization checksum manifest. The manuscript source preserves the
+author name but no affiliation or repository identifier; apply the venue's
+final author/anonymity policy at upload time.
 
 \end{document}

@@ -38,8 +38,8 @@
 \usepackage[hidelinks]{hyperref}
 \providecommand{\Description}[1]{} % Preserve accessibility text from the source.
 
-\title{Rank Before You Merge: A Stage Law for Training-Free Visual Token
-  Compression in Merger-Equipped Vision-Language Models}
+\title{Rank Before You Merge: Stage-Consistent Visual Token Selection for
+  Merger-Equipped Vision-Language Models}
 
 \author{Zhengxing Yan}
 \hypersetup{pdfauthor={Zhengxing Yan}}
@@ -53,33 +53,24 @@
 \maketitle
 
 \begin{abstract}
-Visual-token selection around a native spatial merger is a representation-order
-problem: top-$k$ decisions made before and after the lossy merger need not retain
-the same evidence. We formalize this mismatch and introduce
-\textbf{Rank-Before-Merge (RBM)}, a stage-consistent rule that scores native
-$2\!\times\!2$ units on merger-input features, retains the prescribed budget,
-and applies the unmodified native merger only to the survivors. RBM adds no
-learned parameters, query input, or LLM-attention probe. We evaluate the design
-with an iso-budget control that uses query-blind L2 on merger-input (pre) or
-merger-output (post) features while holding model and decoding fixed. Across
-Qwen3-VL-8B, Qwen2.5-VL-7B, and InternVL3-8B, pre leads the
-matched L2-family post arm on all nine official TextVQA, DocVQA, and OCRBench cells at
-25\% retention, by $+11.0$ to $+38.4$ percentage points and $+293$ to $+432$
-OCRBench points. A full-split matched-depth control at the Qwen3-VL main-merger
-boundary retains the text-dense effect but gives a $-5.64$ percentage-point
-pre-final minus post difference on GQA (95\% CI $[-6.42,-4.86]$), establishing
-that the stage law is workload-conditioned rather than universal.
-
-On Qwen3-VL, the merger weakly preserves unit ranks and preferentially demotes
-document text-stroke units; swapping the pre ranking into the post path recovers
-pre accuracy with identical selected-unit identities. The gains are against the
-matched L2-family post arm,
-not a universal method ranking: query-conditioned FastV remains stronger on
-several reference-grounded and object-centric settings, while RBM is the more
-robust OCR-oriented default. Five prespecified extensions do not improve over
-their stronger constituents. At 25\% retention, compression is stage-neutral in
-speed, increasing throughput by $68\%$ on Qwen3-VL and
-$1.8$--$2.5\times$ on InternVL3.
+Visual-token selection around a native spatial merger is an operator-order
+problem: top-$k$ decisions made before and after a lossy merger need not retain
+the same evidence. We introduce \textbf{Rank-Before-Merge (RBM)}, a training-free
+rule that scores native $2\!\times\!2$ units on merger-input features at a
+fixed budget before applying the native merger. It adds no learned or
+query-dependent scorer. With iso-budget query-blind L2, RBM outperforms matched
+post-merger L2 on all nine text-dense cells across Qwen3-VL-8B,
+Qwen2.5-VL-7B, and InternVL3-8B, with gains of $+11.0$--$+38.4$ percentage
+points and $+235$--$+432$ OCRBench points. A full-split matched-depth Qwen3-VL
+control shows the same text-dense effect but a $-5.64$ percentage-point
+pre-final-minus-post difference on GQA (95\% CI $[-6.42,-4.86]$), establishing
+a workload boundary rather than a universal stage preference. Mechanism probes
+show rank reshuffling and text-stroke demotion; a ranking-swap control recovers
+pre accuracy with identical kept sets. Query-conditioned FastV remains stronger in several
+reference-grounded and object-centric settings, so RBM is positioned as a
+robust OCR-oriented default. At 25\% retention, compression is stage-neutral in
+speed, increasing throughput by $68\%$ on Qwen3-VL and $1.8$--$2.5\times$ on
+InternVL3.
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -136,7 +127,7 @@ receives the same native operation; byte identity is verified on Qwen3-VL. The
 method therefore targets merger-induced \emph{ranking} changes without adding a
 learned scorer, query input, or LLM-attention probe (\S\ref{sec:rbm}).
 
-\textbf{What falls out of it --- a stage law across models.} Under iso-model,
+\textbf{What falls out of it --- a stage-consistent effect across models.} Under iso-model,
 iso-budget, and a shared query-blind L2-family rule, pre leads post by
 $11.0$--$38.4$~pp on
 official text-dense splits across two Qwen generations and by
@@ -162,7 +153,7 @@ First, we formulate representation-dependent top-$k$ selection around a native
 merger as a selection--merger ordering problem and state its kept-set
 equivalence condition. Second, we derive RBM as a stage-consistent design with
 an explicit structural contract and no learned parameters (\S\ref{sec:method}).
-Third, we establish a workload-conditioned stage law across three models and
+Third, we establish a workload-conditioned stage effect across three models and
 two merger designs, identify rank reshuffling and text-stroke demotion as the
 Qwen3-VL mechanism, and map the boundary against FastV and five prespecified
 extensions (\S\ref{sec:experiments}--\ref{sec:negative}).
@@ -267,16 +258,16 @@ single engine (\S\ref{sec:efficiency}).
 
 \begin{figure*}[t!]
   \centering
-  \includegraphics[width=\textwidth]{figs/token_survival_combined.pdf}
-  \caption{\textbf{Representative token-survival maps at 25\% retention.}
-    TextVQA (top) and DocVQA (bottom) use the same query-blind L2 selector
-    before and after Qwen3-VL's native merger. In each row, the first two panels
-    show the pre- and post-selected units; the third overlays pre-kept (green),
-    post-kept (red dashed), and pre-only/post-dropped units (orange). These are
-    audited single-image mechanism examples, not aggregate accuracy evidence.}
-  \Description{Two rows compare pre-merger and post-merger token selection on
-    one TextVQA street image and one DocVQA document image. The overlap panels
-    expose which spatial units survive only before or only after merging.}
+  \includegraphics[width=0.94\textwidth]{figs/token_survival_clean.png}
+  \caption{\textbf{Representative visual comparison at 25\% retention.}
+    The same TextVQA storefront is scored with query-blind L2 before and after
+    Qwen3-VL's native merger. The pre- and post-merger selectors retain the same
+    budget but visibly different spatial units, especially around the text-bearing
+    facade. Sample identifiers, prompts, score-source details, and the companion
+    document example are retained in Supplementary~S2 and the artifact package.}
+  \Description{A storefront image is shown twice with colored token grids. The
+    left panel shows units selected before the native merger and the right panel
+    shows units selected after it, revealing different retained spatial regions.}
   \label{fig:token_survival}
 \end{figure*}
 
@@ -454,30 +445,23 @@ deepstack[0] at ViT layer~8, Qwen2.5-VL main merger input, InternVL3
 pixel-shuffle input) and
 the Qwen2.5-VL position-cursor fix are detailed in Supplementary~\S\,S8,
 including the cross-generation configuration diagnostic.
-Figure~\ref{fig:rank_depth} summarizes the corresponding rank-agreement
-distributions and the retention-depth response.
+Supplementary~S1 summarizes the corresponding rank-agreement distributions;
+Figure~\ref{fig:rank_depth} shows the retention-depth response.
 
 \begin{figure*}[t!]
   \centering
-  \includegraphics[width=\textwidth]{figs/token_survival_m1_rank_overlap.pdf}
-  \vspace{4pt}
   \includegraphics[width=0.88\textwidth]{figs/retention_curves.pdf}
-  \caption{\textbf{Quantitative mechanism and depth diagnostics.} Top:
-    per-image pre/post rank agreement on the deterministic seed-0 M1 sample
-    ($n=64$ per benchmark); boxes and points show the distributions, with
-    mean$\pm$standard deviation annotated. Bottom: normalized accuracy as
-    compression deepens on Qwen3-VL-8B ($n=200$ per point). Pre-merger
-    selection preserves substantially more text-dense accuracy, while ChartQA
-    is primarily budget-limited and the small-sample GQA curve is not used to
-    claim a universal stage preference. The full-split matched-boundary GQA
-    control is reported in Section~\ref{sec:qwen}. Error bars are descriptive
-    rate-approximation standard errors;
-    primary inference uses paired metric-level bootstrap and sign-flip tests.}
-  \Description{The top row contains three rank-agreement distributions for
-    DocVQA, TextVQA, and GQA. The bottom row contains five retention curves for
-    TextVQA, DocVQA, OCR-Bench, ChartQA, and GQA. DocVQA has the strongest rank
-    reshuffling, and the pre-merger accuracy advantage grows with compression
-    on the three text-dense benchmarks.}
+  \caption{\textbf{Accuracy response to compression depth.}
+    Normalized accuracy is shown on Qwen3-VL-8B ($n=200$ per point) as the
+    visual-token budget decreases. Pre-merger selection preserves substantially
+    more text-dense accuracy, while ChartQA is primarily budget-limited and the
+    small-sample GQA curve is not used to claim a universal stage preference.
+    The full-split matched-boundary GQA control is reported in Section~\ref{sec:qwen}.
+    Rank-agreement distributions and their full table are retained in
+    Supplementary~S1, avoiding duplication with Fig.~\ref{fig:fig3}.}
+  \Description{Five retention curves compare pre-merger and post-merger
+    selection on TextVQA, DocVQA, OCR-Bench, ChartQA, and GQA as the visual-token
+    retention decreases.}
   \label{fig:rank_depth}
 \end{figure*}
 
@@ -550,7 +534,7 @@ than binarizing those metrics.
     \multirow{4}{*}{Qwen2.5-VL-7B}
       & TextVQA (VQA-acc)   & 0.862 & \textbf{0.702} & 0.442 & \textbf{+26.1 pp} & 0.597 & 0.319 \\
       & DocVQA (ANLS)       & 0.949 & \textbf{0.636} & 0.526 & \textbf{+11.0 pp} & 0.455 & 0.245 \\
-      & OCR-Bench (/1000)   & 817   & \textbf{476}   & 183   & \textbf{+293 pts} & 335   & 67 \\
+      & OCR-Bench (/1000)   & 817   & \textbf{480}   & 182   & \textbf{+298 pts} & 328   & 70 \\
       & GQA (exact match)   & 0.604 & 0.559          & 0.585 & $-2.6$~pp \dag & ---   & --- \\
     \midrule
     \multirow{4}{*}{InternVL3-8B}
@@ -572,9 +556,9 @@ than binarizing those metrics.
   understated and the relative gaps are, if anything, conservative. (c)~GQA was
   evaluated at $\kappa = 0.25$ only on the full split. (d)~Iso-token control: at
   each model$\times$benchmark, pre and post have identical mean post-merger
-  token counts, with one exception --- the Qwen2.5-VL OCR-Bench @25\% RBM cell
-  used a 4~M-pixel cap (mean tokens 229.6 vs post 282.0), so its $+293$-pt gap
-  is conservative. (e)~Primary inference uses paired-bootstrap 95\% CIs and
+  token counts. The Qwen2.5-VL OCR-Bench cells at both budgets use the matched
+  4~M-pixel cap (mean tokens 229.6 and 131.5, respectively). (e)~Primary
+  inference uses paired-bootstrap 95\% CIs and
   paired sign-flip permutation tests on the official per-item metric. All Qwen
   text-dense intervals exclude zero; Figure~\ref{fig:fig2} shows the intervals.
   McNemar is additional for binary OCRBench/GQA outcomes. (f)~InternVL3 uses pixel-shuffle
@@ -585,10 +569,10 @@ than binarizing those metrics.
   equivalence bound exists, so we do not call it a statistical tie.
 \end{table*}
 
-\textbf{The stage law holds on both generations.} Every text-dense
+\textbf{The stage-consistent effect holds on both generations.} Every text-dense
 $\Delta_{25}$ is large and significant: RBM leads post-merger selection by
 $+38.4$~pp (TextVQA), $+24.3$~pp (DocVQA), $+363$~pts (OCR-Bench; 547 vs 184,
-$3.0\times$) on Qwen3-VL, and by $+26.1$~pp, $+11.0$~pp, $+293$~pts (476 vs 183,
+$3.0\times$) on Qwen3-VL, and by $+26.1$~pp, $+11.0$~pp, $+298$~pts (480 vs 182,
 $2.6\times$) on Qwen2.5-VL; all paired-bootstrap 95\% CIs exclude zero. The gap is robust to
 deeper compression: at $\kappa = 0.125$ the post stage degrades much faster
 (Qwen3-VL OCR-Bench $184 \to 53$ vs RBM $547 \to 350$, widening the pre/post
@@ -613,9 +597,9 @@ pre-final is $0.4207$ versus post $0.4771$, a $-5.64$~pp difference (95\% CI
 $[-6.42,-4.86]$, $n=12578$). The full control table and paired uncertainty are
 in Supplementary~S7b. The result therefore confirms a genuine text-dense
 before-merger advantage at the matched boundary, while GQA favors post-merger
-selection; the stage law is workload-conditioned, not a universal ranking rule.
+selection; the stage effect is workload-conditioned, not a universal ranking rule.
 
-\textbf{Object-centric GQA --- a workload boundary, not a universal stage law.}
+\textbf{Object-centric GQA --- a workload boundary, not a universal stage preference.}
 The corrected full-split matched-boundary control favors post-merger selection
 on GQA ($0.4207$ pre-final versus $0.4771$ post; $-5.64$~pp, 95\% CI
 $[-6.42,-4.86]$, $n=12578$). The original operational layer-8 contrast also
@@ -735,7 +719,8 @@ whereas RBM holds (0.60 / 0.42 / 0.58). There is therefore no universal winner.
     attempted samples; skip parity in note~ii). Margin = winner's absolute
     lead; the winner column is the regime read: FastV's wins mark its
     reference-grounded home regime, RBM's wins mark the OCR regime
-    (\S\ref{sec:modes}).}
+    (\S\ref{sec:modes}). Bold full-split OCR-Bench rows are confirmation
+    results at the unified 4~M-pixel cap.}
   \label{tab:tab3}
   \begin{tabular}{@{}l r r r l@{}}
     \toprule
@@ -745,12 +730,14 @@ whereas RBM holds (0.60 / 0.42 / 0.58). There is therefore no universal winner.
     TextVQA (full; default)      & 5000  & \textbf{0.7771} & 0.605  & \textbf{+17.2 F} \\
     GQA (full; default)          & 12578 & \textbf{0.5376} & 0.449  & \textbf{+8.9 F} \\
     DocVQA (dev; 600k cap)       & 200   & 0.5863          & 0.5924 & $+0.6$ R$^{\ddagger}$ \\
+    OCR-Bench (full; 4M cap)     & 1000  & 0.413           & \textbf{0.559} & \textbf{+14.6 R} \\
     OCR-Bench (dev; native res.) & 200   & 0.415           & \textbf{0.575} & \textbf{+16.0 R} \\
     \midrule
     \multicolumn{5}{@{}l}{\textbf{Qwen2.5-VL-7B}} \\
     TextVQA (dev; default)       & 200   & \textbf{0.7467} & 0.6683 & \textbf{+7.8 F} \\
     GQA (dev; default)           & 200   & 0.475           & 0.520 & $+4.5$ R$^{\ddagger}$ \\
     DocVQA (dev; 600k cap)       & 200   & 0.4852          & 0.5062 & $+2.1$ R$^{\ddagger}$ \\
+    OCR-Bench (full; 4M cap)     & 1000  & 0.295           & \textbf{0.382} & \textbf{+8.7 R} \\
     OCR-Bench (dev; native res.) & 200   & 0.285           & \textbf{0.370} & \textbf{+8.5 R} \\
     \bottomrule
   \end{tabular}
@@ -760,7 +747,8 @@ whereas RBM holds (0.60 / 0.42 / 0.58). There is therefore no universal winner.
   \textbf{Table notes.} F = FastV; R = RBM; $\Delta$ is the winner's absolute
   lead in percentage points. (i)~Scope and pixels: $n$ is printed per row; DocVQA
   cells run at a 600k pixel cap on both arms (iso-pixel within this table);
-  OCR-Bench runs at native resolution, which is what triggers the skips
+  the bold full-split OCR-Bench confirmation rows use a 4~M-pixel cap on both
+  arms; the older dev OCR-Bench rows run at native resolution, which is what triggers the skips
   (note~ii); TextVQA/GQA use each model's default imaging configuration.
   (ii)~OCR-Bench skips: native-resolution giant OCR images overrun the context
   on $\approx 10\%$ of the $n = 200$ set (19/200 Qwen3-VL, 20/200 Qwen2.5-VL);
@@ -784,12 +772,29 @@ whereas RBM holds (0.60 / 0.42 / 0.58). There is therefore no universal winner.
   cell. (v)~$^{\ddagger}$The Qwen3-VL DocVQA paired difference is inconclusive.
   For Qwen2.5-VL GQA/DocVQA, the paired 95\% CIs cross 0
   ($[-10.5, +1.5]$ / $[-10.1, +5.8]$); these cells are
-  exploratory/inconclusive, not statistically robust RBM edges.
+  exploratory/inconclusive, not statistically robust RBM edges. (vi)~The
+  full-split OCR confirmation uses the same HF eager harness and 4~M-pixel cap
+  for both methods on all 1000 items. The nominal scores are 559/1000 vs.
+  413/1000 for Qwen3-VL (79 symmetric skips; $n_{\rm paired}=921$) and
+  382/1000 vs. 295/1000 for Qwen2.5-VL (88 symmetric skips;
+  $n_{\rm paired}=912$); skipped items count as zero. These rows confirm the
+  OCR regime at full scale but do not replace the native-resolution $n=200$
+  regime rows.
 \end{table}
 
-% [COMPRESS-OPTIONAL] Table 2 notes (i)--(iv) are long; if the body overflows,
+% [COMPRESS-OPTIONAL] Table 2 notes (i)--(vi) are long; if the body overflows,
 % move notes (iii)--(iv) (harness + budget detail) to a supplementary note and
 % keep (i)--(ii) here. All numbers are preserved either way.
+
+\textbf{Full-split OCR confirmation.} To check that the OCR advantage is not
+an artifact of the small native-resolution probe, we additionally evaluated
+all 1000 OCRBench items under the same HF eager harness and a 4~M-pixel cap.
+RBM scores 559 versus FastV's 413 on Qwen3-VL and 382 versus 295 on
+Qwen2.5-VL. The gaps are $+14.6$ and $+8.7$ percentage points, respectively,
+with symmetric skips across arms. These full-split rows confirm the direction
+at larger scale; because their pixel cap differs from the older native-resolution
+$n=200$ rows, they are reported as confirmation rather than silently substituted
+for the regime-map cells.
 
 \textbf{Workload-conditioned regime map.}
 \textbf{FastV leads several question-conditioned cells.} FastV-k3 leads RBM on
