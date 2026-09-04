@@ -1,0 +1,1066 @@
+% =============================================================================
+%  main.tex  --  "Rank Before You Merge" (IEEE TCSVT submission draft)
+%  Converted from drafts/paper_acmmm.md (8445 words, 9 sections, 5 tables,
+%  3 figure placeholders). Prepared for author/supervisor review.
+%
+%  DISCIPLINE (do not violate when editing):
+%   - Every NUMBER is copied verbatim from the markdown source. Do not change.
+%   - Red-line wording (scoped claims, the GQA
+%     single-full-statement, "robust default, not uniformly optimal") is
+%     copied verbatim. Do not weaken.
+%   - Internal repository / digest paths are not typeset. The "Source: *.md"
+%     provenance lines of the markdown (work notes) are intentionally omitted.
+%
+%  FIGURES: the method overview in figs/fig1_word.png is the selected figure
+%   embedded in the latest Chinese method draft; the remaining figures are
+%   measured result and mechanism diagnostics migrated from the prior LaTeX
+%   final. No proxy or placeholder is used in the submission source.
+%
+%  PAGE BUDGET (hard cap: <=8 pp body + <=2 pp refs). Compression points already
+%   applied are marked  % [COMPRESSED ...] ; further optional levers are marked
+%   % [COMPRESS-OPTIONAL ...] for the user to apply if the actual compile runs
+%   long (see README_compile.txt, "if it overflows").
+% =============================================================================
+
+\documentclass[journal]{IEEEtran}
+
+% --- packages actually used in this file -------------------------------------
+\usepackage{cite}         % IEEE-compressed numeric citations
+\usepackage{amsmath,amssymb}
+\usepackage{microtype}    % Conservative protrusion/expansion for clean breaks.
+\usepackage{booktabs}     % \toprule \midrule \bottomrule
+\usepackage{multirow}     % Table 1 / Table 2 model-column row spans
+\usepackage{algorithm}    % Algorithm 1 float
+\usepackage{algorithmic}  % Algorithm 1 pseudocode
+\usepackage{pifont}       % \ding{51}=check, \ding{55}=cross (replaces emoji)
+\usepackage{graphicx}     % \includegraphics (figures), \fbox placeholders
+\usepackage{url}          % \path{} for any path-like strings
+\usepackage[hidelinks]{hyperref}
+\providecommand{\Description}[1]{} % Preserve accessibility text from the source.
+
+\title{Rank Before You Merge: A Stage Law for Training-Free Visual Token
+  Compression in Merger-Equipped Vision-Language Models}
+
+\author{Zhengxing Yan}
+\hypersetup{pdfauthor={Zhengxing Yan}}
+\markboth{IEEE Transactions on Circuits and Systems for Video Technology, Submission Draft}%
+{Yan: Rank Before You Merge}
+
+% =============================================================================
+\begin{document}
+
+% -----------------------------------------------------------------------------
+\maketitle
+
+\begin{abstract}
+Visual-token selection around a native spatial merger is a representation-order
+problem: top-$k$ decisions made before and after the lossy merger need not retain
+the same evidence. We formalize this mismatch and introduce
+\textbf{Rank-Before-Merge (RBM)}, a stage-consistent rule that scores native
+$2\!\times\!2$ units on merger-input features, retains the prescribed budget,
+and applies the unmodified native merger only to the survivors. RBM adds no
+learned parameters, query input, or LLM-attention probe. We evaluate the design
+with an iso-budget control that uses query-blind L2 on merger-input (pre) or
+merger-output (post) features while holding model and decoding fixed. Across
+Qwen3-VL-8B, Qwen2.5-VL-7B, and InternVL3-8B, pre leads the
+matched L2-family post arm on all nine official TextVQA, DocVQA, and OCRBench cells at
+25\% retention, by $+11.0$ to $+38.4$ percentage points and $+293$ to $+432$
+OCRBench points. A full-split matched-depth control at the Qwen3-VL main-merger
+boundary retains the text-dense effect but gives a $-5.64$ percentage-point
+pre-final minus post difference on GQA (95\% CI $[-6.42,-4.86]$), establishing
+that the stage law is workload-conditioned rather than universal.
+
+On Qwen3-VL, the merger weakly preserves unit ranks and preferentially demotes
+document text-stroke units; swapping the pre ranking into the post path recovers
+pre accuracy with identical selected-unit identities. The gains are against the
+matched L2-family post arm,
+not a universal method ranking: query-conditioned FastV remains stronger on
+several reference-grounded and object-centric settings, while RBM is the more
+robust OCR-oriented default. Five prespecified extensions do not improve over
+their stronger constituents. At 25\% retention, compression is stage-neutral in
+speed, increasing throughput by $68\%$ on Qwen3-VL and
+$1.8$--$2.5\times$ on InternVL3.
+\end{abstract}
+
+\begin{IEEEkeywords}
+visual token compression, vision-language models, training-free inference,
+multimodal foundation models, inference efficiency
+\end{IEEEkeywords}
+
+% FIG 1 --- place the visual summary at the first available double-column top.
+% Keeping this immediately after \maketitle makes the float land on page 2.
+\begin{figure*}[t!]
+  \centering
+  \includegraphics[width=\textwidth]{figs/fig1_word.png}
+  \caption{\textbf{Rank-Before-Merge (RBM) method overview.}
+  The selected OCRBench example contrasts conventional Post-L2, which first
+  applies the native merger and then ranks merged-token features, with RBM,
+  which scores patch features within native $2\!\times\!2$ merge units, keeps
+  the top-$K$ units, and only then invokes the unmodified native merger. Both
+  paths use the same visual-token budget. RBM is training-free and preserves
+  the native visual interface and downstream language model; the highlighted
+  input region illustrates answer-bearing evidence that can be diluted by
+  post-merger ranking.}
+  \Description{Method diagram with an OCRBench input on the left and two
+  paths. The upper Post-L2 path merges visual units before ranking merged-token
+  L2 features, while the lower RBM path ranks patch L2 features before the
+  native merger and keeps the top-K units. The diagram states that the method
+  is training-free, uses a fixed budget, and leaves the native model unchanged.}
+  \label{fig:fig1}
+\end{figure*}
+
+% =============================================================================
+\section{Introduction}\label{sec:intro}
+% =============================================================================
+
+\textbf{Multimodal inference cost is a visual-token problem.} Visual-language
+models (VLMs) process images as hundreds to tens of thousands of visual tokens,
+making quadratic attention and key-value memory major inference costs.
+Visual-token compression is therefore central to efficient document
+understanding, scene-text QA, and OCR. In merger-equipped architectures such as
+Qwen-VL and InternVL3, $2\!\times\!2$ patch groups are first merged, while prior
+work focuses mainly on which tokens to keep and how to score them. The selection
+stage, before or after the native merger, is rarely isolated as a matched
+variable. Prior work notes Qwen's native token reduction~\cite{bai2025qwen25vl}
+and OCR degradation from post-encoder merging~\cite{islam2025adaptmerge,yang2024visionzip};
+we directly test the boundary by scoring the same units with query-blind L2 on
+merger-input (pre) or merger-output (post) features at the same per-image
+budget.
+
+\textbf{Stage-consistent selection: Rank-Before-Merge (RBM).} RBM resolves the
+operator-order ambiguity by scoring each merger-input unit, retaining the
+top-$\kappa$, and applying the unmodified native merger only to the survivors.
+Its method contract fixes the unit granularity, per-image budget, shared mask,
+and native visual interface. Because merging is per-unit, a fixed kept set
+receives the same native operation; byte identity is verified on Qwen3-VL. The
+method therefore targets merger-induced \emph{ranking} changes without adding a
+learned scorer, query input, or LLM-attention probe (\S\ref{sec:rbm}).
+
+\textbf{What falls out of it --- a stage law across models.} Under iso-model,
+iso-budget, and a shared query-blind L2-family rule, pre leads post by
+$11.0$--$38.4$~pp on
+official text-dense splits across two Qwen generations and by
+$34.6$--$37.4$~pp plus 432 OCRBench points on InternVL3, whose merger design
+differs. A full-split matched-depth pure-stage control retains the text-dense
+effect but yields $-5.64$~pp on Qwen3-VL GQA (95\% CI
+$[-6.42,-4.86]$); the result is workload-conditional and widens with
+compression depth (\S\ref{sec:experiments}).
+
+\textbf{Why the stage matters.} On Qwen3-VL, the learned merger weakly preserves
+unit ranks (Spearman $\rho=0.14$--$0.36$), preferentially demotes high-edge
+text-stroke units on documents, and yields to a ranking-swap control: the post
+path recovers pre accuracy with identical selected-unit sets (Jaccard $=1.000$
+in four model$\times$benchmark cells). Thus, where tested byte-exactly, the
+ranking rather than the forward path explains the gap (\S\ref{sec:mechanism}).
+This matched-rule result is distinct from the query-conditioned FastV comparison:
+FastV remains stronger on several scene-text/object-centric cells, so RBM is a
+query-blind, OCR-preserving robust default, not a universal winner
+(\S\ref{sec:fastv}).
+
+\textbf{Contributions.}
+First, we formulate representation-dependent top-$k$ selection around a native
+merger as a selection--merger ordering problem and state its kept-set
+equivalence condition. Second, we derive RBM as a stage-consistent design with
+an explicit structural contract and no learned parameters (\S\ref{sec:method}).
+Third, we establish a workload-conditioned stage law across three models and
+two merger designs, identify rank reshuffling and text-stroke demotion as the
+Qwen3-VL mechanism, and map the boundary against FastV and five prespecified
+extensions (\S\ref{sec:experiments}--\ref{sec:negative}).
+
+% =============================================================================
+\section{Related Work}\label{sec:related}
+% =============================================================================
+
+\textbf{Token pruning and merging in VLMs.} Most methods score visual tokens and
+drop or merge the least important before or within the early LLM layers.
+\textbf{FastV} prunes at the second LLM layer from the attention visual tokens
+receive~\cite{chen2024fastv}; it is our primary same-model, query-conditioned
+strong baseline --- the method that is stronger on several question-conditioned
+non-OCR cells but weaker in the tested OCR regime (\S\ref{sec:fastv}).
+\textbf{PyramidDrop} drops tokens progressively across LLM
+layers~\cite{xing2024pyramiddrop}; \textbf{FasterVLM} accelerates
+attention-based pruning~\cite{zhang2024fastervlm}; \textbf{SparseVLM} explores
+query-conditioned sparsification~\cite{zhang2024sparsevlm}; \textbf{PruMerge}
+merges by attention-derived importance~\cite{shang2024prumerge};
+\textbf{FitPrune} fits lightweight importance
+predictors~\cite{ye2024fitprune}. Other training-free selectors use visual
+{[CLS]} attention, graph propagation, or multi-cue suppression
+\cite{wang2024vtccls,jiang2025gprune,luan2025adaptprune}, while unified recent
+systems combine importance with diversity or text-guided merging
+\cite{yu2026visiontrim,baek2026agilepruner,fang2026prunesid}. These methods
+prune or merge at different
+encoder-output or LLM-side hook points. Among the methods reviewed here, we
+found no matched comparison of selection immediately before versus after a
+model's native spatial merger under iso-model, iso-token, and a shared
+query-blind L2-family rule.
+
+\textbf{Token-merging lineage (ToMe $\to$ AdaptMerge).} Token \emph{merging}
+originates with \textbf{ToMe}~\cite{bolya2023tome} (bipartite soft matching,
+post-encoder, query-blind); \textbf{AdaptMerge}~\cite{islam2025adaptmerge}
+adapts it to large multimodal models and reports that language-guided merging
+closes most of the OCR gap plain ToMe incurs --- corroborating evidence for our
+lossy-merger thesis, cited as support, not as a competitor. This lineage adds a
+\emph{second}, learned merging stage; we hold the native merger fixed and ask
+only whether selection should precede or follow it, so it is methodologically
+distinct from our stage-axis test.
+Learned visual projectors such as TokenPacker condense tokens while preserving
+fine local cues~\cite{li2024tokenpacker}; unlike our inference-time test, they
+alter the projector architecture and require model adaptation.
+
+\textbf{VisionZip and Qwen-family compression.} \textbf{VisionZip} selects
+``dominant'' tokens by CLS-to-patch attention and merges the remainder into
+``contextual'' tokens~\cite{yang2024visionzip}. In the official Qwen2.5-VL
+implementation we inspected, selection operates on embeddings after the
+PatchMerger, i.e.\ on the post-merger side of our axis. Its authors' own
+Qwen2.5-VL numbers are a model/stage-mismatched anchor
+only: OCRBench $81.5 \to 70.5$ at 50\% retention while general tasks hold, with
+the README caveat that gains are ``less striking'' because the merger already
+compresses --- the same effect seen from the post-merger side; we claim no
+head-to-head victory over it (\S\ref{sec:fastv}). Qwen-specific methods
+\textbf{GlimpsePrune}~\cite{zeng2025glimpseprune} and
+\textbf{VScan}~\cite{zhang2025vscan} provide additional Qwen-family compression
+comparisons without the matched stage-only control used here. The concurrent
+\textbf{AnchorPrune} study applies Qwen2.5-VL selection after its model-specific
+spatial processing and token merging~\cite{oh2026anchorprune}, again placing it
+on the post-merger side rather than matching both sides of the boundary.
+Recent layerwise methods instead score token evolution: TransPrune uses
+token-transition variation~\cite{li2026transprune}, while V2Drop exploits
+variation across adjacent layers~\cite{chen2026v2drop}. They are complementary
+to the controlled native-merger stage axis studied here.
+
+\textbf{The 2026 frontier.} Recent work broadens token reduction beyond
+scalar attention ranks through hierarchical selection~\cite{sun2026hiloprune}.
+Set coverage, reconstruction error, and functional
+sensitivity motivate joint or projector-aware selection
+\cite{ma2026apet,xu2026score,du2026coin,kim2026zooprune,lee2026spare}; learned
+or strongly conditioned compressors instead model semantic labels,
+information flow, or head importance
+\cite{wang2026metacompress,song2026evocomp,sun2026ifprune,zhu2026hawk}.
+Other work makes token lifetime explicitly layer-dependent
+\cite{wang2026informationhorizon,chen2026alvts,li2026crisp}, or preserves
+discarded content through object-centric, optimal-transport, or hybrid
+aggregation~\cite{lei2026core,li2026aot,zhang2026hybrid}. Document- and
+OCR-specific studies further show that generic accuracy can hide lost textual
+evidence~\cite{choi2026docprune,liu2026provenance}. These advances reinforce
+the need to localize the intervention stage; unlike these studies, our
+experiment directly matches the two sides of a frozen model's native spatial
+merger.
+
+\textbf{The design point we isolate.} We do not claim a topological vacuum.
+QuietPrune-style in-ViT pruning~\cite{gao2026quietprune} is a different,
+earlier, trained stage; PixelPrune removes redundant pixel patches before the
+ViT~\cite{wang2026pixelprune};
+FastV/PyramidDrop select inside the LLM; VisionZip selects on the opposite
+(post-merger) side. The combination we isolate is narrower: on a merger-equipped
+VLM, leaving the native merger untouched, scoring the merger-\emph{input}
+$2\!\times\!2$ units by a query-blind saliency norm, keeping the top-$\kappa$,
+and handing only the survivors to the unmodified native merger --- together
+with Qwen3-VL mechanism evidence (M1--M3) that is not evaluated in our cited
+comparisons and explains why this stage can dominate on text-dense workloads.
+
+\textbf{Efficiency evaluation of VLMs.} Reported speedups depend heavily on
+engine and protocol. We adopt the lmms-eval family of \emph{official} scorers
+for accuracy~\cite{zhang2024lmmseval}; EffiVLM-Bench independently emphasizes
+cross-backbone, multi-metric acceleration evaluation
+\cite{wang2025effivlmbench}. We confine all throughput claims to a
+single engine (\S\ref{sec:efficiency}).
+
+\begin{figure*}[t!]
+  \centering
+  \includegraphics[width=\textwidth]{figs/token_survival_combined.pdf}
+  \caption{\textbf{Representative token-survival maps at 25\% retention.}
+    TextVQA (top) and DocVQA (bottom) use the same query-blind L2 selector
+    before and after Qwen3-VL's native merger. In each row, the first two panels
+    show the pre- and post-selected units; the third overlays pre-kept (green),
+    post-kept (red dashed), and pre-only/post-dropped units (orange). These are
+    audited single-image mechanism examples, not aggregate accuracy evidence.}
+  \Description{Two rows compare pre-merger and post-merger token selection on
+    one TextVQA street image and one DocVQA document image. The overlap panels
+    expose which spatial units survive only before or only after merging.}
+  \label{fig:token_survival}
+\end{figure*}
+
+% =============================================================================
+\section{Method --- Stage-Consistent Rank-Before-Merge}\label{sec:method}
+% =============================================================================
+
+\subsection{Problem formulation: selection--merger ordering}\label{sec:models}
+
+Let $U=\{u_i\}_{i=1}^{N}$ be the native merge units and let $M$ denote the
+model's per-unit merger. A representation-dependent scorer induces
+$a_i=s_{\mathrm{pre}}(u_i)$ before merging and
+$b_i=s_{\mathrm{post}}(M(u_i))$ after merging. At budget $k$, the two decisions
+are
+\begin{equation}
+K_{\mathrm{pre}}=\operatorname{TopK}_{k}\{a_i\}_{i=1}^{N},\qquad
+K_{\mathrm{post}}=\operatorname{TopK}_{k}\{b_i\}_{i=1}^{N}.
+\label{eq:stage-sets}
+\end{equation}
+Their visual outputs are $\{M(u_i):i\in K_{\mathrm{pre}}\}$ and
+$\{M(u_i):i\in K_{\mathrm{post}}\}$, respectively. For a \emph{fixed} mask,
+selection and a per-unit merger are compatible; the non-equivalence arises
+because the top-$k$ mask itself depends on whether saliency is measured before
+or after $M$.
+
+\textbf{Selection-equivalence condition.} With deterministic tie breaking, the
+two stages are equivalent at budget $k$ exactly when
+$K_{\mathrm{pre}}=K_{\mathrm{post}}$. A sufficient condition for equivalence at
+all budgets is $b_i=g(a_i)$ for a strictly increasing $g$. We quantify violation
+by the kept-set disagreement
+\begin{equation}
+D_k=1-\frac{|K_{\mathrm{pre}}\cap K_{\mathrm{post}}|}
+{|K_{\mathrm{pre}}\cup K_{\mathrm{post}}|},
+\label{eq:stage-disagreement}
+\end{equation}
+the complement of kept-set Jaccard. Section~\ref{sec:mechanism} tests the
+rank-preservation premise and then isolates whether changed unit identity,
+rather than a changed forward path, accounts for the measured Qwen3-VL gap.
+
+\textbf{Architectural setting.}
+
+We study three merger-equipped VLMs with two merger designs. Qwen3-VL-8B
+and Qwen2.5-VL-7B use a learned PatchMerger~\cite{bai2025qwen3vl,bai2025qwen25vl};
+InternVL3-8B uses pixel-shuffle downsampling~\cite{zhu2025internvl3}.
+All are served in bf16, eager
+attention, vLLM 0.19 (V1)~\cite{kwon2023vllm}, single A40 (46~GB), greedy
+decoding. The shared
+pipeline is: image $\to$ ViT patch tokens $\to$ native merger ($2\!\times\!2$
+groups $\to$ one token) $\to$ language model. The Qwen merger is \emph{not} an
+averaging pool: the four patch features of each $2\!\times\!2$ group are
+concatenated and projected by a small learned MLP (LayerNorm $\to$ fc1 $\to$
+GELU $\to$ fc2) to one unit vector; the lossy step is the four-to-one nonlinear
+projection, so a kept unit's representation is a nonlinear function of its four
+patches. We verified this against the served implementation on both Qwen
+generations.
+
+\textbf{The stage axis (the experimental variable).} The two arms share model,
+token count, decoding, and a query-blind L2 magnitude rule, while evaluating
+that rule on the native feature state available on each side of the merger:
+\begin{itemize}
+  \item \textbf{Pre-merger (RBM).} For each $2\!\times\!2$ unit, average the
+    L2 norms of its four merger-input patch vectors, keep the top-$\kappa N$,
+    and pass only the
+    survivors through the unmodified native merger (and, for Qwen3-VL, each
+    deepstack merger). The merger operates exactly as in the uncompressed model,
+    on a subset of units.
+  \item \textbf{Post stage (contrast).} Either score the $N$ \emph{merged} units
+    on merger-\emph{output} features and keep the top-$\kappa N$ (the stage used
+    by published compression methods for merger-equipped VLMs, including
+    VisionZip's Qwen path), or --- the stronger, query-conditioned contrast ---
+    prune inside the LLM by layer-2 attention (the FastV stage). The main
+    matrix (Table~\ref{tab:tab1}) uses the post-merger-L2
+    contrast from the same query-blind L2 family; the
+    layer-2 FastV contrast is used only in Table~\ref{tab:tab3}.
+\end{itemize}
+\textbf{RBM contract.} The method (i) masks only complete native merge units,
+(ii) retains exactly the per-image top-$k$ budget, (iii) shares unit identity
+across the main and deepstack streams, and (iv) leaves the native merger and
+downstream visual interface unchanged. These constraints separate a stage
+intervention from changes in token count, merger architecture, or query access.
+Figure~\ref{fig:token_survival} visualizes how the two matched-budget stages
+retain different spatial evidence on representative TextVQA and DocVQA inputs.
+
+\textbf{Budget definition.} Retention $\kappa$ is defined over \emph{merge
+units} relative to each image's \textbf{own} full unit count, so two methods at
+the same $\kappa$ feed the language model the same number of visual tokens per
+image; we verify equality of the mean post-merger token count per benchmark
+(\textbf{iso-token} control), so any accuracy difference is attributable to
+\emph{which} units survive and the representational state on which selection is
+made, not to token count. We report $\kappa \in \{0.25, 0.125\}$ (25\% / 12.5\%
+retention); per-benchmark token counts are printed with each table.
+
+\subsection{The L2 selector as a control variable}\label{sec:selector}
+
+We deliberately use the simplest \textbf{text-agnostic, query-blind}
+L2-magnitude family. For unit $u$ with four merger-input patch vectors
+$h_{u,1:4}$ and native merger $M$, the implemented scores are
+\[
+s_{\mathrm{pre}}(u)=\tfrac14\sum_{j=1}^{4}\|h_{u,j}\|_2,
+\qquad
+s_{\mathrm{post}}(u)=\|M(h_{u,1:4})\|_2.
+\]
+Thus the ranking functional is matched at the level of feature magnitude,
+while its representation is the experimental stage: four input vectors before
+the nonlinear merger versus its output vector after it. For Qwen3-VL, the
+headline operational pre arm takes $h$ from the first deepstack tap (ViT
+layer~8), whereas the matched-depth pre-final control takes $h$ from the final
+ViT block at the main-merger boundary (\S\ref{sec:qwen}). We freeze plain RBM
+and add no deployed variant. Mechanism-side probes in \S\ref{sec:modes} and
+\S\ref{sec:negative} test a variance-weighted score and a second scorer family;
+they bound generality but do not redefine the method. Unlike the merging lineage
+of \S\ref{sec:related}, RBM introduces no second learned merger: it manipulates
+only the \emph{set} of units the native merger sees, making pre vs post a stage
+intervention rather than a scorer comparison.
+
+\subsection{Rank-Before-Merge}\label{sec:rbm}
+
+Given an image with $N$ merge units, compute $s(u)$ on merger-input features for
+every unit, retain the top $k = \kappa N$, and invoke the native merger(s) on
+the retained units only. Unit identity is shared across the main and deepstack
+streams (deepstack mergers process intermediate-depth features of the
+\emph{same} units), so pruning a unit removes it from every stream. No attention
+weights are required and no parameters are trained.
+
+\textbf{Selection cost and deployment.} For $d$-dimensional patch features,
+L2 scoring costs $O(Nd)$, a heap-based top-$k$ costs $O(N\log k)$, and storing
+the scores costs $O(N)$. RBM does not reduce the ViT computation before its tap;
+it reduces the units entering the native merger and language-model interface.
+The method adds zero trainable parameters and no query- or LLM-attention pass;
+end-to-end stage neutrality is therefore evaluated empirically in
+\S\ref{sec:efficiency}, rather than inferred from asymptotic notation.
+
+\textbf{Unit equivalence (the structural invariant).} Because the mask is at
+\emph{unit} granularity and the merger is per-unit, a fixed kept set supplies
+the same four patches to the same native per-unit operation. Selection cannot
+prevent intra-unit combination; it changes which units reach the merger. The
+resulting outputs are byte-identical in the verified Qwen3-VL path; other
+families are limited to the evidence stated in \S\ref{sec:discussion}. Pre-merger
+selection keeps units on their raw (merger-input) saliency; post-stage selection
+keeps them on a saliency the merger has already rewritten (\S\ref{sec:mechanism}).
+This invariant is what makes the ranking-swap control of \S\ref{sec:m3}
+decisive.
+
+\begin{algorithm}[t]
+  \caption{Rank-Before-Merge (RBM), one image}
+  \label{alg:rbm}
+  \begin{algorithmic}[1]
+    \REQUIRE image $x$; retention $\kappa$; query-blind scorer $s = \|\cdot\|_2$
+    \ENSURE compressed visual token sequence $z$
+    \STATE $P \gets$ ViT patch tokens of $x$ \COMMENT{16~px footprint}
+    \STATE $U \gets$ group $P$ into $N$ native $2\!\times\!2$ units \COMMENT{32~px footprint}
+    \FOR{each unit $u \in U$}
+    \STATE $\mathrm{score}[u] \gets \frac14\sum_{j=1}^{4}\|h_{u,j}\|_2$ \COMMENT{mean patch L2}
+    \ENDFOR
+    \STATE $k \gets \max(1,\mathrm{round}(\kappa N));\ K \gets \mathrm{topk}(\mathrm{score},k)$
+    \STATE $z_{\mathrm{main}} \gets \mathrm{NativeMerger}(\{u : u \in K\})$ \COMMENT{merge survivors only}
+    \STATE $z_{\mathrm{ds}} \gets \mathrm{DeepstackMergers}(\{u : u \in K\})$ \COMMENT{Qwen3-VL only}
+    \STATE $z \gets \mathrm{NativeVisualInterface}(z_{\mathrm{main}}, z_{\mathrm{ds}})$
+    \RETURN $z$ \COMMENT{feed standard LLM}
+  \end{algorithmic}
+\end{algorithm}
+
+\noindent\textbf{Post-merger selection (the contrast):} replace lines~3--5 of
+Algorithm~\ref{alg:rbm} by $U' \gets \mathrm{NativeMerger}(U)$;
+$\mathrm{score}'[u'] \gets \| f_{\mathrm{out}}(u') \|_2$ on merger-\emph{output}
+features; $K' \gets$ top-$k$ by $\mathrm{score}'$; $\mathrm{keep}(K')$.
+Everything downstream is identical.
+
+% [COMPRESSED -> supp S8] The markdown's "Configuration disclosures" paragraph
+% (the Qwen2.5-VL block-vs-interleaved M-RoPE position-cursor fix, and the
+% per-family merger tap points) is condensed to one cross-reference here; the
+% full detail lives in Supplementary S8.
+\textbf{Configuration details.} Per-family tap points (Qwen3-VL
+deepstack[0] at ViT layer~8, Qwen2.5-VL main merger input, InternVL3
+pixel-shuffle input) and
+the Qwen2.5-VL position-cursor fix are detailed in Supplementary~\S\,S8,
+including the cross-generation configuration diagnostic.
+Figure~\ref{fig:rank_depth} summarizes the corresponding rank-agreement
+distributions and the retention-depth response.
+
+\begin{figure*}[t!]
+  \centering
+  \includegraphics[width=\textwidth]{figs/token_survival_m1_rank_overlap.pdf}
+  \vspace{4pt}
+  \includegraphics[width=0.88\textwidth]{figs/retention_curves.pdf}
+  \caption{\textbf{Quantitative mechanism and depth diagnostics.} Top:
+    per-image pre/post rank agreement on the deterministic seed-0 M1 sample
+    ($n=64$ per benchmark); boxes and points show the distributions, with
+    mean$\pm$standard deviation annotated. Bottom: normalized accuracy as
+    compression deepens on Qwen3-VL-8B ($n=200$ per point). Pre-merger
+    selection preserves substantially more text-dense accuracy, while ChartQA
+    is primarily budget-limited and the small-sample GQA curve is not used to
+    claim a universal stage preference. The full-split matched-boundary GQA
+    control is reported in Section~\ref{sec:qwen}. Error bars are descriptive
+    rate-approximation standard errors;
+    primary inference uses paired metric-level bootstrap and sign-flip tests.}
+  \Description{The top row contains three rank-agreement distributions for
+    DocVQA, TextVQA, and GQA. The bottom row contains five retention curves for
+    TextVQA, DocVQA, OCR-Bench, ChartQA, and GQA. DocVQA has the strongest rank
+    reshuffling, and the pre-merger accuracy advantage grows with compression
+    on the three text-dense benchmarks.}
+  \label{fig:rank_depth}
+\end{figure*}
+
+% =============================================================================
+\section{Main Experiments}\label{sec:experiments}
+% =============================================================================
+
+\subsection{Setup}\label{sec:setup}
+
+\textbf{Benchmarks and metrics.} We use TextVQA VQA accuracy
+~\cite{singh2019textvqa}, DocVQA ANLS~\cite{mathew2021docvqa}, the official
+OCR-Bench score~\cite{liu2024ocrbench}, and GQA normalized exact
+match~\cite{hudson2019gqa}. Official split sizes are 5000, 5349, 1000, and
+12578, respectively. Scorers
+are verbatim ports of the lmms-eval family~\cite{zhang2024lmmseval}, with
+ground-truth self-test passing 200/200.
+
+\textbf{Engines and fairness protocol.} RBM and the none / post cells run in
+vLLM; the FastV baseline runs in an independent HuggingFace transformers eager
+harness (it has no vLLM path). Accuracy is comparable across engines (the harness
+bit-degrades to native at zero drop, 8/8 per-sample identical; HF-vs-vLLM none
+cells agree 16/16); \textbf{throughput is not} --- all efficiency numbers are
+confined to vLLM (\S\ref{sec:efficiency}). Fairness is enforced by the same keep
+ratio relative to each image's own token count and by reporting mean
+post-merger token counts.
+
+\textbf{Significance.} Each pre-vs-post $\Delta$ pairs the same samples under
+greedy decoding. The prespecified primary family comprises the nine
+model$\times$text-dense-benchmark pre-vs-post contrasts at 25\% retention in
+Table~\ref{tab:tab1}. We use 20,000-resample paired-bootstrap confidence
+intervals on per-item metric differences and two-sided paired sign-flip
+permutation tests; Holm correction across these nine tests gives
+$p_{\mathrm{Holm}}\leq4.5\times10^{-4}$ for every contrast. McNemar is reported
+only as a binary-outcome cross-check for OCRBench containment and GQA exact
+match. Other budgets, GQA, mechanism probes, FastV comparisons, and extension
+gates are secondary or exploratory and are not pooled into the primary family.
+The metric-level tests preserve partial credit in VQA accuracy and ANLS rather
+than binarizing those metrics.
+
+\subsection{Main result across three models --- official full splits (Table 1)}\label{sec:qwen}
+
+% --- TABLE 1 : wide (8 columns) -> table* spanning both columns ---------------
+\begin{table*}[t]
+  \centering
+  \small
+  \caption{Official full-split metrics ($n = 5000 / 5349 / 1000 / 12578$),
+    greedy, across Qwen3-VL-8B, Qwen2.5-VL-7B, and InternVL3-8B. RBM =
+    pre-merger L2 (ours); post = post-merger L2 at the same token budget.
+    $\Delta_{25} =$ pre $-$ post at $\kappa = 0.25$. \dag\ marks the
+    only significant post-stage leads (GQA); these use the
+    deepstack[0]-input (layer-8) pre ranking. The separate full-split
+    matched-boundary Qwen3-VL control in \S\ref{sec:qwen} also favors post on
+    GQA ($-5.64$~pp for pre-final minus post), so the result is a genuine
+    workload boundary rather than a claim of universal pre-stage superiority.
+    InternVL3 uses a different merger and
+    family-specific imaging configuration; compare within-model deltas, not
+    cross-model absolute values. Full protocol and skip accounting are in the
+    supplementary material.}
+  \label{tab:tab1}
+  \begin{tabular}{@{}ll r r r l r r@{}}
+    \toprule
+    Model & Benchmark (metric) & none & RBM @25\% & post @25\% & $\Delta_{25}$ & RBM @12.5\% & post @12.5\% \\
+    \midrule
+    \multirow{4}{*}{Qwen3-VL-8B}
+      & TextVQA (VQA-acc)   & 0.844 & \textbf{0.605} & 0.222 & \textbf{+38.4 pp} & 0.472 & 0.132 \\
+      & DocVQA (ANLS)       & 0.956 & \textbf{0.481} & 0.238 & \textbf{+24.3 pp} & 0.352 & 0.103 \\
+      & OCR-Bench (/1000)   & 760   & \textbf{547}   & 184   & \textbf{+363 pts} & 350   & 53 \\
+      & GQA (exact match)   & 0.616 & 0.449          & 0.477 & $-2.8$~pp \dag & ---   & --- \\
+    \midrule
+    \multirow{4}{*}{Qwen2.5-VL-7B}
+      & TextVQA (VQA-acc)   & 0.862 & \textbf{0.702} & 0.442 & \textbf{+26.1 pp} & 0.597 & 0.319 \\
+      & DocVQA (ANLS)       & 0.949 & \textbf{0.636} & 0.526 & \textbf{+11.0 pp} & 0.455 & 0.245 \\
+      & OCR-Bench (/1000)   & 817   & \textbf{476}   & 183   & \textbf{+293 pts} & 335   & 67 \\
+      & GQA (exact match)   & 0.604 & 0.559          & 0.585 & $-2.6$~pp \dag & ---   & --- \\
+    \midrule
+    \multirow{4}{*}{InternVL3-8B}
+      & TextVQA (VQA-acc)   & 0.8338 & \textbf{0.7890} & 0.4148 & \textbf{+37.4 pp} & 0.7230 & 0.3064 \\
+      & DocVQA (ANLS)       & 0.9221 & \textbf{0.7284} & 0.3820 & \textbf{+34.6 pp} & 0.5054 & 0.2451 \\
+      & OCR-Bench (/1000)   & 852    & \textbf{753}    & 321    & \textbf{+432 pts} & ---    & --- \\
+      & GQA (exact match)   & 0.6293 & 0.5993          & 0.6031 & $-0.4$ pp (n.s.)  & ---    & --- \\
+    \bottomrule
+  \end{tabular}
+
+  \vspace{3pt}
+  \footnotesize
+  \textbf{Table notes.} (a)~Qwen3-VL none DocVQA was re-run at max-model-len
+  49,152 and completed with 0/5349 skips (ANLS 0.956); the pre/post cells it
+  anchors ran at the same native-resolution configuration and are directly
+  comparable to each other. (b)~OCR-Bench none cells skip 18 (Qwen3-VL) / 24
+  (Qwen2.5-VL) of 1000 long-OCR images on context overrun, scored 0
+  (conservative; compressed cells skip $\leq 5$), so the uncompressed anchor is
+  understated and the relative gaps are, if anything, conservative. (c)~GQA was
+  evaluated at $\kappa = 0.25$ only on the full split. (d)~Iso-token control: at
+  each model$\times$benchmark, pre and post have identical mean post-merger
+  token counts, with one exception --- the Qwen2.5-VL OCR-Bench @25\% RBM cell
+  used a 4~M-pixel cap (mean tokens 229.6 vs post 282.0), so its $+293$-pt gap
+  is conservative. (e)~Primary inference uses paired-bootstrap 95\% CIs and
+  paired sign-flip permutation tests on the official per-item metric. All Qwen
+  text-dense intervals exclude zero; Figure~\ref{fig:fig2} shows the intervals.
+  McNemar is additional for binary OCRBench/GQA outcomes. (f)~InternVL3 uses pixel-shuffle
+  downsampling and a 4~M-pixel DocVQA cap; its pre/post prompt token counts are
+  identical within every cell. Its GQA $-0.4$~pp difference is
+  indistinguishable: the paired 95\% CI $[-0.93, +0.17]$ crosses 0 (permutation
+  $p = 0.18$), so we claim no GQA stage lead on InternVL3; no preregistered
+  equivalence bound exists, so we do not call it a statistical tie.
+\end{table*}
+
+\textbf{The stage law holds on both generations.} Every text-dense
+$\Delta_{25}$ is large and significant: RBM leads post-merger selection by
+$+38.4$~pp (TextVQA), $+24.3$~pp (DocVQA), $+363$~pts (OCR-Bench; 547 vs 184,
+$3.0\times$) on Qwen3-VL, and by $+26.1$~pp, $+11.0$~pp, $+293$~pts (476 vs 183,
+$2.6\times$) on Qwen2.5-VL; all paired-bootstrap 95\% CIs exclude zero. The gap is robust to
+deeper compression: at $\kappa = 0.125$ the post stage degrades much faster
+(Qwen3-VL OCR-Bench $184 \to 53$ vs RBM $547 \to 350$, widening the pre/post
+ratio from $3.0\times$ to $6.6\times$), and all six text-dense $\Delta_{12.5}$
+remain significant under paired metric-level inference.
+
+\textbf{A full-split matched-boundary control (pre-final).} The original pre arm
+on Qwen3-VL ranks at the \texttt{deepstack[0]}-input tap (layer~8, far upstream)
+and slices all four mergers, while the post arm ranks at the main-merger
+\emph{output} --- so the headline contrast differs in \emph{both} stage and
+feature space. To isolate the stage at a matched boundary, a \textbf{pre-final}
+control ranks L2 at the main-merger's \emph{own input} (final ViT-block features)
+and selects the top-$\kappa$ merge-units from the visual output, leaving the
+deepstack mergers untouched. On the full official splits ($n=5000/5349/1000/
+12578$), pre-final and post use identical sample IDs and per-sample token
+counts. The only intended difference is \emph{before versus after} the lossy
+$2\!\times\!2$ main merger --- a pure stage variable.
+
+Pre-final beats post by $+27.68$~pp on TextVQA, $+4.59$~pp on DocVQA, and
+$+235$ OCRBench points; all three paired 95\% CIs exclude zero. On GQA,
+pre-final is $0.4207$ versus post $0.4771$, a $-5.64$~pp difference (95\% CI
+$[-6.42,-4.86]$, $n=12578$). The full control table and paired uncertainty are
+in Supplementary~S7b. The result therefore confirms a genuine text-dense
+before-merger advantage at the matched boundary, while GQA favors post-merger
+selection; the stage law is workload-conditioned, not a universal ranking rule.
+
+\textbf{Object-centric GQA --- a workload boundary, not a universal stage law.}
+The corrected full-split matched-boundary control favors post-merger selection
+on GQA ($0.4207$ pre-final versus $0.4771$ post; $-5.64$~pp, 95\% CI
+$[-6.42,-4.86]$, $n=12578$). The original operational layer-8 contrast also
+favors post ($-2.8$~pp Qwen3-VL and $-2.6$~pp Qwen2.5-VL), while the layer-8
+RBM arm partly compensates for the Qwen3-VL loss relative to pre-final
+($0.449$ versus $0.4207$). Thus the GQA result is not a true reversal that
+disappears at the matched boundary; it is a genuine but much smaller post-stage
+advantage on object-QA. Its magnitude is about one-fifth to one-sixth of the
+text-dense deltas, and no text-dense benchmark shows a crossover at the
+native-resolution full splits. We therefore state the conclusion as
+\textbf{workload-conditioned}, without claiming equivalence or universal
+pre-stage superiority.
+
+\textbf{A no-merger negative control (LLaVA-1.5).} LLaVA-1.5-7B has a per-token MLP projector
+(Linear--GELU--Linear, no 2x2 spatial averaging). Running the same pre-vs-post
+L2 protocol (pre-MLP vs post-MLP ranking, keep 25\%, $n{=}200$, greedy) yields
+\emph{no} significant stage effect: TextVQA $\Delta = -2.17$~pp (McNemar
+$p{=}0.125$; none $0.452$, pre $0.087$, post $0.108$), GQA $\Delta = -0.5$~pp
+($p{=}1.0$; none $0.575$, pre $0.375$, post $0.380$) --- versus the
+merger-equipped Qwen3-VL's $+38.4$~pp ($p{\approx}5{\times}10^{-5}$) on TextVQA.
+In this no-merger control the trend is slightly reversed
+(post$\gtrsim$pre, n.s.). Together with the merger-equipped results, this is
+consistent with the spatial merger being a key condition for the large
+text-dense pre$>$post gap. A single negative-control architecture cannot
+establish necessity or an if-and-only-if law.
+
+\subsection{Replication on a third family --- InternVL3-8B (Table 1)}\label{sec:internvl}
+
+To test whether the Qwen direction replicates beyond that family, we run RBM
+and the post stage on \textbf{InternVL3-8B},
+whose merger is pixel-shuffle downsampling --- a different design from Qwen's
+PatchMerger. The post arm here is \textbf{post-merger L2 top-k} --- the
+same query-blind L2-magnitude family as the pre arm, at an identical
+token budget (ptid equal across arms), so the InternVL3 block of
+Table~\ref{tab:tab1} isolates the before/after merger stage under iso-budget
+control at 25\% retention. The query-conditioned in-layer FastV contrast is a separate campaign,
+reported in Table~\ref{tab:tab3}.
+
+\textbf{Configuration boundary.} InternVL3 DocVQA uses a 4~M-pixel cap, while
+the Qwen same-scope baseline cells of \S\ref{sec:fastv} use 600k; cross-model
+absolute values are not comparable. At 25\% retention RBM costs $-19.4$~pp vs
+none on InternVL3 DocVQA and $-99$/1000 on OCR-Bench, versus only $-4.5$~pp on
+TextVQA and $-3.0$~pp on GQA. The claim is therefore the large within-model
+pre$>$post margin, not losslessness on every text-dense workload.
+
+At 12.5\% retention ($r=0.875$), TextVQA is 0.7230 pre
+vs post 0.3064 (\textbf{+41.7 pp}); DocVQA pre 0.5054 vs post 0.2451
+(\textbf{+26.0 pp}) --- the gap \emph{widens} under deeper compression, as on
+Qwen.
+
+\textbf{Cross-family directional replication.} InternVL3's pre$-$post text-dense gaps
+($+37.4 / +34.6$~pp / $+432$~pts) are the same order and direction as
+Qwen3-VL's ($+38.4 / +24.3 / +363$~pts) on all three text-dense benchmarks, and
+  GQA stays within the red line --- indistinguishable here ($-0.4$~pp), whereas
+  Qwen3-VL shows a smaller but significant post-stage advantage in the
+  full-split matched-boundary control ($-5.64$~pp for pre-final minus post;
+  \S\ref{sec:qwen}). There is no text-dense crossover at either family's native
+  imaging configuration. These
+accuracy-level replications show that the shared L2-magnitude rule can favor
+the pre-merger side on a third model family with a different merger. They support
+--- but do not by themselves establish --- the Qwen3-VL selection-level
+mechanism as a cross-family explanation.
+
+\textbf{The ranking-swap comparison on InternVL3.} The M3-style control
+(\S\ref{sec:mechanism}) --- run the post-merger forward path but select units
+with the pre-merger ranking --- closely matches pre-merger accuracy on the
+three tested InternVL3 cells: swap vs pre is $+0.00$~pp (TextVQA), $+0.11$~pp
+(DocVQA), and $-0.50$~pp (GQA), with kept-set Jaccard(pre,swap)$= 1.0$ and
+per-sample answer-identity $0.98$--$1.0$ ($n=200$, iso-token, no swap
+fallback). This supports a ranking-level explanation on a second merger
+architecture (pixel-shuffle, not just Qwen's PatchMerger), but the nonzero
+residuals mean that the byte-exact causal attribution remains specific to
+Qwen3-VL.
+
+% FIG 2 --- paired forest plot of the full-split pre-post deltas.
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=\textwidth]{figs/fig2.pdf}
+  \caption{\textbf{The text-dense stage effect replicates across models and
+  merger designs.} Points are paired pre$-$post metric differences at 25\%
+  retention; whiskers are paired-bootstrap 95\% confidence intervals on the
+  official full splits. OCRBench's /1000 score is divided by 10 for a common
+  percentage-point axis. Qwen uses PatchMerger; InternVL3 uses pixel shuffle.
+  GQA bounds the result: Qwen's original layer-8 pre-ranking favors post, while
+  InternVL3's interval crosses zero. Values correspond to
+  Table~\ref{tab:tab1}.}
+  \Description{A horizontal forest plot with one row per benchmark and one
+  point per model. TextVQA, DocVQA, and OCRBench differences are all well to
+  the right of zero; GQA points lie close to or left of zero.}
+  \label{fig:fig2}
+\end{figure*}
+
+\subsection{A workload-conditioned regime map --- RBM vs the query-conditioned strong baseline FastV (Table 2)}\label{sec:fastv}
+
+FastV is the query-conditioned strong baseline in this comparison --- it
+selects inside the LLM after cross-attention has mixed in the question --- and
+we give it every advantage: we compare RBM against FastV at its \textbf{best
+layer $K$} ($K = 3$; a $K$-sensitivity probe found $K = 3$ best), reported at
+identical $n$/scope with paired skips and official rescoring, so the comparison
+cannot be attributed to a handicapped $K$ or a mismatched sample set. We read
+the result as a \textbf{workload-conditioned regime map} --- where
+query-conditioned selection wins, where it fails, and why --- not as a
+single-winner race. At its canonical progressive schedule
+PyramidDrop is near-lossless but occupies a different budget point (equivalent
+mean retention $0.625 \approx 2.1\times$ ours); forced to an honest iso-25\%
+schedule it collapses (TextVQA 0.073 / GQA 0.305 / OCR 0.005 on Qwen3-VL),
+whereas RBM holds (0.60 / 0.42 / 0.58). There is therefore no universal winner.
+
+\begin{table}[t]
+  \centering
+  \scriptsize
+  \setlength{\tabcolsep}{2pt}
+  \caption{Workload-conditioned regime map --- same-scope paired comparison of
+    FastV at best $K = 3$ (the query-conditioned strong baseline) vs RBM (pre,
+    the query-blind robust default) @25\% retention, both Qwen models, official
+    rescoring. Cells are paired within each row (identical $n$, identical
+    attempted samples; skip parity in note~ii). Margin = winner's absolute
+    lead; the winner column is the regime read: FastV's wins mark its
+    reference-grounded home regime, RBM's wins mark the OCR regime
+    (\S\ref{sec:modes}).}
+  \label{tab:tab3}
+  \begin{tabular}{@{}l r r r l@{}}
+    \toprule
+    Benchmark (scope; pixel cap) & $n$ & FastV-k3 & RBM @25\% & $\Delta$ (F/R) \\
+    \midrule
+    \multicolumn{5}{@{}l}{\textbf{Qwen3-VL-8B}} \\
+    TextVQA (full; default)      & 5000  & \textbf{0.7771} & 0.605  & \textbf{+17.2 F} \\
+    GQA (full; default)          & 12578 & \textbf{0.5376} & 0.449  & \textbf{+8.9 F} \\
+    DocVQA (dev; 600k cap)       & 200   & 0.5863          & 0.5924 & $+0.6$ R$^{\ddagger}$ \\
+    OCR-Bench (dev; native res.) & 200   & 0.415           & \textbf{0.575} & \textbf{+16.0 R} \\
+    \midrule
+    \multicolumn{5}{@{}l}{\textbf{Qwen2.5-VL-7B}} \\
+    TextVQA (dev; default)       & 200   & \textbf{0.7467} & 0.6683 & \textbf{+7.8 F} \\
+    GQA (dev; default)           & 200   & 0.475           & 0.520 & $+4.5$ R$^{\ddagger}$ \\
+    DocVQA (dev; 600k cap)       & 200   & 0.4852          & 0.5062 & $+2.1$ R$^{\ddagger}$ \\
+    OCR-Bench (dev; native res.) & 200   & 0.285           & \textbf{0.370} & \textbf{+8.5 R} \\
+    \bottomrule
+  \end{tabular}
+
+  \vspace{3pt}
+  \footnotesize
+  \textbf{Table notes.} F = FastV; R = RBM; $\Delta$ is the winner's absolute
+  lead in percentage points. (i)~Scope and pixels: $n$ is printed per row; DocVQA
+  cells run at a 600k pixel cap on both arms (iso-pixel within this table);
+  OCR-Bench runs at native resolution, which is what triggers the skips
+  (note~ii); TextVQA/GQA use each model's default imaging configuration.
+  (ii)~OCR-Bench skips: native-resolution giant OCR images overrun the context
+  on $\approx 10\%$ of the $n = 200$ set (19/200 Qwen3-VL, 20/200 Qwen2.5-VL);
+  the \emph{identical} hard samples are skipped under both arms (same paired
+  batch, mode-independent). Table scores use the nominal $n=200$ denominator
+  and conservatively count skipped samples as zero. All other cells skip
+  $\leq 5$ (Qwen3-VL TextVQA
+  FastV, 5/5000) or 0. (iii)~Harness: every $n = 200$ cell on both sides comes
+  from the same HF transformers eager-attention harness with family-correct
+  native positions; the Qwen3-VL TextVQA/GQA RBM references are the vLLM
+  full-split cells of Table~\ref{tab:tab1}, for which engine parity is validated
+  (\S\ref{sec:setup}; HF-pre vs vLLM-pre @25\% further agree 14/16 with kept-set
+  Jaccard 0.986, \S\ref{sec:negative}d). An early Qwen2.5-VL $\times$ pre
+  position-harness degeneration (vllm-mimic layout) was detected and replaced by
+  the native layout before any reported number was produced; no reported cell
+  comes from the degenerate path (on Qwen3-VL, native vs mimic differ, 0.575 vs
+  0.525, same ordering). (iv)~Budget: FastV-k3 $\approx 214$ vs RBM
+  $\approx 213$ mean visual tokens/request (Qwen3-VL TextVQA, 25\% retention;
+  the $n = 200$ probe measured 208) --- approximately matched, stated per cell;
+  this is ``each method at its strong configuration,'' not a byte-iso-budget
+  cell. (v)~$^{\ddagger}$The Qwen3-VL DocVQA paired difference is inconclusive.
+  For Qwen2.5-VL GQA/DocVQA, the paired 95\% CIs cross 0
+  ($[-10.5, +1.5]$ / $[-10.1, +5.8]$); these cells are
+  exploratory/inconclusive, not statistically robust RBM edges.
+\end{table}
+
+% [COMPRESS-OPTIONAL] Table 2 notes (i)--(iv) are long; if the body overflows,
+% move notes (iii)--(iv) (harness + budget detail) to a supplementary note and
+% keep (i)--(ii) here. All numbers are preserved either way.
+
+\textbf{Workload-conditioned regime map.}
+\textbf{FastV leads several question-conditioned cells.} FastV-k3 leads RBM on
+Qwen3-VL TextVQA and GQA ($+17.2 / +8.9$~pp), while the Qwen3-VL DocVQA
+comparison is statistically indistinguishable (RBM 0.5924 vs FastV 0.5863;
+paired difference inconclusive). FastV also leads on Qwen2.5-VL TextVQA
+($+7.8$~pp). This is the query-dependent
+headroom made reachable: \emph{which} region matters for \emph{this question}
+becomes visible only once cross-attention has seen the question, exactly where
+FastV operates and exactly where the prespecified query-level gate of
+\S\ref{sec:negative} could not reach before the merger. \textbf{RBM leads the
+tested OCR regime.} RBM wins OCR-Bench on \textbf{both} families ($+16.0$~pp
+Qwen3-VL, $+8.5$~pp Qwen2.5-VL); the Qwen2.5-VL $n = 200$ GQA/DocVQA cells
+favor RBM by $+4.5 / +2.1$~pp but their paired 95\% CIs cross 0
+($[-10.5, +1.5]$ / $[-10.1, +5.8]$), so they are exploratory/inconclusive at
+$n = 200$, not statistically robust RBM edges. The observed OCR split persists
+at FastV's best tested $K$; within this comparison, later query conditioning
+does not recover the OCR accuracy retained by RBM. \textbf{The map is the two
+failure modes of \S\ref{sec:modes}.} Documents $=$ selection misdirection ---
+the merger's reshuffle misleads selection made after it away from text, so the
+OCR regime is lost by the selectors that tap the stream post-merger; scene text
+$=$ feature degradation under a budget every 25\%-keep method pays, and object
+scenes $=$ near-null reshuffle --- together the low-OCR regime where the
+query-dependent headroom lives. We report FastV's wins honestly: FastV is a
+strong query-conditioned baseline that wins its regime; RBM is the robust
+default (never collapses, uniquely holds dense OCR), not a method that leads
+query-conditioned pruning everywhere.
+
+% =============================================================================
+\section{Mechanism --- Why the Merger Is Lossy}\label{sec:mechanism}
+% =============================================================================
+
+We give the pre-vs-post gap a mechanistic account in three parts (M1--M3),
+measured on \textbf{Qwen3-VL-8B} (M1/M2 on a deterministic seed-0 $n = 64$ sample
+per benchmark; M3 on $n = 200$ with the same invocation as the headline cells),
+then state its architectural scope.
+
+\subsection{M1 --- the merger reshuffles unit ranks}\label{sec:m1}
+
+% [COMPRESSED -> supp S1] The markdown restated the rho / Jaccard ordering in
+% two near-identical paragraphs; merged into one here. The full M1 table
+% (Spearman rho, Kendall tau, Jaccard@25%) is Supplementary Table S1. All
+% numbers are retained; the "source: ... snapshot draft" work-note is dropped.
+Per image we correlate the \emph{pre} ranking (merger-input unit L2) with the
+\emph{post} ranking (merged-token L2) over all units. The two rankings are
+barely related, and the reshuffle tracks text density: Spearman
+$\rho = \mathbf{0.137}$ (DocVQA, text-dense document) $< 0.332$ (TextVQA,
+text-dense scene) $< \mathbf{0.360}$ (GQA, object-centric), with the
+decision-relevant top-25\% overlap rising in the same order (Jaccard@25\%
+$= 0.180 < 0.243 < 0.278$; full values in Supplementary~S1). The merger's
+nonlinear projection thus reorders unit saliency almost from scratch
+($\rho = 0.14$--$0.36$, nowhere near 1): both the full-ranking correlation and
+the decision-relevant top-25\% overlap rise from the most text-dense benchmark
+to the object-centric one, so the reshuffle is largest on DocVQA and smallest on
+GQA --- yet substantial on every benchmark.
+
+\subsection{M2 --- the demoted units are text-stroke units}\label{sec:m2}
+
+With rank\_shift $=$ post\_rank $-$ pre\_rank ($+$ $\Rightarrow$ demoted) and
+per-unit Sobel edge energy as a text-stroke proxy, the merger preferentially
+\emph{demotes} high-edge units at $\kappa = 25\%$: $\rho(\text{rank\_shift},
+\text{edge}) = +0.439$ on DocVQA, $+0.155$ on TextVQA, $+0.036$ on GQA ---
+${\sim}12\times$ stronger on documents than on object scenes. The units post
+drops that pre keeps are the highest-edge of all: on DocVQA, mean Sobel
+\textbf{0.641 vs 0.124} for the reverse group, with \textbf{92\% above the
+per-image median (vs 35\%)} --- post-merger selection is \textbf{systematically
+anti-text on documents}. (The \emph{direction}, we hypothesize, is set by the
+merger's training on natural content, which attenuates high-frequency stroke
+energy; this is a testable hypothesis, not a measured result.) The full M2 table
+(per-benchmark Sobel means and median fractions) is in Supplementary~S2.
+
+\subsection{M3 --- a ranking-swap causal control, and the decisive kept-set identity}\label{sec:m3}
+
+By unit equivalence (\S\ref{sec:rbm}), holding the \emph{forward path} fixed at
+post and swapping in the \emph{pre ranking} must reproduce pre accuracy if the
+gap is purely a ranking effect. It does:
+
+Swapping in the pre ranking recovers full pre-merger accuracy (exactly on
+DocVQA; within 2/200 greedy-decode answers on TextVQA, $\varepsilon$-level
+kernel numerics confirmed by a 200/200 byte-identical independent rerun; full
+values are in Supplementary~S9) and
+erases the collapse ($+38.3$~pp TextVQA, $+26.5$~pp DocVQA over post). The swap
+path agrees with post on only 40/200 (TextVQA) and 63/200 (DocVQA) answers ---
+without the pre ranking, the same forward path produces the collapse.
+
+\textbf{The decisive hardening --- kept-set identity on both architectures.}
+Emitting the kept unit indices from both paths and comparing directly:
+\textbf{Jaccard(swap-kept, pre-top-$\kappa$) $= 1.000$ in all four cells}
+(Qwen3-VL and Qwen2.5-VL $\times$ DocVQA and TextVQA; $n = 32$, chance level
+$\kappa/N = 0.25$). The two paths select \emph{exactly the same units}. The
+small swap-vs-pre answer residual on Qwen2.5-VL ($+6.7$~pp DocVQA at $n = 32$)
+traces to an implementation confound of the swap control --- window-attention
+reverse\_indices (three recovery sites on Qwen2.5-VL, zero on Qwen3-VL) map
+identical index sets to physical units in different orderings --- while
+batch-dependent merging is structurally excluded (the merger is per-token
+LN+MLP). \textbf{Verdict: on Qwen3-VL, the tested pre$>$post gap is attributable
+to the ranking alone at selection level} (byte-identical); Qwen2.5-VL
+corroborates kept-set identity but retains an ordering-confound residual.
+The merged representations of kept units carry no stage-dependent loss on
+Qwen3-VL (byte-exact); on Qwen2.5-VL the kept \emph{set} is identical but the
+ordering confound is not eliminated, so we scope the no-loss statement to the
+byte-exact family.
+
+\subsection{Failure modes and scope boundaries}\label{sec:modes}
+
+DocVQA exhibits selection misdirection: post ranking moves away from text and
+the swap fully restores accuracy. TextVQA combines rank corruption with a
+budget effect, while GQA has near-null text-stroke directionality
+($\rho=0.04$) but favors post-stage selection in the corrected matched-boundary
+control. The stage effect is therefore workload-conditional. It retains sign and magnitude
+under a global-centroid attention scorer on Qwen3-VL, but that proxy degrades on
+Qwen2.5-VL; L2 remains the paper's fixed selector. The ranking law replicates on
+Qwen2.5-VL and at the accuracy level on InternVL3 (Table~\ref{tab:tab1}), whereas
+the causal decomposition is claimed only for byte-exact Qwen3-VL. A low 600k
+pixel cap reverses shallow Qwen2.5-VL DocVQA; the native-resolution full split
+remains the headline configuration (\S\ref{sec:discussion}).
+
+\textbf{Retention curve.} The stages are nearly indistinguishable at 75\%
+retention; their gap then widens monotonically through 25\% on both Qwen models
+(full values in Supplementary~S3, $n=200$).
+
+\textbf{Merger mechanism.} Figure~\ref{fig:fig3} connects the stage effect to
+the native merger. Across four workloads, pre- and post-merger rankings share
+only moderate rank correlation and top-quartile overlap. Units rich in
+text-stroke edge energy are preferentially demoted after merging. Finally, a
+Qwen3-VL ranking-swap control keeps the selected unit set fixed
+(Jaccard $=1.000$) while restoring the pre-merger ordering, separating ranking
+damage from a change in token identity.
+
+% FIG 3 --- measured merger mechanism diagnostics and ranking-swap control.
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=\textwidth]{figs/fig3.pdf}
+  \caption{\textbf{What the native merger changes.}
+  \textbf{(a)} Pre/post L2 rankings are only moderately preserved, measured by
+  Spearman correlation and top-25\% kept-set Jaccard across DocVQA ($n=64$),
+  OCRBench ($n=199$), TextVQA ($n=64$), and GQA ($n=64$).
+  \textbf{(b)} Rank shifts are associated with text-stroke edge energy: units
+  with stronger high-frequency structure are demoted more after merging.
+  \textbf{(c)} In the Qwen3-VL ranking-swap control, post-merger features use
+  the pre-merger order while the kept set remains identical
+  (Jaccard $=1.000$), isolating ordering from token identity on $n=200$
+  TextVQA and DocVQA samples.}
+  \Description{Three mechanism panels analyze the native visual merger. The
+  first compares pre- and post-merger rank correlation and top-quartile set
+  overlap on four benchmarks. The second shows that text-stroke-rich units tend
+  to move downward in rank after merging. The third compares pre, post, and a
+  ranking-swap control on TextVQA and DocVQA; the swap preserves exactly the
+  same kept-unit set while restoring pre-merger ordering.}
+  \label{fig:fig3}
+\end{figure*}
+
+% =============================================================================
+\section{Negative Results --- Tested Extensions Do Not Improve Plain RBM}\label{sec:negative}
+% =============================================================================
+
+We prespecified five query-aware or regime-aware extensions and
+report all five as failures on Qwen3-VL-8B. \textbf{(a) Image-level routing:}
+pre is at least as accurate as post on 84--97\% of images per benchmark; the
+best router scores below always-pre (0.484 vs 0.494) and far below the
+per-sample oracle (0.576). On pooled $N=774$, only ${\sim}27\%$ of the oracle
+gap is workload-level, leaving ${\sim}73\%$ sample- and query-dependent.
+\textbf{(b) Merger-aware masking:} its selected $t=0.5$ hybrid gains
+$2.3$~pp on TextVQA but loses $8.0$~pp on OCR-Bench and gains nothing on GQA;
+no candidate passes the no-OCR-regression plus GQA-gain gate.
+\textbf{(c) Query-embedding blending:} on a disjoint development slice every
+$\lambda>0$ underperforms plain L2 ($-1.7/-5.2/-3.3$~pp for
+$\lambda=0.3/0.5/0.7$), so the prespecified rule selects $\lambda=0$.
+\textbf{(d) A variance-weighted (frequency-aware) selector:} the mechanism-side
+probe of \S\ref{sec:selector} ($\alpha{=}1$, $\beta{=}0.6$, selected in two grid
+rounds on TextVQA-500 at 25\% retention) improves the text-dense cell
+($+1.2$~pp TextVQA$@25\%$, $+0.5$~pp at 50\%) but regresses $-1.6$ to
+$-2.2$~pp on DocVQA$@25\%$, OCR-Bench$@25\%$, and GQA$@25\%$; no candidate
+passes a no-regression gate across the four benchmarks, so we freeze the L2
+selector and treat the improvement as hypothesis support only.
+\textbf{(e) An adaptive PRE/POST stage router:} a query-blind workload detector
+on merger-input features (high-frequency tail ratio + L2-entropy) routes each
+image to the stage predicted to be stronger. Tuned on TextVQA it reduces to
+always-PRE --- statistically indistinguishable from plain RBM on every
+benchmark (TextVQA/DocVQA/OCR-Bench regression $= 0.0$~pp, but GQA gain
+$= +0.0$~pp, below the required $+1$~pp); raising the threshold to route
+scene images to POST collapses TextVQA by a further $7$~pp. The GQA and TextVQA
+workload signatures overlap at the unit level, so no single global threshold
+reconciles the two acceptance criteria.
+
+\textbf{Exploratory learned boundary scorer.} A held-out MLP probe successfully
+distills post-merger importance from pre-merger norm, edge, variance, position,
+and neighborhood features, but transfers the wrong task bias: at 25\%
+retention, TextVQA falls from 0.595 to 0.435 ($-16.0$~pp) while GQA rises from
+0.515 to 0.550 ($+3.5$~pp). It is therefore not an RBM upgrade; as an
+intervention, its failure is consistent with M2's text-stroke demotion
+(Supplementary~S4b.3).
+
+These results bound, rather than close, the tested design space: image-only
+signals cannot access the query-dependent oracle headroom, and distilling a
+post-merger teacher reproduces its text-dense failure mode. We therefore freeze
+plain RBM as the robust text-dense/OCR default and select a FastV-class method
+for scene-text/object-centric traffic; within the tested configurations,
+routing, scorer modification, and learned post-order imitation offer no
+consistent benefit.
+
+% =============================================================================
+\section{Efficiency --- Supporting Evidence}\label{sec:efficiency}
+% =============================================================================
+
+Efficiency is supporting evidence, measured only in vLLM 0.19 V1 offline on one
+A40. \textbf{Stage-neutral:} across 75/50/25\% retention, pre vs post throughput
+is 4.61/4.52, 5.39/5.54, and 6.91/6.89 req/s; five-repeat measurements remain
+within 3\% with no consistent direction. \textbf{Compression scaling:} relative
+to no compression, throughput rises 12/31/68\% and 25\%-retention latency falls
+from 0.36 to 0.23~s. InternVL3 independently yields $1.8$--$2.5\times$ throughput
+at 25\% retention, again with pre $\approx$ post at identical token counts.
+The flat $\approx42$~GB allocator reservation is not a memory measurement;
+continuous-batching efficiency remains future work.
+
+% =============================================================================
+\section{Discussion and Limitations}\label{sec:discussion}
+% =============================================================================
+
+The broader design implication is to determine the evidence set before a lossy
+native aggregation step when that step is not rank-preserving, then reuse the
+model's unmodified merger on the survivors. Within the tested merger-equipped
+models and scorer families, RBM instantiates this rule and better preserves
+text-dense accuracy; Qwen3-VL diagnostics indicate that its native merger
+rewrites saliency in a text-hostile direction. This is a bounded design rule,
+not a universal winner. RBM retains dense OCR better
+than the compared FastV settings ($+16.0/+8.5$~pp on the two Qwen models), while
+FastV leads on several scene-text/object-centric cells (Table~\ref{tab:tab3}).
+
+\textbf{Architecture and mechanism scope.} The byte-exact M3 causal attribution
+is established on Qwen3-VL; Qwen2.5-VL retains an ordering confound, and
+InternVL3 provides accuracy-level and bounded ranking-swap support rather than a
+byte-exact causal decomposition. Models without a native merger are out of
+scope. M1/M2 use a Sobel proxy on $n=64$ samples per benchmark and M3 uses
+$n=200$; the full-split GQA control favors post by $5.64$~pp at the matched
+boundary, and no equivalence margin was preregistered. Holm correction covers the
+nine prespecified 25\%-retention text-dense stage contrasts; secondary budgets,
+GQA, mechanism analyses, baseline regime comparisons, and extension gates
+remain uncorrected and should be read as secondary or exploratory.
+
+\textbf{Evaluation scope.} FastV uses HF eager whereas the other methods use
+vLLM; anchors support accuracy comparison, but throughput is vLLM-only. Some
+baseline cells use $n=200$, as marked. Metric-level bootstrap intervals and
+paired permutation tests are primary; McNemar covers additional binary outcomes.
+
+\textbf{Configuration scope.} DocVQA pixel caps differ (4~M for InternVL3,
+600k for Qwen baseline cells), so cross-model absolute scores are incomparable.
+Low-resolution Qwen2.5-VL reverses the shallow-stage direction; the headline is
+the native-resolution full split. RBM also remains lossy against no compression
+on InternVL3 DocVQA/OCR ($-19.4$~pp/$-99$ points), despite beating post.
+
+% =============================================================================
+\section{Conclusion}\label{sec:conclusion}
+% =============================================================================
+
+We formulate visual-token compression around native merging as a
+representation-dependent selection-order problem and instantiate a
+stage-consistent solution, RBM, under an explicit unit-and-interface contract.
+Under iso-model, iso-budget, and a shared query-blind L2-magnitude family,
+pre-merger ranking is consistently stronger across the tested text-dense cells
+of three models from two architecture families;
+the measured gaps generally grow under deeper compression. A ranking-swap
+control attributes the Qwen3-VL gap to merger-induced rank changes. The
+resulting training-free method, RBM, is a
+robust OCR-oriented default rather than a universal winner: query-conditioned
+FastV remains stronger on several scene-text/object-centric settings. RBM adds
+no stage-specific serving cost, and five prespecified Qwen3-VL extensions fail
+to improve over their stronger constituents.
+
+% =============================================================================
+\bibliographystyle{IEEEtran}
+\bibliography{references}
+
+\end{document}

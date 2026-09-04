@@ -1,0 +1,530 @@
+% references.bib — VLA / "Rank Before You Merge" (ACM MM'27 submission) bibliography
+% Generated for drafts/paper_acmmm.md. Keys match every \cite{} in the body exactly.
+%
+% Verification (2026-07): each entry's arXiv id / year / venue / authors checked via
+% WebSearch + the arXiv abs page (or publisher page). Provenance per key is recorded in
+% drafts/citekey_map.md. 18 entries carried over from references_v4.bib (verified 2026-07);
+% zhu2025internvl3 added and verified this revision (arXiv:2504.10479, first author Jinguo Zhu).
+% Citekey convention: firstauthor + arXiv-year + keyword.
+%
+% Coverage: 19 keys cited in paper_acmmm.md (all present) + kwon2023vllm (engine reference;
+% currently uncited in the body — retained for optional \cite, harmless if unused).
+
+% =====================================================================
+% Methods — training-free visual token compression / merging
+% =====================================================================
+
+% FastV — ECCV 2024 (Oral). Verified: arxiv.org/abs/2403.06764; github.com/pkunlp-icler/FastV ([ECCV 2024 Oral]).
+@inproceedings{chen2024fastv,
+  author    = {Liang Chen and Haozhe Zhao and Tianyu Liu and Shuai Bai and Junyang Lin and Chang Zhou and Baobao Chang},
+  title     = {An Image is Worth 1/2 Tokens After Layer 2: Plug-and-Play Inference Acceleration for Large Vision-Language Models},
+  booktitle = {European Conference on Computer Vision (ECCV)},
+  year      = {2024},
+  eprint    = {2403.06764},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.CV},
+}
+
+% VisionZip — CVPR 2025. Verified: arxiv.org/abs/2412.04467; dblp conf/cvpr/YangCTWL0J25.
+@inproceedings{yang2024visionzip,
+  author    = {Senqiao Yang and Yukang Chen and Zhuotao Tian and Chengyao Wang and Jingyao Li and Bei Yu and Jiaya Jia},
+  title     = {VisionZip: Longer is Better but Not Necessary in Vision Language Models},
+  booktitle = {IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+  year      = {2025},
+  eprint    = {2412.04467},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.CV},
+}
+
+% PyramidDrop — CVPR 2025 (camera-ready title differs). Verified: github.com/Cooperx521/PyramidDrop; cvpr.thecvf.com 2025.
+@inproceedings{xing2024pyramiddrop,
+  author    = {Long Xing and Qidong Huang and Xiaoyi Dong and Jiajie Lu and Pan Zhang and Yuhang Zang and Yuhang Cao and Conghui He and Jiaqi Wang and Feng Wu and Dahua Lin},
+  title     = {PyramidDrop: Accelerating Your Large Vision-Language Models via Pyramid Visual Redundancy Reduction},
+  booktitle = {IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+  year      = {2025},
+  eprint    = {2410.17247},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.CV},
+}
+
+% FasterVLM — arXiv preprint (title changed in v2; method name FasterVLM). Verified: arxiv.org/abs/2412.01818.
+@misc{zhang2024fastervlm,
+  author       = {Qizhe Zhang and Aosong Cheng and Ming Lu and Renrui Zhang and Zhiyong Zhuo and Jiajun Cao and Shaobo Guo and Qi She and Shanghang Zhang},
+  title        = {Beyond Text-Visual Attention: Exploiting Visual Cues for Effective Token Pruning in VLMs},
+  year         = {2024},
+  eprint       = {2412.01818},
+  archivePrefix = {arXiv},
+  primaryClass = {cs.CV},
+}
+
+% SparseVLM — ICML 2025 (PMLR vol. 267). Verified: proceedings.mlr.press/v267/zhang25s.html.
+@inproceedings{zhang2024sparsevlm,
+  author    = {Yuan Zhang and Chun-Kai Fan and Junpeng Ma and Wenzhao Zheng and Tao Huang and Kuan Cheng and Denis Gudovskiy and Tomoyuki Okuno and Yohei Nakata and Kurt Keutzer and Shanghang Zhang},
+  title     = {SparseVLM: Visual Token Sparsification for Efficient Vision-Language Model Inference},
+  booktitle = {International Conference on Machine Learning (ICML)},
+  series    = {Proceedings of Machine Learning Research},
+  volume    = {267},
+  publisher = {PMLR},
+  year      = {2025},
+  eprint    = {2410.04417},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.CV},
+}
+
+% ToMe (Token Merging) — ICLR 2023 (origin of token merging; bipartite soft matching). Verified: arxiv.org/abs/2210.09461.
+@inproceedings{bolya2023tome,
+  author    = {Daniel Bolya and Cheng-Yang Fu and Xiaoliang Dai and Peizhao Zhang and Christoph Feichtenhofer and Judy Hoffman},
+  title     = {Token Merging: Your {ViT} But Faster},
+  booktitle = {International Conference on Learning Representations (ICLR)},
+  year      = {2023},
+  eprint    = {2210.09461},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.CV},
+}
+
+% AdaptMerge — Findings of EMNLP 2025. Verified: aclanthology.org/2025.findings-emnlp.387.
+@inproceedings{islam2025adaptmerge,
+  author    = {Zahidul Islam and Mrigank Rochan},
+  title     = {{AdaptMerge}: Inference Time Adaptive Visual and Language-Guided Token Merging for Efficient Large Multimodal Models},
+  booktitle = {Findings of the Association for Computational Linguistics: EMNLP 2025},
+  year      = {2025},
+  doi       = {10.18653/v1/2025.findings-emnlp.387},
+}
+
+% LLaVA-PruMerge — ICCV 2025. Verified: arxiv.org/abs/2403.15388; DOI 10.1109/ICCV51701.2025.02122.
+@inproceedings{shang2024prumerge,
+  author    = {Yuzhang Shang and Mu Cai and Bingxin Xu and Yong Jae Lee and Yan Yan},
+  title     = {LLaVA-PruMerge: Adaptive Token Reduction for Efficient Large Multimodal Models},
+  booktitle = {IEEE/CVF International Conference on Computer Vision (ICCV)},
+  year      = {2025},
+  eprint    = {2403.15388},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.CV},
+  doi       = {10.1109/ICCV51701.2025.02122},
+}
+
+% FitPrune — AAAI 2025. Verified: ojs.aaai.org/index.php/AAAI/article/view/34366.
+@inproceedings{ye2024fitprune,
+  author    = {Weihao Ye and Qiong Wu and Wenhao Lin and Yiyi Zhou},
+  title     = {Fit and Prune: Fast and Training-free Visual Token Pruning for Multi-modal Large Language Models},
+  booktitle = {Proceedings of the AAAI Conference on Artificial Intelligence (AAAI)},
+  year      = {2025},
+  eprint    = {2409.10197},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.CV},
+}
+
+% GlimpsePrune — IEEE TCSVT (accepted); arXiv 2508.01548. Verified: github.com/HVision-NKU/GlimpsePrune.
+@article{zeng2025glimpseprune,
+  author  = {Quan-Sheng Zeng and Yunheng Li and Qilong Wang and Peng-Tao Jiang and Zuxuan Wu and Ming-Ming Cheng and Qibin Hou},
+  title   = {A Glimpse to Compress: Dynamic Visual Token Pruning for Large Vision-Language Models},
+  journal = {IEEE Transactions on Circuits and Systems for Video Technology},
+  year    = {2026},
+  eprint  = {2508.01548},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.CV},
+  pages   = {1--1},
+  doi     = {10.1109/TCSVT.2026.3702147},
+}
+
+% VScan — arXiv preprint (under review). Verified: arxiv.org/abs/2505.22654; openreview forum h6UiecXxlV.
+@misc{zhang2025vscan,
+  author       = {Ce Zhang and Kaixin Ma and Tianqing Fang and Wenhao Yu and Hongming Zhang and Zhisong Zhang and Haitao Mi and Dong Yu},
+  title        = {VScan: Rethinking Visual Token Reduction for Efficient Large Vision-Language Models},
+  year         = {2025},
+  eprint       = {2505.22654},
+  archivePrefix = {arXiv},
+  primaryClass = {cs.CV},
+}
+
+% =====================================================================
+% Models — merger-equipped VLMs studied
+% =====================================================================
+
+% Qwen3-VL technical report. Verified: arxiv.org/abs/2511.21631 (2025-11).
+@misc{bai2025qwen3vl,
+  author       = {Shuai Bai and Yuxuan Cai and Ruizhe Chen and Keqin Chen and Xionghui Chen and Zesen Cheng and Lianghao Deng and Wei Ding and Chang Gao and Chunjiang Ge and others},
+  title        = {Qwen3-VL Technical Report},
+  year         = {2025},
+  eprint       = {2511.21631},
+  archivePrefix = {arXiv},
+  primaryClass = {cs.CV},
+}
+
+% Qwen2.5-VL technical report. Verified: arxiv.org/abs/2502.13923 (2025-02).
+@misc{bai2025qwen25vl,
+  author       = {Shuai Bai and Keqin Chen and Xuejing Liu and Jialin Wang and Wenbin Ge and Sibo Song and Kai Dang and Peng Wang and Yuanzhi Zhu and Junyang Lin and others},
+  title        = {Qwen2.5-VL Technical Report},
+  year         = {2025},
+  eprint       = {2502.13923},
+  archivePrefix = {arXiv},
+  primaryClass = {cs.CV},
+}
+
+% InternVL3 technical report (InternVL3-8B = pixel-shuffle merger model, Table 2).
+% Verified 2026-07: arxiv.org/abs/2504.10479 (2025-04); first author Jinguo Zhu; cs.CV.
+% Key kept as used in the body (zhu2025internvl3); all fields from the arXiv record.
+@misc{zhu2025internvl3,
+  author       = {Jinguo Zhu and Weiyun Wang and Zhe Chen and Zhaoyang Liu and Shenglong Ye and Lixin Gu and Hao Tian and Yuchen Duan and Weijie Su and Jie Shao and Zhangwei Gao and Erfei Cui and Xuehui Wang and Yue Cao and Yangzhou Liu and Xingguang Wei and Hongjie Zhang and Haomin Wang and Weiye Xu and Hao Li and Jiahao Wang and Nianchen Deng and Songze Li and Yinan He and Tan Jiang and Jiapeng Luo and Yi Wang and Conghui He and Botian Shi and Xingcheng Zhang and Wenqi Shao and Junjun He and Yingtong Xiong and Wenwen Qu and Peng Sun and Penglong Jiao and Han Lv and Lijun Wu and Kaipeng Zhang and Huipeng Deng and Jiaye Ge and Kai Chen and Limin Wang and Min Dou and Lewei Lu and Xizhou Zhu and Tong Lu and Dahua Lin and Yu Qiao and Jifeng Dai and Wenhai Wang},
+  title        = {InternVL3: Exploring Advanced Training and Test-Time Recipes for Open-Source Multimodal Models},
+  year         = {2025},
+  eprint       = {2504.10479},
+  archivePrefix = {arXiv},
+  primaryClass = {cs.CV},
+  doi          = {10.48550/arXiv.2504.10479},
+}
+
+% =====================================================================
+% Benchmarks / metrics
+% =====================================================================
+
+% TextVQA — CVPR 2019 (also the VQA-accuracy metric source). Verified: dblp conf/cvpr/SinghNSJCBPR19.
+@inproceedings{singh2019textvqa,
+  author    = {Amanpreet Singh and Vivek Natarajan and Meet Shah and Yu Jiang and Xinlei Chen and Dhruv Batra and Devi Parikh and Marcus Rohrbach},
+  title     = {Towards {VQA} Models That Can Read},
+  booktitle = {IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+  year      = {2019},
+  eprint    = {1904.08920},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.CV},
+}
+
+% DocVQA — WACV 2021 (introduces the ANLS metric). Verified: openaccess.thecvf.com WACV2021.
+@inproceedings{mathew2021docvqa,
+  author    = {Minesh Mathew and Dimosthenis Karatzas and R. Manmatha and C. V. Jawahar},
+  title     = {DocVQA: A Dataset for VQA on Document Images},
+  booktitle = {IEEE/CVF Winter Conference on Applications of Computer Vision (WACV)},
+  pages     = {2200--2209},
+  year      = {2021},
+  eprint    = {2007.00398},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.CV},
+}
+
+% OCRBench — Science China Information Sciences 2024. Verified: link.springer.com/article/10.1007/s11432-024-4235-6.
+@article{liu2024ocrbench,
+  author  = {Yuliang Liu and Zhang Li and Mingxin Huang and Biao Yang and Wenwen Yu and Chunyuan Li and Xucheng Yin and Cheng-Lin Liu and Lianwen Jin and Xiang Bai},
+  title   = {{OCRBench}: On the Hidden Mystery of {OCR} in Large Multimodal Models},
+  journal = {Science China Information Sciences},
+  volume  = {67},
+  number  = {22},
+  pages   = {220102},
+  year    = {2024},
+  eprint  = {2305.07895},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.CV},
+  doi     = {10.1007/s11432-024-4235-6},
+}
+
+% GQA — CVPR 2019. Verified: arxiv.org/abs/1902.09506.
+@inproceedings{hudson2019gqa,
+  author    = {Drew A. Hudson and Christopher D. Manning},
+  title     = {{GQA}: A New Dataset for Real-World Visual Reasoning and Compositional Question Answering},
+  booktitle = {IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+  year      = {2019},
+  eprint    = {1902.09506},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.CV},
+}
+
+% =====================================================================
+% Evaluation framework / serving engine
+% =====================================================================
+
+% lmms-eval — Findings of NAACL 2025. Verified: aclanthology.org/2025.findings-naacl.51.
+@inproceedings{zhang2024lmmseval,
+  author    = {Kaichen Zhang and Bo Li and Peiyuan Zhang and Fanyi Pu and Joshua Adrian Cahyono and Kairui Hu and Shuai Liu and Yuanhan Zhang and Jingkang Yang and Chunyuan Li and Ziwei Liu},
+  title     = {{LMMs-Eval}: Reality Check on the Evaluation of Large Multimodal Models},
+  booktitle = {Findings of the Association for Computational Linguistics: NAACL 2025},
+  pages     = {881--916},
+  year      = {2025},
+  eprint    = {2407.12772},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.CV},
+}
+
+% vLLM (serving engine, v0.19 V1 used throughout) — SOSP 2023. Verified: arxiv.org/abs/2309.06180.
+% NOTE: not currently \cite'd in paper_acmmm.md body; include if an engine citation is added.
+@inproceedings{kwon2023vllm,
+  author    = {Woosuk Kwon and Zhuohan Li and Siyuan Zhuang and Ying Sheng and Lianmin Zheng and Cody Hao Yu and Joseph E. Gonzalez and Hao Zhang and Ion Stoica},
+  title     = {Efficient Memory Management for Large Language Model Serving with {PagedAttention}},
+  booktitle = {Proceedings of the 29th Symposium on Operating Systems Principles (SOSP)},
+  year      = {2023},
+  eprint    = {2309.06180},
+  archivePrefix = {arXiv},
+  primaryClass  = {cs.OS},
+}
+
+@inproceedings{gao2026quietprune,
+  author    = {Tianxiao Gao and Shanwei Zhao and Shuo Fang and Shiai Zhu and Chenguang Ma},
+  title     = {{QuietPrune}: Query-Guided Early Token Pruning for Vision-Language Models},
+  booktitle = {Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+  pages     = {3553--3562},
+  year      = {2026},
+}
+
+@inproceedings{sun2026hiloprune,
+  author    = {Zixun Sun and Yubo Dong and Hehe Fan and Yi Yang},
+  title     = {{Hi-Lo Prune}: Look at What You'll Lose before Pruning with Hierarchical Token Selection},
+  booktitle = {Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+  pages     = {31941--31951},
+  year      = {2026},
+}
+
+@inproceedings{li2026transprune,
+  author    = {Ao Li and Yuxiang Duan and Jinghui Zhang and Congbo Ma and Yutong Xie and Gustavo Carneiro and Mohammad Yaqub and Hu Wang},
+  title     = {{TransPrune}: Token Transition Pruning for Efficient Large Vision-Language Model},
+  booktitle = {Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+  pages     = {39529--39538},
+  year      = {2026},
+  eprint    = {2507.20630},
+  archivePrefix = {arXiv},
+}
+
+@inproceedings{chen2026v2drop,
+  author    = {Junjie Chen and Xuyang Liu and Zichen Wen and Yiyu Wang and Siteng Huang and Honggang Chen},
+  title     = {Variation-Aware Vision Token Dropping for Faster Large Vision-Language Models},
+  booktitle = {Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+  pages     = {3489--3499},
+  year      = {2026},
+  eprint    = {2509.01552},
+  archivePrefix = {arXiv},
+}
+
+% =====================================================================
+% CVPR 2026 frontier -- official CVF proceedings pages verified 2026-08-14
+% =====================================================================
+
+@inproceedings{wang2026metacompress,
+  author    = {Yi Wang and Haofei Zhang and Qihan Huang and Anda Cao and Gongfan Fang and Wei Wang and Xuan Jin and Jie Song and Mingli Song and Xinchao Wang},
+  title     = {Rethinking Token Reduction for Large Vision-Language Models},
+  booktitle = {Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+  pages     = {24727--24737},
+  year      = {2026},
+  eprint    = {2603.21701},
+  archivePrefix = {arXiv},
+}
+
+@inproceedings{lei2026core,
+  author    = {Jingyu Lei and Gaoang Wang and Der-Horng Lee},
+  title     = {{CORE}: Compact Object-centric {RE}presentations as a New Paradigm for Token Merging in {LVLMs}},
+  booktitle = {Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+  year      = {2026},
+}
+
+@inproceedings{ma2026apet,
+  author    = {Qiankun Ma and Ziyao Zhang and Haofei Wang and Zhen Song and Jie Chen and Hairong Zheng},
+  title     = {{ApET}: Approximation-Error Guided Token Compression for Efficient {VLMs}},
+  booktitle = {Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+  year      = {2026},
+}
+
+@inproceedings{wang2026informationhorizon,
+  author    = {Yahong Wang and Juncheng Wu and Zhangkai Ni and Longzhen Yang and Yihang Liu and Chengmei Yang and Ying Wen and Lianghua He and Xianfeng Tang and Hui Liu and Yuyin Zhou},
+  title     = {When Token Pruning is Worse than Random: Understanding Visual Token Information in {VLLMs}},
+  booktitle = {Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+  pages     = {31910--31919},
+  year      = {2026},
+  eprint    = {2512.07580},
+  archivePrefix = {arXiv},
+}
+
+@inproceedings{choi2026docprune,
+  author    = {Joonmyung Choi and Sanghyeok Lee and Jongha Kim and Sehyung Kim and Dohwan Ko and Jihyung Kil and Hyunwoo J. Kim},
+  title     = {{DocPrune}: Efficient Document Question Answering via Background, Question, and Comprehension-aware Token Pruning},
+  booktitle = {Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+  pages     = {3543--3552},
+  year      = {2026},
+}
+
+@inproceedings{xu2026score,
+  author    = {Tong Xu and Hailong Shi and Xingyu Gao},
+  title     = {{SCoRe}: Salience-Coverage Reduction for Vision Token Pruning in Vision-Language Models},
+  booktitle = {Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+  year      = {2026},
+}
+
+@inproceedings{du2026coin,
+  author    = {Chenxi Du and Yongheng Deng and Jiani Liu and Yujia Zhang and Xi Chen and Ju Ren},
+  title     = {{CoIn}: Coverage and Informativeness-Guided Token Reduction for Efficient Large Multimodal Models},
+  booktitle = {Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+  pages     = {10492--10501},
+  year      = {2026},
+}
+
+@inproceedings{kim2026zooprune,
+  author    = {Youngeun Kim and Youjia Zhang and Huiling Liu and Aecheon Jung and Sunwoo Lee and Sungeun Hong},
+  title     = {{ZOO-Prune}: Training-Free Token Pruning via Zeroth-Order Gradient Estimation in Vision-Language Models},
+  booktitle = {Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+  pages     = {39572--39582},
+  year      = {2026},
+  eprint    = {2509.24837},
+  archivePrefix = {arXiv},
+}
+
+@inproceedings{li2026aot,
+  author    = {Jinlong Li and Liyuan Jiang and Haonan Zhang and Nicu Sebe},
+  title     = {Token Reduction via Local and Global Contexts Optimization for Efficient Video Large Language Models},
+  booktitle = {Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+  year      = {2026},
+  eprint    = {2603.01400},
+  archivePrefix = {arXiv},
+}
+
+@inproceedings{chen2026alvts,
+  author    = {Yongru Chen and Kai Zhang and Zeliang Zong and Yuchen Lu and Wenming Tan and Ye Ren and Jilin Hu},
+  title     = {One Layer's Trash is Another Layer's Treasure: Adaptive Layer-wise Visual Token Selection in {LVLMs}},
+  booktitle = {Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+  year      = {2026},
+}
+
+@inproceedings{zhang2026hybrid,
+  author    = {Jusheng Zhang and Xiaoyang Guo and Kaitong Cai and Qinhan Lv and Yijia Fan and Wenhao Chai and Jian Wang and Keze Wang},
+  title     = {Hybrid Token Compression for Vision-Language Models},
+  booktitle = {Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+  pages     = {31889--31899},
+  year      = {2026},
+  eprint    = {2512.08240},
+  archivePrefix = {arXiv},
+}
+
+@inproceedings{song2026evocomp,
+  author    = {Jiafei Song and Fengwei Zhou and Jin Qu and Wenjin Jason Li and Tong Wu and Gengjian Xue and Zhikang Zhao and Daomin Wei and Yichao Lu and Bailin Na},
+  title     = {{EvoComp}: Learning Visual Token Compression for Multimodal Large Language Models via Semantic-Guided Evolutionary Labeling},
+  booktitle = {Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+  year      = {2026},
+}
+
+@inproceedings{sun2026ifprune,
+  author    = {Guohao Sun and Yufei Wang and Sizhuo Ma and Yuege Xie and Yuting Cheng and Zhiqiang Tao and Jian Wang},
+  title     = {{IF-Prune}: Information-Flow Guided Token Pruning for Efficient Vision-Language Models},
+  booktitle = {Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+  pages     = {3522--3531},
+  year      = {2026},
+}
+
+@inproceedings{zhu2026hawk,
+  author    = {Qihui Zhu and Tao Zhang and Yuchen Wang and Shuangwu Chen and Xiaobin Tan and Jian Yang and Yang Liu and Yinfei Pan},
+  title     = {{HAWK}: Head Importance-Aware Visual Token Pruning in Multimodal Models},
+  booktitle = {Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR)},
+  year      = {2026},
+}
+
+% Current preprints -- misc entries, not represented as peer reviewed.
+@misc{liu2026provenance,
+  author       = {Feixiang Liu and Qiang Qiu and Hao Zhang and Xinyue Wang},
+  title        = {Beyond Accuracy: Auditing Spatial Provenance in Visual Token Pruning for {OCR}-Critical {MLLM} Inference},
+  year         = {2026},
+  eprint       = {2608.00077},
+  archivePrefix = {arXiv},
+  primaryClass = {cs.CV},
+}
+
+@inproceedings{oh2026anchorprune,
+  author    = {Kyuan Oh and Bumsoo Kim},
+  title     = {{AnchorPrune}: Relevance-Anchored Contextual Expansion for Visual Token Pruning},
+  booktitle = {European Conference on Computer Vision (ECCV)},
+  year      = {2026},
+  eprint    = {2607.07033},
+  archivePrefix = {arXiv},
+}
+
+@misc{wang2026pixelprune,
+  author       = {Nan Wang and Zhiwei Jin and Chen Chen and Haonan Lu},
+  title        = {{PixelPrune}: Pixel-Level Adaptive Visual Token Reduction via Predictive Coding},
+  year         = {2026},
+  eprint       = {2604.00886},
+  archivePrefix = {arXiv},
+  primaryClass = {cs.CV},
+}
+
+@misc{lee2026spare,
+  author       = {Jaeyeon Lee and Shunjie Wen and Dong-Wan Choi},
+  title        = {Moving Beyond Diversity: Visual Token Pruning as Subspace Reconstruction for Efficient {VLMs}},
+  year         = {2026},
+  eprint       = {2606.18681},
+  archivePrefix = {arXiv},
+  primaryClass = {cs.CV},
+}
+
+@misc{li2026crisp,
+  author       = {Xu Li and Yi Zheng and Mengyang Zhao and Yuxuan Liang and Zhe Liu and Rui Zhu and Xiaolei Chen and Wei Zhou and Baoquan Zhao and Juncen Guo},
+  title        = {{CRISP}: Pre-{LLM} Yet Text-Driven Visual Token Pruning for Efficient {LVLM} Inference},
+  year         = {2026},
+  eprint       = {2607.16326},
+  archivePrefix = {arXiv},
+  primaryClass = {cs.CV},
+}
+
+% Additional verified recent compression and evaluation work.
+@misc{wang2024vtccls,
+  author       = {Ao Wang and Fengyuan Sun and Hui Chen and Zijia Lin and Jungong Han and Guiguang Ding},
+  title        = {{[CLS]} Token Tells Everything Needed for Training-free Efficient {MLLMs}},
+  year         = {2024},
+  eprint       = {2412.05819},
+  archivePrefix = {arXiv},
+  primaryClass = {cs.CV},
+}
+
+@misc{li2024tokenpacker,
+  author       = {Wentong Li and Yuqian Yuan and Jian Liu and Dongqi Tang and Song Wang and Jie Qin and Jianke Zhu and Lei Zhang},
+  title        = {{TokenPacker}: Efficient Visual Projector for Multimodal {LLM}},
+  year         = {2024},
+  eprint       = {2407.02392},
+  archivePrefix = {arXiv},
+  primaryClass = {cs.CV},
+}
+
+@misc{jiang2025gprune,
+  author       = {Yutao Jiang and Qiong Wu and Wenhao Lin and Wei Yu and Yiyi Zhou},
+  title        = {What Kind of Visual Tokens Do We Need? Training-free Visual Token Pruning for Multi-modal Large Language Models from the Perspective of Graph},
+  year         = {2025},
+  eprint       = {2501.02268},
+  archivePrefix = {arXiv},
+  primaryClass = {cs.CV},
+}
+
+@misc{luan2025adaptprune,
+  author       = {Bozhi Luan and Wengang Zhou and Hao Feng and Zhe Wang and Xiaosong Li and Houqiang Li},
+  title        = {Multi-Cue Adaptive Visual Token Pruning for Large Vision-Language Models},
+  year         = {2025},
+  eprint       = {2503.08019},
+  archivePrefix = {arXiv},
+  primaryClass = {cs.CV},
+}
+
+@inproceedings{yu2026visiontrim,
+  author    = {Hanxun Yu and Wentong Li and Xuan Qu and Song Wang and Junbo Chen and Jianke Zhu},
+  title     = {{VisionTrim}: Unified Vision Token Compression for Training-Free {MLLM} Acceleration},
+  booktitle = {International Conference on Learning Representations (ICLR)},
+  year      = {2026},
+  eprint    = {2601.22674},
+  archivePrefix = {arXiv},
+}
+
+@inproceedings{baek2026agilepruner,
+  author    = {Changwoo Baek and Jouwon Song and Sohyeon Kim and Kyeongbo Kong},
+  title     = {{AgilePruner}: An Empirical Study of Attention and Diversity for Adaptive Visual Token Pruning in Large Vision-Language Models},
+  booktitle = {International Conference on Learning Representations (ICLR)},
+  year      = {2026},
+  eprint    = {2603.01236},
+  archivePrefix = {arXiv},
+}
+
+@inproceedings{fang2026prunesid,
+  author    = {Zhengyao Fang and Pengyuan Lyu and Chengquan Zhang and Guangming Lu and Jun Yu and Wenjie Pei},
+  title     = {Prune Redundancy, Preserve Essence: Vision Token Compression in {VLMs} via Synergistic Importance-Diversity},
+  booktitle = {International Conference on Learning Representations (ICLR)},
+  year      = {2026},
+  eprint    = {2603.09480},
+  archivePrefix = {arXiv},
+}
+
+@inproceedings{wang2025effivlmbench,
+  author    = {Zekun Wang and Minghua Ma and Zexin Wang and Rongchuan Mu and Liping Shan and Ming Liu and Bing Qin},
+  title     = {{EffiVLM-BENCH}: A Comprehensive Benchmark for Evaluating Training-Free Acceleration in Large Vision-Language Models},
+  booktitle = {Annual Meeting of the Association for Computational Linguistics (ACL)},
+  year      = {2025},
+  eprint    = {2506.00479},
+  archivePrefix = {arXiv},
+}
