@@ -1,9 +1,10 @@
 # STATE.md - 当前项目状态（主窗口维护，保持 ≤30 行）
 > 项目：VLM 视觉 token 压缩；目标：Rank-Before-Merge -> IEEE TCSVT。
-> 最近更新：2026-09-04；方法创新冻结，当前为投稿硬化阶段。
+> 最近更新：2026-09-09；方法创新冻结，当前为投稿硬化阶段。
 
 ## 当前论文
 - 当前 TCSVT 权威稿：`drafts/ieee_tcsvt_submission_20260904/main.tex`；补充材料：同目录 `supplement.tex`。
+- 中文方法稿已按 anti-defensive-writing 重写并校准到权威稿：`drafts/RBM_merger_aware_中文方法包装草稿_反防御性改写版.docx`。
 - IEEEtran 双栏正文 11 页；补充材料 9 页；主文 Figure 1 使用 Word 选定图，Figure 2 已简化为纯视觉对比。
 - 方法叙事已升级为 representation-dependent selection--merger ordering：含 kept-set 等价条件、阶段分歧、四项 RBM contract、算法复杂度与部署边界；未新增模块或实验 claim。
 - 定位：RBM 是最小 stage operationalization 与 OCR-oriented 鲁棒默认；FastV 是 query-conditioned 强 baseline；不宣通用胜出/scorer novelty。
