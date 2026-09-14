@@ -301,3 +301,10 @@
 - **FastV 贡献**：RankBridge 在同一 25% budget 的四个锁定 Qwen3-VL `n=200` probes 上均较 FastV-k3 提升（+0.5 至 +3.2pp），可作为第二贡献；只有 TextVQA 显著，且 OCRBench 落后纯 RBM 11.6pp，因此禁止写成全局优于 FastV 或 universal hybrid winner。
 - **图件与格式**：DCC 稿严格复用 `RBM_merger_aware_中文_Fig1更新版.docx` 的 4 张内嵌图；使用 DCC 官方单栏 12pt 模板，总长 10 页并完成逐页 PDF QA。
 - **作者信息**：DCC 2027 为 single blind，作者姓名保留；affiliation/country/email 未获确认，不推断，首页保留可见占位符，实际投稿前必须补齐并由用户明确确认。
+
+## 2026-09-14 | 外部评审意见后的 DCC 对齐修订
+
+- **Rate--distortion**：新增 $R=k/N$ 与任务失真 $\mathcal D(R)=1-S(R)/S(1)$，并用冻结的 Qwen3-VL `n=200` 12.5/25/50/100% operating points 绘制矢量曲线；明确连线只连接实测 rate，不作为插值或新实验。
+- **图表**：Fig.1 以原 OCRBench 图像加矢量流程框重建，机制图直接恢复与 Word 内容一致的原生矢量 PDF；Table 1 增加逐行 metric，Table 2 明确 `RB−FastV (pp)`。PDF 视觉核验确认原表不存在错行，先前问题来自文本抽取顺序。
+- **可读性与 harness**：摘要首次出现即白话定义 machine-centric；Introduction 增加 0.36→0.23 s、+68% 的代价锚点；Related Work 按干预 stage 组织；HF/vLLM 一致性补充 8/8 与 16/16 明确检查数。
+- **SOTA gap**：禁止把跨模型、跨 harness 或论文自报数字拼成 head-to-head 表。当前公平强 baseline 是 FastV；VisionZip/SparseVLM/PyramidDrop 等同模型同 rate 对比必须来自新的受控运行，若预计超过 6 GPU·h 则执行前找用户确认。

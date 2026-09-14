@@ -46,17 +46,6 @@ Y.~Zhang, C.-K. Fan, J.~Ma, W.~Zheng, T.~Huang, K.~Cheng, D.~Gudovskiy,
   of Machine Learning Research, vol. 267.\hskip 1em plus 0.5em minus
   0.4em\relax PMLR, 2025.
 
-\bibitem{shang2024prumerge}
-Y.~Shang, M.~Cai, B.~Xu, Y.~J. Lee, and Y.~Yan, ``Llava-prumerge: Adaptive
-  token reduction for efficient large multimodal models,'' in \emph{IEEE/CVF
-  International Conference on Computer Vision (ICCV)}, 2025.
-
-\bibitem{ye2024fitprune}
-W.~Ye, Q.~Wu, W.~Lin, and Y.~Zhou, ``Fit and prune: Fast and training-free
-  visual token pruning for multi-modal large language models,'' in
-  \emph{Proceedings of the AAAI Conference on Artificial Intelligence (AAAI)},
-  2025.
-
 \bibitem{yang2024visionzip}
 S.~Yang, Y.~Chen, Z.~Tian, C.~Wang, J.~Li, B.~Yu, and J.~Jia, ``Visionzip:
   Longer is better but not necessary in vision language models,'' in
@@ -67,6 +56,17 @@ S.~Yang, Y.~Chen, Z.~Tian, C.~Wang, J.~Li, B.~Yu, and J.~Jia, ``Visionzip:
 Z.~Islam and M.~Rochan, ``{AdaptMerge}: Inference time adaptive visual and
   language-guided token merging for efficient large multimodal models,'' in
   \emph{Findings of the Association for Computational Linguistics: EMNLP 2025},
+  2025.
+
+\bibitem{shang2024prumerge}
+Y.~Shang, M.~Cai, B.~Xu, Y.~J. Lee, and Y.~Yan, ``Llava-prumerge: Adaptive
+  token reduction for efficient large multimodal models,'' in \emph{IEEE/CVF
+  International Conference on Computer Vision (ICCV)}, 2025.
+
+\bibitem{ye2024fitprune}
+W.~Ye, Q.~Wu, W.~Lin, and Y.~Zhou, ``Fit and prune: Fast and training-free
+  visual token pruning for multi-modal large language models,'' in
+  \emph{Proceedings of the AAAI Conference on Artificial Intelligence (AAAI)},
   2025.
 
 \bibitem{yu2026visiontrim}
