@@ -305,6 +305,6 @@
 ## 2026-09-14 | 外部评审意见后的 DCC 对齐修订
 
 - **Rate--distortion**：新增 $R=k/N$ 与任务失真 $\mathcal D(R)=1-S(R)/S(1)$，并用冻结的 Qwen3-VL `n=200` 12.5/25/50/100% operating points 绘制矢量曲线；明确连线只连接实测 rate，不作为插值或新实验。
-- **图表**：Fig.1 以原 OCRBench 图像加矢量流程框重建，机制图直接恢复与 Word 内容一致的原生矢量 PDF；Table 1 增加逐行 metric，Table 2 明确 `RB−FastV (pp)`。PDF 视觉核验确认原表不存在错行，先前问题来自文本抽取顺序。
+- **图表**：不采用近似重绘的 Fig.1；Word 更新版 Fig.1 暂保留精确 PNG。Word 的其余三张图均恢复项目中一一对应的原始 PDF 矢量源（定性对照、机制图、token-survival 图）；Table 1 增加逐行 metric，Table 2 明确 `RB−FastV (pp)`。PDF 视觉核验确认原表不存在错行，先前问题来自文本抽取顺序。
 - **可读性与 harness**：摘要首次出现即白话定义 machine-centric；Introduction 增加 0.36→0.23 s、+68% 的代价锚点；Related Work 按干预 stage 组织；HF/vLLM 一致性补充 8/8 与 16/16 明确检查数。
 - **SOTA gap**：禁止把跨模型、跨 harness 或论文自报数字拼成 head-to-head 表。当前公平强 baseline 是 FastV；VisionZip/SparseVLM/PyramidDrop 等同模型同 rate 对比必须来自新的受控运行，若预计超过 6 GPU·h 则执行前找用户确认。
