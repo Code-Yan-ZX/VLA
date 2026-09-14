@@ -293,3 +293,11 @@
 - **标题/摘要**：标题改为 “Rank Before You Merge: Stage-Consistent Visual Token Selection for Merger-Equipped Vision-Language Models”；摘要压至约 199 个英文词，保留问题、RBM、三模型 text-dense 结果、GQA 边界、ranking-swap 和效率结论。
 - **图表**：主文 Figure 2 改为去除样本元数据/调试框的纯视觉 TextVQA pre/post 对比；rank-overlap 分布和完整调试图移至 supplement，避免与 Figure 5 重复。
 - **Artifact**：当前投稿 S9 以 supplement 中明确列出的 29 个 cell 为权威索引；服务器找回的 24 个历史 `gate_*.json` 保留在匿名包 `audit/legacy_gates/`，不伪装成当前 S9。服务器原始导出保留不改，匿名包单独清理绝对路径并重新生成 checksum。
+
+## 2026-09-14 | DCC 2027 machine-centric 包装与 FastV 边界
+
+- **投稿定位**：采用 “Training-Free Machine-Centric Visual Token Compression” 作为 DCC 主线；machine-centric 明确定义为选择粒度、预算、位置/stream identity、native merger 与 LLM 接口遵循部署模型的原生计算图，不暗示新的 learned importance model。
+- **标题**：定为 “Rank Before You Merge: Training-Free Machine-Centric Visual Token Compression for Efficient Vision-Language Model Inference”，保留 RBM 方法识别度并突出 DCC 的压缩/推理主题。
+- **FastV 贡献**：RankBridge 在同一 25% budget 的四个锁定 Qwen3-VL `n=200` probes 上均较 FastV-k3 提升（+0.5 至 +3.2pp），可作为第二贡献；只有 TextVQA 显著，且 OCRBench 落后纯 RBM 11.6pp，因此禁止写成全局优于 FastV 或 universal hybrid winner。
+- **图件与格式**：DCC 稿严格复用 `RBM_merger_aware_中文_Fig1更新版.docx` 的 4 张内嵌图；使用 DCC 官方单栏 12pt 模板，总长 10 页并完成逐页 PDF QA。
+- **作者信息**：DCC 2027 为 single blind，作者姓名保留；affiliation/country/email 未获确认，不推断，首页保留可见占位符，实际投稿前必须补齐并由用户明确确认。
