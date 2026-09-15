@@ -355,3 +355,9 @@
 - **claim 层级**：主贡献聚焦 RBM 的 native-merger ordering；RankBridge 降为 pre-merger rank 与 FastV attention 互补的外部验证，明确 GQA reversal 与非 universal winner 边界。
 - **编辑范围**：重写标题、摘要、引言、Related Work 的组织收束、方法章节标题与结论；所有实验数字、引用、图文件和图内容保持不变。
 - **验证**：官方 DCC 单栏 12pt、US Letter、10 页、51 条正文实引；0 undefined citation/reference、0 overfull/underfull，10 页逐页渲染检查无裁切、重叠或异常空白。
+
+## 2026-09-15 | DCC 第 6 页机制章节前留白收紧
+
+- **调整**：在 Fig.3 后加入浮动屏障，局部缩小该页 `textfloatsep`，并对 “Why the Merger Changes Selection” 前使用保留型负间距；离开该位置后恢复模板默认浮动间距。
+- **原因**：直接负间距会让章节标题越过延迟浮动图并落到第 5 页末；先固定 Fig.3 再收紧间距，可保持图、标题和首段在正确阅读顺序中。
+- **范围与验证**：图文件、图尺寸、caption 和正文均未改变；最终仍为 10 页，0 undefined/overfull/underfull，第 5--7 页渲染检查通过。
