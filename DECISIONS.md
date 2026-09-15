@@ -308,3 +308,10 @@
 - **图表**：不采用近似重绘的 Fig.1；Word 更新版 Fig.1 暂保留精确 PNG。Word 的其余三张图均恢复项目中一一对应的原始 PDF 矢量源（定性对照、机制图、token-survival 图）；Table 1 增加逐行 metric，Table 2 明确 `RB−FastV (pp)`。PDF 视觉核验确认原表不存在错行，先前问题来自文本抽取顺序。
 - **可读性与 harness**：摘要首次出现即白话定义 machine-centric；Introduction 增加 0.36→0.23 s、+68% 的代价锚点；Related Work 按干预 stage 组织；HF/vLLM 一致性补充 8/8 与 16/16 明确检查数。
 - **SOTA gap**：禁止把跨模型、跨 harness 或论文自报数字拼成 head-to-head 表。当前公平强 baseline 是 FastV；VisionZip/SparseVLM/PyramidDrop 等同模型同 rate 对比必须来自新的受控运行，若预计超过 6 GPU·h 则执行前找用户确认。
+
+## 2026-09-15 | DCC 参考文献恢复与 10 页压缩
+
+- **引用数量**：确认 DCC 与 TCSVT 的 BibTeX 库均为 51 条；先前 PDF 只有 20 条，是正文引用覆盖不足。DCC 正文现按干预阶段实质引用 40 条，不使用 `\nocite` 凑数。
+- **Related Work**：重组为 LLM-side pruning、encoder-output selection、merging/projector、早期/自适应选择、文档压缩与 evaluation 六类，最后收束到 RBM 的 native-merger boundary。
+- **合规压页**：遵守 DCC 10 页总上限与 12pt，采用 IEEEtran 标准 `et al.` 控制、规范 venue 缩写和正文去重；不缩参考文献字号。最终为 10 页、40 条 rendered references、0 undefined、0 overfull。
+- **图件**：根据项目已有矢量源，将 Fig.1 从 Word PNG 切换为已验证的原始 PDF 矢量版；其余线图继续使用 PDF 矢量源。10 页逐页渲染核验无裁切、重叠或表格错行，字体全部嵌入。
