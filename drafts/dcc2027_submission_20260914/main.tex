@@ -44,6 +44,7 @@ Zhengxing Yan$^{1}$, Hao Sun$^{2}$, Chen Guo$^{3}$, and Jianpeng Hu$^{1,*}$\\[0.
 
 \maketitle
 \thispagestyle{empty}
+\vspace{0.5em}
 
 \begin{abstract}
 Native spatial mergers already compress visual patches before a
@@ -56,11 +57,11 @@ RBM outperforms matched post-merger
 L2 selection on all nine text-dense full-split cells across Qwen3-VL,
 Qwen2.5-VL, and InternVL3, with gains of 11.0--38.4 percentage points and
 235--432 OCRBench points. A merger-aware rank prior also improves FastV-k3 on
-all four locked Qwen3-VL probes at the same budget, although only TextVQA is
-significant and pure RBM remains stronger on OCRBench. Rank and token-survival
+all four locked Qwen3-VL probes at the same budget. Rank and token-survival
 analyses attribute the main effect to merger-induced saliency rewriting. RBM
 adds no learned parameters and increases measured throughput by 68\% on
-Qwen3-VL at 25\% retention.
+Qwen3-VL at 25\% retention. Code:
+\href{https://github.com/Code-Yan-ZX/qrbm-vlm}{github.com/Code-Yan-ZX/qrbm-vlm}.
 \end{abstract}
 
 \Section{Introduction}

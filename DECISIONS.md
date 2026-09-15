@@ -340,3 +340,10 @@
 - **调整**：将 task rate--distortion 图的浮动约束由仅页底 `[!b]` 放宽为 `[!htbp]`，让图紧随其正文引用与页首 Table 2 排列。
 - **结果**：第 6 页图前的大段空白消除，Fig.3、后续章节和 Fig.4/5 顺序均正常；内容、数据与图尺寸不变。
 - **验证**：仍为 10 页、51 条实引；0 LaTeX/package warning、0 overfull/underfull、字体全部嵌入，10 页重新渲染检查通过。
+
+## 2026-09-15 | DCC 摘要加入开源仓库
+
+- **仓库声明**：摘要末尾加入可点击的 `Code: github.com/Code-Yan-ZX/qrbm-vlm.`，指向用户指定的公开仓库。
+- **摘要压缩**：保留 FastV 四个 probe 的正向结果，将显著性与 OCRBench 边界留在正文结果段，避免新增链接把 Introduction 贡献列表拆到第 2 页。
+- **首页排版**：作者区与 Abstract 标题之间增加 `0.5em` 间距；贡献列表完整留在第 1 页，Fig.1 正常从第 2 页开始。
+- **验证**：仍为 10 页、51 条实引；0 LaTeX/package warning、0 overfull/underfull，字体全部嵌入，10 页重新渲染检查通过。
