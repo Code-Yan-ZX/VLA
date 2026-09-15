@@ -347,3 +347,11 @@
 - **摘要压缩**：保留 FastV 四个 probe 的正向结果，将显著性与 OCRBench 边界留在正文结果段，避免新增链接把 Introduction 贡献列表拆到第 2 页。
 - **首页排版**：作者区与 Abstract 标题之间增加 `0.5em` 间距；贡献列表完整留在第 1 页，Fig.1 正常从第 2 页开始。
 - **验证**：仍为 10 页、51 条实引；0 LaTeX/package warning、0 overfull/underfull，字体全部嵌入，10 页重新渲染检查通过。
+
+## 2026-09-15 | DCC 顶会式故事线重构
+
+- **核心叙事**：全文统一为“post-merger ranking 隐含 rank-preservation 假设 → native merger 改写 saliency → RBM 以最小 operator-order 改动修复 → matched evidence 与机制控制验证 → GQA/RankBridge 界定边界”。不再把四项贡献并列陈述。
+- **标题定位**：改为 “Rank Before You Merge: Training-Free, Merger-Aware Visual Token Compression for Vision-Language Models”；保留 machine-centric 作为方法契约定义，不再让该非标准术语承担标题主卖点。
+- **claim 层级**：主贡献聚焦 RBM 的 native-merger ordering；RankBridge 降为 pre-merger rank 与 FastV attention 互补的外部验证，明确 GQA reversal 与非 universal winner 边界。
+- **编辑范围**：重写标题、摘要、引言、Related Work 的组织收束、方法章节标题与结论；所有实验数字、引用、图文件和图内容保持不变。
+- **验证**：官方 DCC 单栏 12pt、US Letter、10 页、51 条正文实引；0 undefined citation/reference、0 overfull/underfull，10 页逐页渲染检查无裁切、重叠或异常空白。
