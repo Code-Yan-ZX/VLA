@@ -8,7 +8,7 @@
 - 主线：native merger 改写 saliency ranking；RBM 在 merger 前选择完整 native units，并保持 merger、位置、deepstack 与 LLM 接口不变。
 - 第二贡献：RankBridge 用 20% 最终预算保护 pre-merger rank，其余由 FastV-k3 选择；Qwen3-VL 锁定 n=200 四基准均较 FastV 提升 0.5–3.2pp。
 - claim 边界：只有 TextVQA +3.2pp 达显著；OCRBench 上 RankBridge 仍落后纯 RBM 11.6pp，故写作 complementary signal，不宣称 universal hybrid winner。
-- Fig.1 已按用户指定图片替换；Fig.2、Fig.4、Fig.5 使用项目原始 PDF 矢量源，Fig.3 为矢量 task rate--distortion 图。
+- Fig.1 已按用户最新指定的详细流程图（v2）原样替换；Fig.2、Fig.4、Fig.5 使用项目原始 PDF 矢量源，Fig.3 为矢量 task rate--distortion 图。
 - 作者：Zhengxing Yan（SUES）、Hao Sun（NJUST）、Chen Guo（ECNU）、Jianpeng Hu（SUES，通讯作者）；单位与邮箱已写入首页。
 
 ## DCC 合规与验证

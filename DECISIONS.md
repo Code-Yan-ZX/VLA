@@ -328,3 +328,9 @@
 - **职称处理**：胡建鹏的副教授职称不写入会议论文作者栏，避免与标准 author/affiliation 格式混杂；通讯身份用上标星号与 `Corresponding author` 明示。
 - **Fig.1**：以用户附件 `codex-clipboard-799a028a-baff-4ba1-9a49-2c0c5c09b77d.png` 原样替换，项目副本为 `figs/fig1_user_20260915.png`，SHA-256 与附件一致。
 - **验证**：更新后仍为单栏 12pt、10 页、51 条实引；0 undefined、0 overfull，全部字体嵌入，10 页逐页渲染检查通过。
+
+## 2026-09-15 | DCC Fig.1 更新为用户最新详细版
+
+- **替换范围**：仅替换 DCC 稿的 Fig.1，不改变作者信息、正文结论、数据、其余图表或参考文献。
+- **图源**：使用用户最新附件 `codex-clipboard-1a9e936a-632d-4c4c-830f-8b585a814c1b.png`，项目副本为 `figs/fig1_user_20260915_v2.png`；副本与附件 SHA-256 一致。
+- **验证**：正式 `main.pdf` 重新编译为 10 页、51 条实引；0 undefined、0 overfull，字体全部嵌入，并完成全部 10 页的最新渲染检查。
