@@ -315,3 +315,9 @@
 - **Related Work**：重组为 LLM-side pruning、encoder-output selection、merging/projector、早期/自适应选择、文档压缩与 evaluation 六类，最后收束到 RBM 的 native-merger boundary。
 - **合规压页**：遵守 DCC 10 页总上限与 12pt，采用 IEEEtran 标准 `et al.` 控制、规范 venue 缩写和正文去重；不缩参考文献字号。最终为 10 页、40 条 rendered references、0 undefined、0 overfull。
 - **图件**：根据项目已有矢量源，将 Fig.1 从 Word PNG 切换为已验证的原始 PDF 矢量版；其余线图继续使用 PDF 矢量源。10 页逐页渲染核验无裁切、重叠或表格错行，字体全部嵌入。
+
+## 2026-09-15 | DCC 全量恢复 TCSVT 的 51 篇引用
+
+- **纠正**：用户确认原稿最高为 50+ references；复核 TCSVT 权威源后确认其正文实引为 51 篇。DCC 不再停在精选 40 篇，现全量恢复同一组 51 篇。
+- **写入方式**：新增 11 篇按 strongly conditioned selection、layer-dependent lifetime、discarded-evidence aggregation 和 OCR provenance 四类写入 Related Work，均参与论证，无 `\nocite`。
+- **排版**：长作者表统一为首位作者加 `et al.`，venue 使用规范缩写；正文与参考文献仍为 12pt。最终 10 页、51 条 rendered references、0 undefined、0 overfull，逐页 PDF QA 通过。

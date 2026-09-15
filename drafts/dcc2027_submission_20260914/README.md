@@ -5,8 +5,8 @@ authoritative TCSVT draft and the figures embedded in
 `drafts/RBM_merger_aware_中文_Fig1更新版.docx`. Figures 1, 2, 4, and 5 use the
 project's original PDF vector sources corresponding to the Word figures.
 Figure 3 adds a task rate--distortion view of the frozen Qwen3-VL retention
-sweep. The manuscript contains 40 references cited in the text from the
-51-entry bibliography; no `\nocite` padding is used.
+sweep. All 51 research references in the bibliography are cited in the text;
+no `\nocite` padding is used.
 
 Build with:
 

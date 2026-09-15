@@ -11,7 +11,7 @@
 - 保留 Word `RBM_merger_aware_中文_Fig1更新版.docx` 的图意；Fig.1、Fig.2、Fig.4、Fig.5 均使用项目原始 PDF 矢量源，另新增矢量 task rate--distortion Fig.3。
 
 ## DCC 合规与验证
-- 官方 `dccpaper.cls`、单栏 12pt、US Letter；总长 10 页，含图表和 40 条正文实引参考文献（原库 51 条，无 `\nocite`）。
+- 官方 `dccpaper.cls`、单栏 12pt、US Letter；总长 10 页，原库 51 篇全部在正文实质引用，无 `\nocite`。
 - DCC 2027 为 single blind；作者姓名保留，affiliation/country/email 等待确认，当前以可见占位符标注。
 - `latexmk` 通过；0 undefined citation/reference、0 overfull/underfull；全部字体嵌入；10 页均已渲染检查，无裁切、重叠或图文穿插。
 - DCC 2027 截止：2026-10-02 23:59 US Pacific；实际投稿须 user 明确确认。
