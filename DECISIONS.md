@@ -321,3 +321,10 @@
 - **纠正**：用户确认原稿最高为 50+ references；复核 TCSVT 权威源后确认其正文实引为 51 篇。DCC 不再停在精选 40 篇，现全量恢复同一组 51 篇。
 - **写入方式**：新增 11 篇按 strongly conditioned selection、layer-dependent lifetime、discarded-evidence aggregation 和 OCR provenance 四类写入 Related Work，均参与论证，无 `\nocite`。
 - **排版**：长作者表统一为首位作者加 `et al.`，venue 使用规范缩写；正文与参考文献仍为 12pt。最终 10 页、51 条 rendered references、0 undefined、0 overfull，逐页 PDF QA 通过。
+
+## 2026-09-15 | DCC 作者信息与用户指定 Fig.1
+
+- **作者顺序**：Zhengxing Yan（上海工程技术大学）、Hao Sun（南京理工大学）、Chen Guo（华东师范大学）、Jianpeng Hu（上海工程技术大学）；Jianpeng Hu 标记为通讯作者。四个用户提供邮箱原样写入。
+- **职称处理**：胡建鹏的副教授职称不写入会议论文作者栏，避免与标准 author/affiliation 格式混杂；通讯身份用上标星号与 `Corresponding author` 明示。
+- **Fig.1**：以用户附件 `codex-clipboard-799a028a-baff-4ba1-9a49-2c0c5c09b77d.png` 原样替换，项目副本为 `figs/fig1_user_20260915.png`，SHA-256 与附件一致。
+- **验证**：更新后仍为单栏 12pt、10 页、51 条实引；0 undefined、0 overfull，全部字体嵌入，10 页逐页渲染检查通过。

@@ -16,7 +16,7 @@
 \usepackage[hidelinks]{hyperref}
 \hypersetup{
   pdftitle={Rank Before You Merge: Training-Free Machine-Centric Visual Token Compression for Efficient Vision-Language Model Inference},
-  pdfauthor={Zhengxing Yan},
+  pdfauthor={Zhengxing Yan, Hao Sun, Chen Guo, Jianpeng Hu},
   pdfsubject={DCC 2027 submission draft},
   pdfkeywords={visual token compression, vision-language models, training-free inference, native merger}
 }
@@ -33,9 +33,14 @@
 \title{\large\textbf{Rank Before You Merge: Training-Free Machine-Centric
 Visual Token Compression for Efficient Vision-Language Model Inference}}
 
-\author{\shortstack{Zhengxing Yan\\[0.5em]
-{\small Affiliation to be confirmed}\\
-{\small Country and email to be confirmed}}}
+\author{\shortstack{
+Zhengxing Yan$^{1}$, Hao Sun$^{2}$, Chen Guo$^{3}$, and Jianpeng Hu$^{1,*}$\\[0.4em]
+{\small $^{1}$Shanghai University of Engineering Science}\\
+{\small $^{2}$Nanjing University of Science and Technology}\\
+{\small $^{3}$East China Normal University}\\[0.2em]
+{\small \texttt{super\_fw@163.com}; \texttt{sh1076849939@163.com}}\\
+{\small \texttt{guochenjkhjk@qq.com}; \texttt{mr@sues.edu.cn}}\\
+{\small $^{*}$Corresponding author}}}
 
 \maketitle
 \thispagestyle{empty}
@@ -79,7 +84,7 @@ per-image budget, and applies the original merger to the survivors
 
 \begin{figure}[t]
   \centering
-  \includegraphics[width=\figurewidth]{figs/fig1_vector.pdf}
+  \includegraphics[width=\figurewidth]{figs/fig1_user_20260915.png}
   \caption{\label{fig:overview}RBM follows the native merge topology. It ranks
   complete merger-input units, preserves a fixed per-image budget, and passes
   the selected units through the unmodified merger and language-model
