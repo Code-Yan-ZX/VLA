@@ -378,3 +378,10 @@
 - **统计与基线**：RankBridge 改为 exploratory，OCRBench 有效 n=181、19 common skips，删除 TextVQA 显著性；加入 same-HF full OCRBench FastV 对比和失败分母。
 - **图与效率**：旧来源不清的 RD 图及过强机制图移除；新 Fig.2 仅使用全量 Qwen3 审计结果。效率按真实 J6 n=200 吞吐与独立 n=1×5 proxy 分开报告。
 - **验证**：`latexmk` 通过；官方 12pt/US Letter 共 10 页，0 undefined/overfull/underfull，全部字体嵌入；逐页渲染检查无裁切、重叠或图表溢出。未运行新 GPU 实验，未向会议外发。
+
+## 2026-09-16 | 恢复 51 篇实引并保持 10 页
+
+- **原因**：首版证据审计重写将 Related Work 压缩过度，BibTeX 只输出 19 篇实际引用；用户要求恢复更完整的参考文献覆盖。
+- **处理**：按 attention/progressive pruning、encoder-output selection、merging/projectors、2026 selectors、OCR/document audit 与评测重新扩写 Related Work，恢复原库 51 篇正文实引，仍不使用 `\nocite`。
+- **版面取舍**：移除未通过预设 gate 的 RankBridge 探索段与精选案例图；保留全量 operational 表、Qwen3 final-input 控制、same-HF FastV 表和效率协议。正文与参考文献保持模板 12pt。
+- **验证**：最终仍为 10 页 US Letter；51 个唯一 citation key 与 51 个 `\bibitem` 对齐。

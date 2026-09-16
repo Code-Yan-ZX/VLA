@@ -41,33 +41,191 @@ Y.~Zhang \emph{et~al.}, ``Sparsevlm: Visual token sparsification for efficient
   (ICML)}, ser. Proceedings of Machine Learning Research, vol. 267.\hskip 1em
   plus 0.5em minus 0.4em\relax PMLR, 2025.
 
-\bibitem{bolya2023tome}
-D.~Bolya \emph{et~al.}, ``Token merging: Your {ViT} but faster,'' in \emph{Int.
-  Conf. Learn. Represent. (ICLR)}, 2023.
+\bibitem{wang2024vtccls}
+A.~Wang \emph{et~al.}, ``{[CLS]} token tells everything needed for
+  training-free efficient {MLLMs},'' 2024.
 
 \bibitem{shang2024prumerge}
 Y.~Shang \emph{et~al.}, ``Llava-prumerge: Adaptive token reduction for
   efficient large multimodal models,'' in \emph{Proc. IEEE/CVF Int. Conf.
   Comput. Vis. (ICCV)}, 2025.
 
-\bibitem{yang2024visionzip}
-S.~Yang \emph{et~al.}, ``Visionzip: Longer is better but not necessary in
-  vision language models,'' in \emph{Proc. IEEE/CVF Conf. Comput. Vis. Pattern
-  Recognit. (CVPR)}, 2025.
-
-\bibitem{li2024tokenpacker}
-W.~Li \emph{et~al.}, ``{TokenPacker}: Efficient visual projector for multimodal
-  {LLM},'' 2024.
-
 \bibitem{ye2024fitprune}
 W.~Ye \emph{et~al.}, ``Fit and prune: Fast and training-free visual token
   pruning for multi-modal large language models,'' in \emph{Proc. AAAI Conf.
   Artif. Intell. (AAAI)}, 2025.
 
+\bibitem{jiang2025gprune}
+Y.~Jiang \emph{et~al.}, ``What kind of visual tokens do we need? training-free
+  visual token pruning for multi-modal large language models from the
+  perspective of graph,'' 2025.
+
+\bibitem{luan2025adaptprune}
+B.~Luan \emph{et~al.}, ``Multi-cue adaptive visual token pruning for large
+  vision-language models,'' 2025.
+
+\bibitem{yu2026visiontrim}
+H.~Yu \emph{et~al.}, ``{VisionTrim}: Unified vision token compression for
+  training-free {MLLM} acceleration,'' in \emph{Int. Conf. Learn. Represent.
+  (ICLR)}, 2026.
+
+\bibitem{baek2026agilepruner}
+C.~Baek \emph{et~al.}, ``{AgilePruner}: An empirical study of attention and
+  diversity for adaptive visual token pruning in large vision-language
+  models,'' in \emph{Int. Conf. Learn. Represent. (ICLR)}, 2026.
+
+\bibitem{fang2026prunesid}
+Z.~Fang \emph{et~al.}, ``Prune redundancy, preserve essence: Vision token
+  compression in {VLMs} via synergistic importance-diversity,'' in \emph{Int.
+  Conf. Learn. Represent. (ICLR)}, 2026.
+
+\bibitem{bolya2023tome}
+D.~Bolya \emph{et~al.}, ``Token merging: Your {ViT} but faster,'' in \emph{Int.
+  Conf. Learn. Represent. (ICLR)}, 2023.
+
+\bibitem{yang2024visionzip}
+S.~Yang \emph{et~al.}, ``Visionzip: Longer is better but not necessary in
+  vision language models,'' in \emph{Proc. IEEE/CVF Conf. Comput. Vis. Pattern
+  Recognit. (CVPR)}, 2025.
+
 \bibitem{islam2025adaptmerge}
 Z.~Islam and M.~Rochan, ``{AdaptMerge}: Inference time adaptive visual and
   language-guided token merging for efficient large multimodal models,'' in
   \emph{Findings Assoc. Comput. Linguistics: EMNLP}, 2025.
+
+\bibitem{li2024tokenpacker}
+W.~Li \emph{et~al.}, ``{TokenPacker}: Efficient visual projector for multimodal
+  {LLM},'' 2024.
+
+\bibitem{zeng2025glimpseprune}
+Q.-S. Zeng \emph{et~al.}, ``A glimpse to compress: Dynamic visual token pruning
+  for large vision-language models,'' \emph{IEEE Trans. Circuits Syst. Video
+  Technol.}, pp. 1--1, 2026.
+
+\bibitem{zhang2025vscan}
+C.~Zhang \emph{et~al.}, ``Vscan: Rethinking visual token reduction for
+  efficient large vision-language models,'' 2025.
+
+\bibitem{oh2026anchorprune}
+K.~Oh and B.~Kim, ``{AnchorPrune}: Relevance-anchored contextual expansion for
+  visual token pruning,'' in \emph{Eur. Conf. Comput. Vis. (ECCV)}, 2026.
+
+\bibitem{gao2026quietprune}
+T.~Gao \emph{et~al.}, ``{QuietPrune}: Query-guided early token pruning for
+  vision-language models,'' in \emph{Proc. IEEE/CVF Conf. Comput. Vis. Pattern
+  Recognit. (CVPR)}, 2026, pp. 3553--3562.
+
+\bibitem{wang2026pixelprune}
+N.~Wang \emph{et~al.}, ``{PixelPrune}: Pixel-level adaptive visual token
+  reduction via predictive coding,'' 2026.
+
+\bibitem{li2026transprune}
+A.~Li \emph{et~al.}, ``{TransPrune}: Token transition pruning for efficient
+  large vision-language model,'' in \emph{Proc. IEEE/CVF Conf. Comput. Vis.
+  Pattern Recognit. (CVPR)}, 2026, pp. 39\,529--39\,538.
+
+\bibitem{chen2026v2drop}
+J.~Chen \emph{et~al.}, ``Variation-aware vision token dropping for faster large
+  vision-language models,'' in \emph{Proc. IEEE/CVF Conf. Comput. Vis. Pattern
+  Recognit. (CVPR)}, 2026, pp. 3489--3499.
+
+\bibitem{sun2026hiloprune}
+Z.~Sun \emph{et~al.}, ``{Hi-Lo Prune}: Look at what you'll lose before pruning
+  with hierarchical token selection,'' in \emph{Proc. IEEE/CVF Conf. Comput.
+  Vis. Pattern Recognit. (CVPR)}, 2026, pp. 31\,941--31\,951.
+
+\bibitem{ma2026apet}
+Q.~Ma \emph{et~al.}, ``{ApET}: Approximation-error guided token compression for
+  efficient {VLMs},'' in \emph{Proc. IEEE/CVF Conf. Comput. Vis. Pattern
+  Recognit. (CVPR)}, 2026.
+
+\bibitem{xu2026score}
+T.~Xu, H.~Shi, and X.~Gao, ``{SCoRe}: Salience-coverage reduction for vision
+  token pruning in vision-language models,'' in \emph{Proc. IEEE/CVF Conf.
+  Comput. Vis. Pattern Recognit. (CVPR)}, 2026.
+
+\bibitem{du2026coin}
+C.~Du \emph{et~al.}, ``{CoIn}: Coverage and informativeness-guided token
+  reduction for efficient large multimodal models,'' in \emph{Proc. IEEE/CVF
+  Conf. Comput. Vis. Pattern Recognit. (CVPR)}, 2026, pp. 10\,492--10\,501.
+
+\bibitem{kim2026zooprune}
+Y.~Kim \emph{et~al.}, ``{ZOO-Prune}: Training-free token pruning via
+  zeroth-order gradient estimation in vision-language models,'' in \emph{Proc.
+  IEEE/CVF Conf. Comput. Vis. Pattern Recognit. (CVPR)}, 2026, pp.
+  39\,572--39\,582.
+
+\bibitem{lee2026spare}
+J.~Lee, S.~Wen, and D.-W. Choi, ``Moving beyond diversity: Visual token pruning
+  as subspace reconstruction for efficient {VLMs},'' 2026.
+
+\bibitem{wang2026metacompress}
+Y.~Wang \emph{et~al.}, ``Rethinking token reduction for large vision-language
+  models,'' in \emph{Proc. IEEE/CVF Conf. Comput. Vis. Pattern Recognit.
+  (CVPR)}, 2026, pp. 24\,727--24\,737.
+
+\bibitem{song2026evocomp}
+J.~Song \emph{et~al.}, ``{EvoComp}: Learning visual token compression for
+  multimodal large language models via semantic-guided evolutionary labeling,''
+  in \emph{Proc. IEEE/CVF Conf. Comput. Vis. Pattern Recognit. (CVPR)}, 2026.
+
+\bibitem{sun2026ifprune}
+G.~Sun \emph{et~al.}, ``{IF-Prune}: Information-flow guided token pruning for
+  efficient vision-language models,'' in \emph{Proc. IEEE/CVF Conf. Comput.
+  Vis. Pattern Recognit. (CVPR)}, 2026, pp. 3522--3531.
+
+\bibitem{zhu2026hawk}
+Q.~Zhu \emph{et~al.}, ``{HAWK}: Head importance-aware visual token pruning in
+  multimodal models,'' in \emph{Proc. IEEE/CVF Conf. Comput. Vis. Pattern
+  Recognit. (CVPR)}, 2026.
+
+\bibitem{wang2026informationhorizon}
+Y.~Wang \emph{et~al.}, ``When token pruning is worse than random: Understanding
+  visual token information in {VLLMs},'' in \emph{Proc. IEEE/CVF Conf. Comput.
+  Vis. Pattern Recognit. (CVPR)}, 2026, pp. 31\,910--31\,919.
+
+\bibitem{chen2026alvts}
+Y.~Chen \emph{et~al.}, ``One layer's trash is another layer's treasure:
+  Adaptive layer-wise visual token selection in {LVLMs},'' in \emph{Proc.
+  IEEE/CVF Conf. Comput. Vis. Pattern Recognit. (CVPR)}, 2026.
+
+\bibitem{li2026crisp}
+X.~Li \emph{et~al.}, ``{CRISP}: Pre-{LLM} yet text-driven visual token pruning
+  for efficient {LVLM} inference,'' 2026.
+
+\bibitem{lei2026core}
+J.~Lei, G.~Wang, and D.-H. Lee, ``{CORE}: Compact object-centric
+  {RE}presentations as a new paradigm for token merging in {LVLMs},'' in
+  \emph{Proc. IEEE/CVF Conf. Comput. Vis. Pattern Recognit. (CVPR)}, 2026.
+
+\bibitem{li2026aot}
+J.~Li \emph{et~al.}, ``Token reduction via local and global contexts
+  optimization for efficient video large language models,'' in \emph{Proc.
+  IEEE/CVF Conf. Comput. Vis. Pattern Recognit. (CVPR)}, 2026.
+
+\bibitem{zhang2026hybrid}
+J.~Zhang \emph{et~al.}, ``Hybrid token compression for vision-language
+  models,'' in \emph{Proc. IEEE/CVF Conf. Comput. Vis. Pattern Recognit.
+  (CVPR)}, 2026, pp. 31\,889--31\,899.
+
+\bibitem{choi2026docprune}
+J.~Choi \emph{et~al.}, ``{DocPrune}: Efficient document question answering via
+  background, question, and comprehension-aware token pruning,'' in \emph{Proc.
+  IEEE/CVF Conf. Comput. Vis. Pattern Recognit. (CVPR)}, 2026, pp. 3543--3552.
+
+\bibitem{liu2026provenance}
+F.~Liu \emph{et~al.}, ``Beyond accuracy: Auditing spatial provenance in visual
+  token pruning for {OCR}-critical {MLLM} inference,'' 2026.
+
+\bibitem{zhang2024lmmseval}
+K.~Zhang \emph{et~al.}, ``{LMMs-Eval}: Reality check on the evaluation of large
+  multimodal models,'' in \emph{Findings Assoc. Comput. Linguistics: NAACL},
+  2025, pp. 881--916.
+
+\bibitem{wang2025effivlmbench}
+Z.~Wang \emph{et~al.}, ``{EffiVLM-BENCH}: A comprehensive benchmark for
+  evaluating training-free acceleration in large vision-language models,'' in
+  \emph{Annu. Meeting Assoc. Comput. Linguistics (ACL)}, 2025.
 
 \bibitem{bai2025qwen25vl}
 S.~Bai \emph{et~al.}, ``Qwen2.5-vl technical report,'' 2025.
@@ -102,10 +260,5 @@ Y.~Liu \emph{et~al.}, ``{OCRBench}: On the hidden mystery of {OCR} in large
 D.~A. Hudson and C.~D. Manning, ``{GQA}: A new dataset for real-world visual
   reasoning and compositional question answering,'' in \emph{Proc. IEEE/CVF
   Conf. Comput. Vis. Pattern Recognit. (CVPR)}, 2019.
-
-\bibitem{zhang2024lmmseval}
-K.~Zhang \emph{et~al.}, ``{LMMs-Eval}: Reality check on the evaluation of large
-  multimodal models,'' in \emph{Findings Assoc. Comput. Linguistics: NAACL},
-  2025, pp. 881--916.
 
 \end{thebibliography}
