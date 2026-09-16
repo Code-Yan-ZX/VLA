@@ -385,3 +385,8 @@
 - **处理**：按 attention/progressive pruning、encoder-output selection、merging/projectors、2026 selectors、OCR/document audit 与评测重新扩写 Related Work，恢复原库 51 篇正文实引，仍不使用 `\nocite`。
 - **版面取舍**：移除未通过预设 gate 的 RankBridge 探索段与精选案例图；保留全量 operational 表、Qwen3 final-input 控制、same-HF FastV 表和效率协议。正文与参考文献保持模板 12pt。
 - **验证**：最终仍为 10 页 US Letter；51 个唯一 citation key 与 51 个 `\bibitem` 对齐。
+
+## 2026-09-16 | 恢复 token-survival maps
+
+- **用户取舍**：`Task rate--distortion operating` 与 `The native merger rewrites selection saliency` 可删除，但 `Token-survival maps for audited TextVQA and DocVQA images` 必须保留。
+- **处理**：用 token-survival maps 替换与 Table 2 数值重复的全量柱状图；caption 明确它是 historical n=200 operational diagnostic，只说明精选案例的空间分配，不作为 aggregate accuracy 或 merger-only 因果证据。

@@ -28,6 +28,8 @@ Suggested caption:
 
 Visual QA: PNG inspected after rendering; four panels and all labels are legible without clipping or overlap. Grid, three distinct colors, and hatch patterns distinguish methods; PDF contains vector bars, text, and paths.
 
+The full-split bar chart was used during the evidence-audited rewrite but was removed from the final manuscript at the user's request to retain the token-survival maps. Its values remain reported in Table 2 and the generated file remains an internal audit artifact only.
+
 ## Original figure disposition
 
 ### Figure 1: user-specified schematic — retain unchanged
@@ -56,6 +58,6 @@ Generator `scripts/plot_dcc_rate_distortion.py:21–41` hardcodes n=200 diagnost
 
 PDF text extraction and the corresponding PNG confirm the title “Merger demotes text-stroke units”, which exceeds a Sobel edge association. The swap panel also prints TextVQA RBM .598 versus Swap .603, despite the old prose claiming identical recovered accuracy and byte-identical retained outputs. This difference might reflect scope, scoring, or differing answer trajectories; the asset itself does not explain it. Its n=200 answer and n=30/31 kept-set controls should not be represented as one fully paired byte-identical end-to-end experiment. Use carefully scoped textual evidence if retained, not this unmodified strong-mechanism graphic.
 
-### Original displayed Figure 5: `fig4_vector.pdf` survival maps — omit or retain only as separately scoped historical examples
+### Original displayed Figure 5: `fig4_vector.pdf` survival maps — retained as separately scoped historical examples
 
-The companion `fig4_word.png` embeds early diagnostic text: “PRE = block-8 (deepstack_0) unit L2; POST = merged token (main+deepstack cat) L2”, TextVQA-200 pre .695/post .255, DocVQA-200 pre .725/post .39. These are not the final full-split score definitions in the new chart. It also labels positive rank-edge correlation as merger demotion of high-edge/text, conflating text and edge energy. The local TextVQA example even has a slightly negative edge-shift correlation, which is not itself an error but prevents treating every example as evidence for edge demotion. The PDF has no extractable text, so this audit uses its accompanying PNG for those embedded details. Omitting this figure prevents subset/score-definition confusion and reduces redundant illustrative material.
+The companion `fig4_word.png` embeds early diagnostic text: “PRE = block-8 (deepstack_0) unit L2; POST = merged token (main+deepstack cat) L2”, TextVQA-200 pre .695/post .255, DocVQA-200 pre .725/post .39. These are not final full-split or final-input-control scores. It also labels positive rank-edge correlation as merger demotion of high-edge/text, conflating text and edge energy. The local TextVQA example has a slightly negative edge-shift correlation, which prevents treating every example as evidence for edge demotion. The final caption therefore identifies the historical $n=200$ diagnostic and limits the figure to selected spatial-allocation examples rather than aggregate or merger-only evidence.

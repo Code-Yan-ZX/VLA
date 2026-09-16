@@ -7,7 +7,7 @@
 - 标题：*Rank Before You Merge: Native-Unit Selection for Visual Token Compression*。
 - 主线：RBM 是 model-specific operational design；三模型主表不再称纯 stage 证据。Qwen3 final-input control 单列，且披露 post score 拼接 main/deepstack，避免 merger-only 因果归因。
 - RankBridge 从投稿正文移除（内部审计保留），避免失败的探索性 probe 分散主线；FastV 保留同后端 full OCRBench 对比。
-- Fig.1 保留用户指定 v2；Fig.2 改为全量 Qwen3 三臂控制图；旧 RD、案例、强机制及混合口径图从正文移除。
+- Fig.1 保留用户指定 v2；按用户要求保留 TextVQA/DocVQA token-survival maps；旧 RD、saliency mechanism 与重复的全量柱状图从正文移除。
 - 作者：Zhengxing Yan（SUES）、Hao Sun（NJUST）、Chen Guo（ECNU）、Jianpeng Hu（SUES，通讯作者）；单位与邮箱已写入首页。
 - 摘要末尾已加入公开代码仓库：`https://github.com/Code-Yan-ZX/qrbm-vlm`；首页作者区与摘要间距已核正。
 - 新稿加入 same-HF FastV OCRBench、可复现效率协议、模型特定 tap/顺序/配额差异及明确 limitations；未新增实验或数据。

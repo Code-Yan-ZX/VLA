@@ -6,8 +6,8 @@ Letter rendering with the official 12pt `dccpaper` class.
 
 The rewrite separates the operational RBM comparisons from the Qwen3-VL
 final-input control, reports model-specific implementation differences, removes
-the unsupported RankBridge significance claim, reports OCRBench's effective
-hybrid sample size as 181, and bounds the mechanism and efficiency conclusions.
+RankBridge from the submission manuscript while retaining its exploratory
+records in the internal audit, and bounds the mechanism and efficiency conclusions.
 The final manuscript contains 51 references, each cited substantively in the
 body; it does not use `\nocite`.
 
