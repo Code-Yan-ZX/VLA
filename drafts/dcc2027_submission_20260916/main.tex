@@ -41,6 +41,12 @@ We separate operational accuracy from attribution. A three-model matrix compares
 \caption{\label{fig:overview}Native-unit selection schematic. Selected identities stay aligned with the surviving visual streams and interface. The illustrated pre-merger location is conceptual: operational Qwen3-VL RBM scores the layer-8 deepstack input, whereas the final-input control scores the main merger's final-block input. The diagram's $\rho$ denotes retention, written $\kappa$ in the text.}
 \end{figure}
 
+\begin{figure}[t]
+\centering
+\includegraphics[width=.72\textwidth]{figs/fig2_word.png}
+\caption{\label{fig:ocr-cases}Selected OCRBench cases at 25\% retention. Blue cells are retained visual units; checkmarks indicate correctness under the official answer rule for these examples. The cases illustrate different spatial allocations and do not replace the full-split comparison.}
+\end{figure}
+
 At 25\% retention, RBM improves all nine text-dense Post-L2 comparisons; the final-input control preserves the direction on three text tasks, with a smaller DocVQA gain, while GQA reverses it. We contribute the interface-compatible rule, full-split operational and final-input evidence, and diagnostics that delimit its workload scope. Token retention denotes a task budget, not bit rate or total cost.
 
 \Section{Related Work}
@@ -125,12 +131,6 @@ Model & Benchmark & None & RBM & Post-L2 & $\Delta$\\
 \end{table}
 
 GQA favors Post-L2 in all three point estimates. The small InternVL3 difference has an interval crossing zero in the paired analysis. The Qwen results give clearer evidence of a task boundary: pre-merger magnitude is useful for the tested text-dense workloads, but is not a general-purpose saliency criterion.
-
-\begin{figure}[t]
-\centering
-\includegraphics[width=.72\textwidth]{figs/fig2_word.png}
-\caption{\label{fig:ocr-cases}Selected OCRBench cases at 25\% retention. Blue cells are retained visual units; checkmarks indicate correctness under the official answer rule for these examples. The cases illustrate different spatial allocations and do not replace the full-split comparison.}
-\end{figure}
 
 \SubSection{Final-input control}
 Table~\ref{tab:stage} and Fig.~\ref{fig:controls} separate the final-input contrast from early-tap RBM. Pre-final gains 27.68 points on TextVQA, 4.59 on DocVQA, and 235/1000 on OCRBench, but loses 5.64 on GQA. The smaller DocVQA gain than the operational 24.3 points prevents attributing that headline contrast to the merger boundary alone; residual score aggregation also limits merger-only attribution.

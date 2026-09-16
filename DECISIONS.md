@@ -397,3 +397,4 @@
 - **选择**：采用 `fig3_fullsplit_controls`。它使用完整评测集，并与主表和 final-input control 对齐；不采用 `fig3_word`，因为其 “merger demotes text-stroke units” 标题超过现有 Sobel edge association 与 mixed-scope swap 证据。
 - **版面**：柱状图、OCR 精选案例和 token-survival maps 分列第 5、6、7 页，参考文献从第 8 页开始；保持 10 页与 51 篇正文实引。
 - **最终顺序修订**：按用户要求将 OCR 精选案例提前并编号为 Fig.2；全量柱状图顺延为 Fig.3；token-survival maps 保持 Fig.4。正文交叉引用同步更新。
+- **位置修订**：用户要求 Fig.2 再提前；将其源位置移至 Fig.1 之后，使两图同在第 2 页，避免案例图到结果章节才出现。
