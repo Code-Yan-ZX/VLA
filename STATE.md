@@ -1,13 +1,13 @@
 # STATE.md — 当前项目状态（主窗口维护，≤30 行）
 > 项目：VLM 视觉 token 压缩；当前目标：DCC 2027。
-> 最近更新：2026-09-15；DCC 初稿与投稿源包已生成，尚未实际投稿。
+> 最近更新：2026-09-16；完成独立模型审稿，DCC 稿尚未实际投稿。
 
 ## 当前论文
 - DCC 权威稿：`drafts/dcc2027_submission_20260914/main.tex`；编译 PDF：同目录 `main.pdf`。
 - 标题：*Rank Before You Merge: Training-Free, Merger-Aware Visual Token Compression for Vision-Language Models*。
 - 主线：把视觉 token 压缩定义为 operator-order 问题；native merger 改写 saliency ranking，RBM 在 merger 前选择完整 native units，并保持 merger、位置、deepstack 与 LLM 接口不变。
 - 第二贡献：RankBridge 用 20% 最终预算保护 pre-merger rank，其余由 FastV-k3 选择；Qwen3-VL 锁定 n=200 四基准均较 FastV 提升 0.5–3.2pp。
-- claim 边界：只有 TextVQA +3.2pp 达显著；OCRBench 上 RankBridge 仍落后纯 RBM 11.6pp，故写作 complementary signal，不宣称 universal hybrid winner。
+- 审稿纠偏：主表混有 feature-depth/stage 变化；纯 stage 控制仍有文本任务收益。TextVQA +3.2pp 显著性需按官方软分数复核；OCRBench probe 有效 n=181，非 200。
 - Fig.1 已按用户最新指定的详细流程图（v2）原样替换；Fig.2、Fig.4、Fig.5 使用项目原始 PDF 矢量源，Fig.3 为矢量 task rate--distortion 图；第 6 页浮动位置及其后章节标题间距已优化。
 - 作者：Zhengxing Yan（SUES）、Hao Sun（NJUST）、Chen Guo（ECNU）、Jianpeng Hu（SUES，通讯作者）；单位与邮箱已写入首页。
 - 摘要末尾已加入公开代码仓库：`https://github.com/Code-Yan-ZX/qrbm-vlm`；首页作者区与摘要间距已核正。
@@ -24,6 +24,7 @@
 - Word 图源：`drafts/RBM_merger_aware_中文_Fig1更新版.docx`。
 
 ## 下一步
+- 优先处理 `reviews/dcc2027_model_review_20260916/REVIEW.md`：统一 scoring tap/归因，修正样本量并复核显著性；本轮仅审稿，未改正文、未跑实验。
 - 投稿前由四位作者逐一确认英文姓名拼写、单位和邮箱；需要时补 ORCID。
 - 公平的多方法 SOTA 表仍缺同模型/同 rate 运行；现有可比强 baseline 为 FastV。新增 full-split/多方法实验可能超过 6 GPU·h，执行前升级确认。
 - 投稿前核对 EasyChair 表单、关键词、利益冲突与最终 PDF；获得明确确认后再实际提交。

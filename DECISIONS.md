@@ -361,3 +361,11 @@
 - **调整**：在 Fig.3 后加入浮动屏障，局部缩小该页 `textfloatsep`，并对 “Why the Merger Changes Selection” 前使用保留型负间距；离开该位置后恢复模板默认浮动间距。
 - **原因**：直接负间距会让章节标题越过延迟浮动图并落到第 5 页末；先固定 Fig.3 再收紧间距，可保持图、标题和首段在正确阅读顺序中。
 - **范围与验证**：图文件、图尺寸、caption 和正文均未改变；最终仍为 10 页，0 undefined/overfull/underfull，第 5--7 页渲染检查通过。
+
+## 2026-09-16 | 独立模型审稿与证据边界纠偏
+
+- **用户要求**：直接用模型能力审稿，不使用本地 skills；按项目 LEAN MAIN 分派方法、实验和审稿评价三项子任务，主任务核对关键证据后汇总。
+- **结果**：报告位于 `reviews/dcc2027_model_review_20260916/REVIEW.md`；模拟推荐 Weak Reject，主要因为方法定义与主表因果归因不一致，以及 secondary probe 样本量/显著性披露不足。
+- **已确认**：`reports/acmmm_final_controls.md:24` 说明 headline RBM 在 early tap 取分，主表混有 feature-depth 与 stage；matched-input 控制仍支持文本任务收益，但不可将主表全部增益归于 operator order。
+- **统计纠偏**：`experiments/rankbridge_gate.md:50–54` 记录 OCRBench 实际有效 n=181、19 shared skips；TextVQA z=2.11 源于 9:2 二值不一致对，其双侧 exact McNemar p=0.06543，官方软分数提升的显著性仍需独立配对复核，不能据此断言一定显著或一定不显著。
+- **范围**：仅生成审稿报告并更新状态；未改论文/图表、未执行新实验、未投稿。此次发现涉及 claim，已向用户明确报告，后续修改与实验须围绕上述证据边界开展。
