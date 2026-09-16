@@ -5,6 +5,10 @@
 \usepackage{amsmath,amssymb,booktabs,graphicx,multirow,url,IEEEtrantools}
 \usepackage[hidelinks]{hyperref}
 \hypersetup{pdftitle={Rank Before You Merge: Native-Unit Selection for Visual Token Compression},pdfauthor={Zhengxing Yan, Hao Sun, Chen Guo, Jianpeng Hu}}
+\setcounter{topnumber}{3}
+\setcounter{totalnumber}{5}
+\renewcommand{\topfraction}{.95}
+\renewcommand{\textfraction}{.05}
 \begin{document}
 \bstctlcite{dccBSTcontrol}
 \title{\large\textbf{Rank Before You Merge: Native-Unit Selection\\
@@ -123,7 +127,7 @@ Model & Benchmark & None & RBM & Post-L2 & $\Delta$\\
 GQA favors Post-L2 in all three point estimates. The small InternVL3 difference has an interval crossing zero in the paired analysis. The Qwen results give clearer evidence of a task boundary: pre-merger magnitude is useful for the tested text-dense workloads, but is not a general-purpose saliency criterion.
 
 \SubSection{Final-input control}
-Table~\ref{tab:stage} separates the final-input contrast from early-tap RBM. Pre-final gains 27.68 points on TextVQA, 4.59 on DocVQA, and 235/1000 on OCRBench, but loses 5.64 on GQA. The smaller DocVQA gain than the operational 24.3 points prevents attributing that headline contrast to the merger boundary alone; residual score aggregation also limits merger-only attribution.
+Table~\ref{tab:stage} and Fig.~\ref{fig:controls} separate the final-input contrast from early-tap RBM. Pre-final gains 27.68 points on TextVQA, 4.59 on DocVQA, and 235/1000 on OCRBench, but loses 5.64 on GQA. The smaller DocVQA gain than the operational 24.3 points prevents attributing that headline contrast to the merger boundary alone; residual score aggregation also limits merger-only attribution.
 
 \begin{table}[t]
 \centering
@@ -143,12 +147,18 @@ GQA & .4207 & .4771 & $-5.64$ [$-6.42$, $-4.86$]\\
 
 \begin{figure}[t]
 \centering
-\includegraphics[width=\textwidth]{figs/fig4_vector.pdf}
-\caption{\label{fig:survival}Token-survival maps for audited TextVQA and DocVQA images. Each row shows operational early-tap RBM, Post-L2, and their overlap at the same 25\% retention. Embedded scores and annotations belong to the historical $n=200$ diagnostic; these selected cases illustrate spatial allocation rather than aggregate accuracy or a merger-only causal effect.}
+\includegraphics[width=.80\textwidth]{figs/fig3_fullsplit_controls.pdf}
+\caption{\label{fig:controls}Full-split Qwen3-VL results at 25\% retention. Early-tap RBM is operational; Pre-final and Post-L2 form the final-input control. OCRBench is normalized by 1,000.}
 \end{figure}
 
 \SubSection{Comparison with attention-based selection}
 A same-harness full-OCRBench comparison evaluates RBM and FastV-k3 at a shared four-million-pixel cap and a 25\% final budget (Table~\ref{tab:fastv}). Both methods use native positions, greedy decoding, and at most 32 generated tokens. The Qwen3-VL and Qwen2.5-VL runs encounter 79 and 88 common context or memory failures, respectively. These exact shared IDs receive zero in the scores out of 1,000; the completed paired sets contain 921 and 912 examples. RBM leads by 146 and 87 points. These HF scores are a separate experiment and must not be substituted into the vLLM matrix.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=.72\textwidth]{figs/fig2_word.png}
+\caption{\label{fig:ocr-cases}Selected OCRBench cases at 25\% retention. Blue cells are retained visual units; checkmarks indicate correctness under the official answer rule for these examples. The cases illustrate different spatial allocations and do not replace the full-split comparison.}
+\end{figure}
 
 \begin{table}[t]
 \centering
@@ -168,6 +178,12 @@ Qwen2.5-VL & 382 & 295 & +87 & 912\\
 The two operational Qwen3-VL rankings differ substantially. On diagnostic DocVQA, TextVQA, and GQA samples, Spearman correlations are .137, .332, and .360, and top-25\% Jaccard overlaps are .180, .243, and .278. Representation choice therefore changes the selected set, although the different feature depths prevent merger-only attribution.
 
 Rank shifts also associate with local edge energy: post-minus-pre rank correlations with Sobel energy are +.439, +.155, and +.036 in the same task order. On DocVQA, RBM-only versus Post-L2-only units have mean energy .641 versus .124, and 92\% versus 35\% exceed their image's median. Because Sobel energy also responds to borders, texture, and contours, this establishes an edge association rather than text-specific or causal demotion. Figure~\ref{fig:survival} visualizes the spatial allocation in two audited cases.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=.88\textwidth]{figs/fig4_vector.pdf}
+\caption{\label{fig:survival}Token-survival maps for audited TextVQA and DocVQA images. Each row shows operational early-tap RBM, Post-L2, and their overlap at the same 25\% retention. Embedded scores and annotations belong to the historical $n=200$ diagnostic; these selected cases illustrate spatial allocation rather than aggregate accuracy or a merger-only causal effect.}
+\end{figure}
 
 A ranking-swap check fixes the post-merger computation but substitutes RBM's kept identities. On the verified Qwen3-VL path, kept-set overlap is 1.000, retained representations are byte-identical, and predictions agree. This verifies path equivalence for a fixed set, not that norm or edge energy identifies causally relevant text. Qwen2.5-VL retains an ordering confound, while InternVL3 provides accuracy-level replication without byte-exact attribution.
 

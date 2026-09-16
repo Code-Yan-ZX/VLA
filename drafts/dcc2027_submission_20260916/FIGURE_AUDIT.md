@@ -28,7 +28,7 @@ Suggested caption:
 
 Visual QA: PNG inspected after rendering; four panels and all labels are legible without clipping or overlap. Grid, three distinct colors, and hatch patterns distinguish methods; PDF contains vector bars, text, and paths.
 
-The full-split bar chart was used during the evidence-audited rewrite but was removed from the final manuscript at the user's request to retain the token-survival maps. Its values remain reported in Table 2 and the generated file remains an internal audit artifact only.
+The full-split bar chart is retained in the final manuscript alongside the two user-required qualitative figures. It was selected over the older `fig3_word.png` mechanism panel because the latter makes a stronger text-demotion claim than the audited evidence supports.
 
 ## Original figure disposition
 
@@ -38,7 +38,7 @@ Original asset: `figs/fig1_user_20260915_v2.png`. It is intentionally preserved.
 
 Suggested clarification: “Schematic of unit-preserving selection. The evaluated Qwen3-VL RBM scores an early ViT tap; matched-input controls are reported separately. The image denotes retention by rho, corresponding to kappa in the text.” If the new text adopts rho consistently for retention and a different hybrid symbol, say so instead.
 
-### Original displayed Figure 2: `fig2_vector.pdf` — illustrative cases can remain
+### Original displayed Figure 2: `fig2_word.png` — retained as selected illustrative cases
 
 PDF text extraction and `fig2_word.png` show OCRBench airport-board (`A105-108`) and document (`OCTOBER 1999`) cases, with RBM marked correct and Post-L2/FastV-k3 incorrect. No visible correctness contradiction with the existing case records was found.
 

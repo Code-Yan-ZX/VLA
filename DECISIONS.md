@@ -390,3 +390,9 @@
 
 - **用户取舍**：`Task rate--distortion operating` 与 `The native merger rewrites selection saliency` 可删除，但 `Token-survival maps for audited TextVQA and DocVQA images` 必须保留。
 - **处理**：用 token-survival maps 替换与 Table 2 数值重复的全量柱状图；caption 明确它是 historical n=200 operational diagnostic，只说明精选案例的空间分配，不作为 aggregate accuracy 或 merger-only 因果证据。
+
+## 2026-09-16 | 最终正文图组
+
+- **用户指定**：Fig.1 保持不变；`fig4_vector` 与 `fig2_word` 必须保留；`fig3_word` 和 `fig3_fullsplit_controls` 二选一。
+- **选择**：采用 `fig3_fullsplit_controls`。它使用完整评测集，并与主表和 final-input control 对齐；不采用 `fig3_word`，因为其 “merger demotes text-stroke units” 标题超过现有 Sobel edge association 与 mixed-scope swap 证据。
+- **版面**：柱状图、OCR 精选案例和 token-survival maps 分列第 5、6、7 页，参考文献从第 8 页开始；保持 10 页与 51 篇正文实引。
