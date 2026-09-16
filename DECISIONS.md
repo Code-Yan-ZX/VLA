@@ -369,3 +369,12 @@
 - **已确认**：`reports/acmmm_final_controls.md:24` 说明 headline RBM 在 early tap 取分，主表混有 feature-depth 与 stage；matched-input 控制仍支持文本任务收益，但不可将主表全部增益归于 operator order。
 - **统计纠偏**：`experiments/rankbridge_gate.md:50–54` 记录 OCRBench 实际有效 n=181、19 shared skips；TextVQA z=2.11 源于 9:2 二值不一致对，其双侧 exact McNemar p=0.06543，官方软分数提升的显著性仍需独立配对复核，不能据此断言一定显著或一定不显著。
 - **范围**：仅生成审稿报告并更新状态；未改论文/图表、未执行新实验、未投稿。此次发现涉及 claim，已向用户明确报告，后续修改与实验须围绕上述证据边界开展。
+
+## 2026-09-16 | DCC 证据审计版重写完成
+
+- **新权威稿**：`drafts/dcc2027_submission_20260916/main.tex`，题为 “Rank Before You Merge: Native-Unit Selection for Visual Token Compression”；旧 `20260914` 目录保持不动。
+- **因果边界**：三模型 headline 结果明确为 model-specific operational comparisons；Qwen3 `Pre-final` 只称 final-input control。其 Post-L2 使用 main+deepstack 拼接输出，故不称 pure-stage 或 merger-only isolation。
+- **实现披露**：正文补 Qwen3 early tap/四流、Qwen2.5 排序差异、InternVL3 tile 配额差异及各 backend 位置语义边界；保留 native weights/interface compatibility，不再声称所有路径保留原始坐标。
+- **统计与基线**：RankBridge 改为 exploratory，OCRBench 有效 n=181、19 common skips，删除 TextVQA 显著性；加入 same-HF full OCRBench FastV 对比和失败分母。
+- **图与效率**：旧来源不清的 RD 图及过强机制图移除；新 Fig.2 仅使用全量 Qwen3 审计结果。效率按真实 J6 n=200 吞吐与独立 n=1×5 proxy 分开报告。
+- **验证**：`latexmk` 通过；官方 12pt/US Letter 共 10 页，0 undefined/overfull/underfull，全部字体嵌入；逐页渲染检查无裁切、重叠或图表溢出。未运行新 GPU 实验，未向会议外发。
