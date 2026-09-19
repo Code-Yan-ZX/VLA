@@ -979,6 +979,23 @@ def parse_args():
                          "support post+swap and pre+swap; internvl3 supports "
                          "post+swap only (PRE ranking = pixel-shuffle unit L2 scores "
                          "captured via an mlp1 forward pre_hook; pre+swap guarded out).")
+    ap.add_argument("--post-score-scope", default="full",
+                    choices=["full", "main"],
+                    help="mode=post, stage ranking, qwen3vl ONLY: which feature "
+                         "columns the post L2/TopK score is computed over. full "
+                         "(default; ORIGINAL behavior) = the entire concatenated "
+                         "row -- vLLM qwen3_vl.py visual.forward cats "
+                         "[main_merger, deepstack_0, deepstack_1, deepstack_2] "
+                         "along dim=1, so the score is the L2 norm of the full "
+                         "hidden*(1+3) vector. main = score computed ONLY from "
+                         "the main-merger block (s[:, :hidden]); the KEPT ROWS "
+                         "still come from the FULL main+deepstack output "
+                         "(index_select preserves the deepstack columns of kept "
+                         "units -- identical final token count and LLM input "
+                         "dimensionality, only the RANKING feature space "
+                         "changes). Isolates the deepstack-column contribution "
+                         "to the post ranking. Guarded: requires --mode post, "
+                         "--mask-ranking stage, family qwen3vl.")
     ap.add_argument("--hybrid-text-frac", type=float, default=0.5,
                     help="--mode hybrid ONLY (merger-aware selection, design §4c): "
                          "fraction t in [0,1] of the CONTESTED budget (k - |agreement|) "
@@ -1357,9 +1374,21 @@ def setup_qwen2vl_mrope_fix(model):
 # --------------------------------------------------------------------------- #
 # (B) POST-merger: wrap _process_image_input, prune post-split. (== v2_p1.)
 # --------------------------------------------------------------------------- #
-def setup_post_merger(model, r: float, selector: str = "l2"):
+def setup_post_merger(model, r: float, selector: str = "l2",
+                      score_scope: str = "full"):
     _orig = model._process_image_input
-    diag = {"fires": 0, "nk": [], "selector": selector}
+    # score_scope="main" (qwen3vl): rank on the main-merger column block only.
+    # vLLM 0.19 qwen3_vl.py visual.forward (verified at source):
+    #   hidden_states = torch.cat([hidden_states] + deepstack_feature_lists,
+    #                             dim=1)   # main block FIRST
+    # so per-split rows are [main | ds0 | ds1 | ds2] along dim=1 and the main
+    # block is s[:, :hidden]. Kept rows are still index_select'ed from the FULL
+    # split (deepstack columns of kept units preserved; token count unchanged).
+    _vis = getattr(model, "visual", None)
+    n_ds = (len(getattr(_vis, "deepstack_visual_indexes", None) or [])
+            or len(getattr(_vis, "deepstack_merger_list", None) or []))
+    diag = {"fires": 0, "nk": [], "selector": selector,
+            "score_scope": score_scope, "n_deepstack": int(n_ds)}
 
     def _patched(image_input):
         splits = _orig(image_input)
@@ -1368,6 +1397,10 @@ def setup_post_merger(model, r: float, selector: str = "l2"):
         diag["fire_total"] = diag.get("fire_total", 0) + len(splits)
         if r == 0.0:
             return splits
+        if score_scope == "main":
+            ctx = int(splits[0].shape[-1])
+            assert ctx % (1 + n_ds) == 0, \
+                f"post main-scope: ctx {ctx} not divisible by 1+{n_ds}"
         out = []
         for s in splits:
             n = int(s.shape[0])
@@ -1377,11 +1410,16 @@ def setup_post_merger(model, r: float, selector: str = "l2"):
             # max-num-seqs=1 regardless of the vision-encoder cache skips.
             k = _budget_next(n, r) if BUDGET["k"] is not None \
                 or BUDGET["frac"] is not None else max(1, int(round(n * (1.0 - r))))
-            score = _score_tokens(s, selector)
+            if score_scope == "main":
+                score = _score_tokens(s[:, :ctx // (1 + n_ds)], selector)
+            else:
+                score = _score_tokens(s, selector)
             idx = torch.topk(score, k).indices.sort().values
             out.append(s.index_select(0, idx).contiguous())
         if len(diag["nk"]) < 8:
             diag["nk"].append((int(splits[0].shape[0]), int(out[0].shape[0])))
+            if score_scope == "main":
+                diag["main_hidden"] = ctx // (1 + n_ds)
         return tuple(out)
     model._process_image_input = _patched
     return diag
@@ -3743,6 +3781,41 @@ def run_dry_check(family: str, selector: str = "l2",
     print(f"[dry-check]   OK post-merger prune: splits [40,20] -> "
           f"{[s.shape[0] for s in out]} (r=0.75)")
 
+    # (d2) post main-scope scoring (qwen3vl): rank on the MAIN column block
+    #      ONLY, keep FULL rows. Build splits where the main block and the
+    #      deepstack blocks induce DIFFERENT rankings, so full-scope and
+    #      main-scope must select different unit sets.
+    if family == "qwen3vl":
+        hidden_d, n_units = 6, 8
+        n_img = hidden_d * (1 + 3)                      # row width: main + 3 deepstack
+        main = torch.zeros(n_units, hidden_d)
+        main[0] = 10.0                                  # main-L2 top-1
+        main[1] = 9.0                                   # main-L2 top-2
+        ds = torch.zeros(n_units, hidden_d * 3)
+        ds[6] = 10.0                                    # full-L2 top-1 (unit 6)
+        ds[7] = 9.0                                     # full-L2 top-2 (unit 7)
+        rows = torch.cat([main, ds], dim=1)             # [8, 24] -- main FIRST
+        model_d2 = _DummyModel(family)
+        def _fake_pii_d2(ii):
+            return (rows.clone(),)
+        model_d2._process_image_input = _fake_pii_d2    # BEFORE setup
+        diag_d2 = setup_post_merger(model_d2, 0.75, "l2", score_scope="main")
+        out_d2 = model_d2._process_image_input(None)
+        assert diag_d2["score_scope"] == "main" and diag_d2["n_deepstack"] == 3
+        assert diag_d2["main_hidden"] == hidden_d, diag_d2
+        # k = round(8*0.25) = 2 kept; main-scope must keep units {0,1}
+        # (full-scope would keep {6,7} -- assert the rankings really differ)
+        full_keep = set(torch.topk(rows.float().norm(dim=-1), 2).indices.tolist())
+        assert full_keep == {6, 7}, full_keep   # sanity: scopes DO differ here
+        assert out_d2[0].shape == (2, n_img), out_d2[0].shape
+        # kept rows must be EXACT full rows of main-block top-2 (units 0,1)
+        got = out_d2[0]
+        assert torch.equal(got[0], rows[0]) and torch.equal(got[1], rows[1]), \
+            "main-scope kept the wrong units (expected main-block top-2 {0,1})"
+        print(f"[dry-check]   OK post main-scope: main block [:, :{hidden_d}] "
+              f"ranks (kept units {{0,1}}, full-scope would keep {{6,7}}); "
+              f"kept rows are FULL [8,24] rows (deepstack cols preserved)")
+
     # (e) M3 post+swap: POST forward path (nothing sliced) + PRE-ranking select.
     #     grid (1,4,8) -> 8 units -> k=round(8*0.25)=2.
     model3 = _DummyModel(family)
@@ -3933,6 +4006,22 @@ def main():
     else:
         family = args.model_family
         model_id = MODELS[family]
+
+    # post main-scope guards (P-DCC A: main-only post ranking) -- BEFORE the
+    # dry check so --mode post --post-score-scope main on an unsupported combo
+    # errors cleanly. Only the stage-ranking Qwen3-VL post path implements the
+    # main-block scoring; anything else would silently mean "full".
+    if args.post_score_scope == "main":
+        if args.mode != "post":
+            raise SystemExit("--post-score-scope main requires --mode post "
+                             f"(got mode={args.mode}).")
+        if args.mask_ranking == "swap":
+            raise SystemExit("--post-score-scope main is stage-ranking only "
+                             "(not implemented for --mask-ranking swap).")
+        if family != "qwen3vl":
+            raise SystemExit(f"--post-score-scope main is qwen3vl only "
+                             f"(got {family}; the main/deepstack column split "
+                             f"does not exist there).")
 
     # pre-final (P0-3 pure-stage confound control) guards -- BEFORE the dry
     # check so --mode pre-final --model-family internvl3 --dry-check errors
@@ -4210,7 +4299,8 @@ def main():
                                                       family,
                                                       save_kept=args.save_unit_scores)
         else:
-            diag = setup_post_merger(model, r, args.selector)
+            diag = setup_post_merger(model, r, args.selector,
+                                     score_scope=args.post_score_scope)
     elif args.mode == "hybrid":
         # Merger-aware selection: post forward path + hybrid pre/post/edge mask.
         diag, hybrid_state = setup_hybrid(model, r, args.selector, family,
@@ -4471,6 +4561,7 @@ def main():
         "visionzip_style": args.visionzip_style,
         "visionzip_dom_ratio": args.visionzip_dom_ratio,
         "selector": args.selector, "max_pixels": args.max_pixels,
+        "post_score_scope": args.post_score_scope,
         "alpha": args.alpha, "beta": args.beta,
         "tau_hf": args.tau_hf, "tau_ent": args.tau_ent,
         "hf_var_mode": args.hf_var_mode,
