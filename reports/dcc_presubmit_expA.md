@@ -1,7 +1,7 @@
 # DCC 投稿前实验 A — Qwen3-VL main-only Post-L2 控制（Post-main vs Pre-final）
 
-日期：2026-09-19 ｜ 分支：`exp/qrbm-e1`（代码提交 `5deeaa0`、`bcbdaae`，已同步 main `26253cd`+）
-状态：TextVQA / DocVQA **完成**；OCRBench / GQA 见 §5。
+日期：2026-09-19 ｜ 分支：`exp/qrbm-e1`（代码提交 `5deeaa0`、`bcbdaae`、`26cf96c`，已同步 main）
+状态：**四基准全部完成**（§4 + §5）。
 
 ## 1. 问题
 
@@ -91,10 +91,36 @@ main-merger **输入**处对 2×2 unit 特征打 L2。因此 Pre-final vs Post-L
 4. 机制表述需对齐：Pre-final 与 Post-main 都是"main-merger 邻域"特征，两者之差
    是纯粹的 merger 前/后排序差；DocVQA 上 merged-token 范数排序反而更好。
 
-## 5. OCRBench / GQA（补跑）
+## 5. OCRBench / GQA（补跑，`--gpu-memory-utilization 0.85`，见注）
 
-- [待补：OCRBench n=1000]
-- [待补：GQA n=12578]
+| 全量 | Pre-final | **Post-main（A）** | Δ(A−B) [95% CI] | p | 配对 n |
+|---|---|---|---|---|---|
+| OCRBench n=1000（containment，/1000 记 419→356） | 0.4190 | 0.3560 | **−6.30** [−9.9, −2.6] | 5.5e-04 | 1000（McNemar 144/207, p=9.1e-04） |
+| GQA n=12578（exact-match） | 0.4207 | 0.4818 | **+6.11** [+5.33, +6.89] | 5e-05 | 12578（McNemar 1622/854, p≈0） |
+
+注：首跑 OCRBench 因 vLLM 编码器缓存 99.6% 满批 OOM（1000/1000 skip，存档
+`full_ocrbench_main.failed_try1.*`）；重试时桌面 Xorg 显存增长致 0.9 利用率差
+~30 MiB 无法启动，两 cell 改 `--gpu-memory-utilization 0.85`（仅 KV cache/调度，
+不影响数值）。两 cell 均一次成功、0 skip，`main_hidden=4096` 分支确认执行
+（fires=744/2534）。GQA mean_ptid 与 pre-final 锚点一致（iso-token）。
+
+### 四基准合成（官方口径，Δ = Post-main − Pre-final）
+
+| | TextVQA | DocVQA | OCRBench | GQA |
+|---|---|---|---|---|
+| Δ | **−18.15** | **+9.00** | **−6.30** | **+6.11** |
+| 方向 | pre 占优 | **post 占优（反转）** | pre 占优 | post 占优（与全量已披露方向一致、更强） |
+
+1. 文本密集基准（TextVQA、OCRBench）：pre>post 的顺序效应**在特征空间清理后仍然成立**
+   （方向保留；TextVQA 幅度 27.7→18.2 pp，其中 ~9.5 pp 由 deepstack 列污染解释）。
+2. DocVQA：full-scope 的 "+4.59 pp" **完全由 deepstack 列污染造成**；main-only 下
+   post 反超 +9.00 pp —— DocVQA 上不存在 pre 阶段优势。
+3. GQA：与论文已披露的 full-split 反向（post>pre, −5.64 pp）一致且更强
+   （post-main 0.4818 > post full 0.4771 > pre-final 0.4207；且 post-main 同时高于
+   headline pre 0.449 —— GQA 上最佳臂是 post-main）。
+4. 核心 headline 不倒：headline pre（TV 0.605 / DV 0.481 / OCR 0.547）在
+   TV/DV/OCR 上仍高于一切 post 变体；GQA 的 post>pre 已在稿件中披露。
+   **需要修正的是 tab:stage 语境下对 DocVQA "+4.59 pp" 的归因叙述**（见 §6）。
 
 ## 6. 对论文的修改建议（`drafts/dcc2027_submission_20260916/main.tex`，本实验未改动稿件）
 
@@ -105,7 +131,10 @@ main-merger **输入**处对 2×2 unit 特征打 L2。因此 Pre-final vs Post-L
    the merger boundary alone"：方向仍成立且现在有直接量化证据，建议升级表述为
    "a main-only scoring control reverses the DocVQA sign, attributing it to the
    concatenated-norm feature space rather than the ordering stage"。
-3. `:140`（tab:stage caption）"Post-L2 scores the concatenated main-plus-deepstack
+3. `:136` "… but loses 5.64 on GQA"：方向不变且更强（main-only 下 pre-final 落后
+   post-main 6.11 pp，post-main 同时超过 headline pre 0.449→0.4818），如引用 GQA
+   最佳臂需更新。
+4. `:140`（tab:stage caption）"Post-L2 scores the concatenated main-plus-deepstack
    output"：建议增加 Post-main 行/列或脚注披露本控制；
    `:88` 的 "neither a pure stage intervention" 披露句可保留并引用本实验。
 
