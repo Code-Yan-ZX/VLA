@@ -136,6 +136,11 @@ def stage_full(out_dir, benches, extra=False):
                         "post-main(L2@main-block)", "pre-final(stage, L2@merger-input)",
                         n_resamples=20000, seed=20260919,
                         n_nominal=N_FULL[bench])
+        if pair["mean_A"] is None:
+            print("  paired n=0 -> no statistics (arm-level skip mismatch); "
+                  "see skip counts above")
+            results[bench] = pair
+            continue
         print(f"  {METRIC_NAME[bench]} post-main(mean_A)={pair['mean_A']:.4f} "
               f"pre-final(mean_B)={pair['mean_B']:.4f}")
         print(f"  delta(A-B) = {pair['mean_delta_pp']:+.2f} pp, "
