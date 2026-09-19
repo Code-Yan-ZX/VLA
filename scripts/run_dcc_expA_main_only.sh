@@ -42,13 +42,25 @@ wait_gpu(){ # block until >= 40000 MiB free (protocol convention)
   echo "[expA][ABORT] GPU busy after wait"; return 1
 }
 
-run_cell(){ # bench n subset mode extra-flags tag
+run_cell(){ # bench n subset mode extra-flags tag  (skip>10% -> one retry, p0_1 gate)
   local FLAGS=$STD; [ "$1" = "docvqa" ] && FLAGS=$DOC
-  timeout 21600 $PY src/v3_premerger/v3_premerger_runner.py --model-family $FAM \
-    --benchmark $1 --subset $3 --n $2 --r $R --mode post \
-    --post-score-scope main --selector l2 --max-tokens $MAXTOK $4 \
-    --out $OUT/$5.json > $OUT/$5.log 2>&1
-  echo "[expA] $5 exit=$? $(tail -1 $OUT/$5.log)"
+  for ATT in 1 2; do
+    timeout 21600 $PY src/v3_premerger/v3_premerger_runner.py --model-family $FAM \
+      --benchmark $1 --subset $3 --n $2 --r $R --mode post \
+      --post-score-scope main --selector l2 --max-tokens $MAXTOK $4 \
+      --out $OUT/$5.json > $OUT/$5.log 2>&1
+    echo "[expA] $5 (try $ATT) exit=$? $(tail -1 $OUT/$5.log)"
+    SR=$($PY -c "
+import json
+try:
+    d=json.load(open('$OUT/$5.json'))
+    print((d.get('n_skipped') or 0)/max(len(d.get('per_sample') or [1]),1))
+except Exception: print(1.0)")
+    $PY -c "import sys; sys.exit(0 if float('$SR') <= 0.10 else 1)" \
+      && return 0
+    echo "[expA] $5 skip=$SR > 0.10 -> retry"
+  done
+  echo "[expA][WARN] $5 still skip=$SR after retry"
 }
 
 wait_gpu
