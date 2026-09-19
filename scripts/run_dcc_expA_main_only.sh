@@ -31,6 +31,11 @@ MAXTOK=32
 FS=eval/full_splits
 STD="--max-num-seqs 8 --max-model-len 8192 --gpu-memory-utilization 0.9"
 DOC="--max-num-seqs 4 --max-model-len 32768 --max-num-batched-tokens 32768 --gpu-memory-utilization 0.9"
+# lowmem variants: desktop/Xorg growth can leave < 40.01 GiB free at vLLM
+# startup (0.9 * 44.45 GiB). 0.85 shrinks only the KV cache (scheduling), not
+# numerics. Used for the ocrbench/gqa extra cells; noted in the report.
+LOWSTD="--max-num-seqs 8 --max-model-len 8192 --gpu-memory-utilization 0.85"
+LOWDOC="--max-num-seqs 4 --max-model-len 32768 --max-num-batched-tokens 32768 --gpu-memory-utilization 0.85"
 STAGE=${1:-all}
 
 wait_gpu(){ # block until >= 40000 MiB free (protocol convention)
@@ -42,13 +47,7 @@ wait_gpu(){ # block until >= 40000 MiB free (protocol convention)
   echo "[expA][ABORT] GPU busy after wait"; return 1
 }
 
-run_cell(){ # bench n subset mode extra-flags tag [lowmem]  (skip>10% -> one retry, p0_1 gate)
-  local FLAGS=$STD; [ "$1" = "docvqa" ] && FLAGS=$DOC
-  # lowmem: desktop/Xorg growth can leave < 40.01 GiB free at vLLM startup;
-  # 0.85 shrinks only the KV cache (scheduling), not numerics. Noted in report.
-  if [ "$6" = "lowmem" ]; then
-    FLAGS="${FLAGS%% --gpu-memory-utilization *} --gpu-memory-utilization 0.85"
-  fi
+run_cell(){ # bench n subset flags tag  (skip>10% -> one retry, p0_1 gate)
   for ATT in 1 2; do
     timeout 21600 $PY src/v3_premerger/v3_premerger_runner.py --model-family $FAM \
       --benchmark $1 --subset $3 --n $2 --r $R --mode post \
@@ -113,11 +112,11 @@ fi
 
 if [ "$STAGE" = "extra" ] || [ "$STAGE" = "all" ]; then
   wait_gpu
-  echo "=== [extra] ocrbench n=1000 post-main (lowmem) ==="
-  run_cell ocrbench 1000 $FS/ocrbench.jsonl "" full_ocrbench_main lowmem
+  echo "=== [extra] ocrbench n=1000 post-main (lowmem 0.85) ==="
+  run_cell ocrbench 1000 $FS/ocrbench.jsonl "$LOWSTD" full_ocrbench_main
   wait_gpu
-  echo "=== [extra] gqa n=12578 post-main (lowmem) ==="
-  run_cell gqa 12578 $FS/gqa_testdev.jsonl "" full_gqa_main lowmem
+  echo "=== [extra] gqa n=12578 post-main (lowmem 0.85) ==="
+  run_cell gqa 12578 $FS/gqa_testdev.jsonl "$LOWSTD" full_gqa_main
   $PY scripts/analyze_dcc_expA.py --stage full --out-dir $OUT --extra
 fi
 echo "[expA] stage '$STAGE' done"
