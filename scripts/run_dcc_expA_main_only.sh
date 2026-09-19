@@ -42,8 +42,13 @@ wait_gpu(){ # block until >= 40000 MiB free (protocol convention)
   echo "[expA][ABORT] GPU busy after wait"; return 1
 }
 
-run_cell(){ # bench n subset mode extra-flags tag  (skip>10% -> one retry, p0_1 gate)
+run_cell(){ # bench n subset mode extra-flags tag [lowmem]  (skip>10% -> one retry, p0_1 gate)
   local FLAGS=$STD; [ "$1" = "docvqa" ] && FLAGS=$DOC
+  # lowmem: desktop/Xorg growth can leave < 40.01 GiB free at vLLM startup;
+  # 0.85 shrinks only the KV cache (scheduling), not numerics. Noted in report.
+  if [ "$6" = "lowmem" ]; then
+    FLAGS="${FLAGS%% --gpu-memory-utilization *} --gpu-memory-utilization 0.85"
+  fi
   for ATT in 1 2; do
     timeout 21600 $PY src/v3_premerger/v3_premerger_runner.py --model-family $FAM \
       --benchmark $1 --subset $3 --n $2 --r $R --mode post \
@@ -108,11 +113,11 @@ fi
 
 if [ "$STAGE" = "extra" ] || [ "$STAGE" = "all" ]; then
   wait_gpu
-  echo "=== [extra] ocrbench n=1000 post-main ==="
-  run_cell ocrbench 1000 $FS/ocrbench.jsonl "$STD" full_ocrbench_main
+  echo "=== [extra] ocrbench n=1000 post-main (lowmem) ==="
+  run_cell ocrbench 1000 $FS/ocrbench.jsonl "" full_ocrbench_main lowmem
   wait_gpu
-  echo "=== [extra] gqa n=12578 post-main ==="
-  run_cell gqa 12578 $FS/gqa_testdev.jsonl "$STD" full_gqa_main
+  echo "=== [extra] gqa n=12578 post-main (lowmem) ==="
+  run_cell gqa 12578 $FS/gqa_testdev.jsonl "" full_gqa_main lowmem
   $PY scripts/analyze_dcc_expA.py --stage full --out-dir $OUT --extra
 fi
 echo "[expA] stage '$STAGE' done"
