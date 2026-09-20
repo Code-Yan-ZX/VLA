@@ -1,27 +1,18 @@
 # STATE.md — 当前项目状态（主窗口维护，≤30 行）
-> 项目：VLM 视觉 token 压缩；当前目标：DCC 2027。
-> 最近更新：2026-09-16；证据审计版 DCC 投稿稿已完成，尚未实际投稿。
+> 项目：VLM 视觉 token 压缩；最近更新：2026-09-20。
 
-## 当前论文
-- DCC 权威稿：`drafts/dcc2027_submission_20260916/main.tex`；编译 PDF 与投稿源包同目录。
-- 标题：*Rank Before You Merge: Native-Unit Selection for Visual Token Compression*。
-- 主线：RBM 是 model-specific operational design；三模型主表不再称纯 stage 证据。Qwen3 final-input control 单列，且披露 post score 拼接 main/deepstack，避免 merger-only 因果归因。
-- RankBridge 从投稿正文移除（内部审计保留），避免失败的探索性 probe 分散主线；FastV 保留同后端 full OCRBench 对比。
-- 图组按用户最终指定：Fig.1 v2 不变；`fig2_word` OCR 案例提前至第 2 页并编号 Fig.2，`fig3_fullsplit_controls` 为 Fig.3，`fig4_vector` token-survival maps 为 Fig.4。旧 RD 与强 saliency-mechanism 图不进入正文。
-- 作者：Zhengxing Yan（SUES）、Hao Sun（NJUST）、Chen Guo（ECNU）、Jianpeng Hu（SUES，通讯作者）；单位与邮箱已写入首页。
-- 摘要末尾已加入公开代码仓库：`https://github.com/Code-Yan-ZX/qrbm-vlm`；首页作者区与摘要间距已核正。
-- 新稿加入 same-HF FastV OCRBench、可复现效率协议、模型特定 tap/顺序/配额差异及明确 limitations；未新增实验或数据。
+## 当前方向
+- 用户明确要求放下 RBM 作为研究主线，重新对齐视觉 token 压缩领域；当前阶段为 P1 文献版图与选题判断。
+- 顶会综述：notes/token_compression_landscape_20260920.md；官方来源核验表：notes/lit_venue_map_20260920.md、notes/lit_methods_20260920.md、notes/lit_frontier_20260920.md。
+- 2026 年 QuietPrune、DocPrune、MMTok、MetaCompress 等已占据早期 query 引导、文档压缩、集合覆盖和多轮复用等宽泛命题；不能沿用旧的“无人做”说法。
+- 候选研究问题：同模型同实际 token 预算下，细粒度证据保真与完整服务链 p95 TTFT、请求吞吐、峰值显存的联合权衡；须先做差距诊断，再确定新方法。
 
-## DCC 合规与验证
-- 官方 `dccpaper.cls`、单栏 12pt、US Letter；总长 10 页，51 篇正文实引，无 `\nocite`。
-- DCC 2027 为 single blind；四位作者、三家单位、四个邮箱和通讯作者信息已填写。
-- `latexmk` 通过；0 undefined citation/reference、0 overfull/underfull；全部字体嵌入；10 页均已渲染检查，无裁切、重叠或图文穿插。
-- DCC 2027 截止：2026-10-02 23:59 US Pacific；实际投稿须 user 明确确认。
-
-## 既有权威材料
-- TCSVT 稿：`drafts/ieee_tcsvt_submission_20260904/main.tex`；实验、native-mRoPE 修正与 artifact 结论继续有效。
-- Word 图源：`drafts/RBM_merger_aware_中文_Fig1更新版.docx`。
+## 既有结果
+- RBM 相关论文、实验和图表保留为历史材料及可能的对照，不作为当前默认投稿方向。
+- DCC 2027 证据审计稿：drafts/dcc2027_submission_20260916/main.tex，尚未实际投稿；后续是否使用须基于新方向另行判断。
+- 既有 TCSVT 稿：drafts/ieee_tcsvt_submission_20260904/main.tex；部分模型适配和评测经验可复用。
 
 ## 下一步
-- 四位作者逐一确认姓名、单位、邮箱、通讯作者；核对 EasyChair 关键词、利益冲突与版权。
-- 实际外发投稿须 user 明确确认；未经确认不上传。
+- 从同日综述选 3–4 个强基线和 2 个现代模型，设计同后端、同实际 LLM 视觉 token 预算的诊断协议。
+- 先核验 TextVQA/OCRBench/DocVQA/ChartQA 与普通 VQA、多轮下的绝对分数、稀有证据失败切片、端到端延迟及连续批处理吞吐。
+- 若诊断差距稳定，再在 notes/positioning.md 写新颖性句、方法假设和成功/停止判据；不要预设 RBM 或任何新打分器一定有效。

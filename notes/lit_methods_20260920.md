@@ -1,0 +1,22 @@
+# VLM 视觉 token 压缩：核心方法证据核查（2026-09-20）
+
+范围：2024–2026，优先会议官方论文页、论文 PDF、OpenReview 与期刊页面。以下“风险/局限”若未见原文自述，统一标为**机理推断**，不可写成论文证实的失败。方法指标来自不同模型、压缩率和协议，不宜横排成统一排行榜。
+
+| 方法、正式身份 | 要解决的痛点与位置 | 机制 | 论文证实的收益 | 风险/局限（证据性质） |
+|---|---|---|---|---|
+| [FastV](https://www.ecva.net/papers/eccv_2024/papers_ECCV/papers/10478.pdf)，ECCV 2024 | 解码器深层仍计算大量低价值视觉 token；LLM 内剪枝 | 在早层取视觉 token 收到的注意力，指定层后删除低分 token；免训练 | LLaVA-1.5-13B 报告约 45% FLOPs 降低，广泛任务总体表现近原模型 | 指定剪枝层之前的视觉编码与 LLM 计算仍在；对小文字、稀疏证据依赖注意力打分，可能误删（机理推断）。[VisionZip 同预算表](https://openaccess.thecvf.com/content/CVPR2025/papers/Yang_VisionZip_Longer_is_Better_but_Not_Necessary_in_Vision_Language_CVPR_2025_paper.pdf)显示 FastV 在 192/576 token 的 LLaVA-1.5 平均保留性能为 88.2%，明显低于 VisionZip 98.5%，但属他人复现配置。 |
+| [LLaVA-PruMerge](https://openaccess.thecvf.com/content/ICCV2025/html/Shang_LLaVA-PruMerge_Adaptive_Token_Reduction_for_Efficient_Large_Multimodal_Models_ICCV_2025_paper.html)，ICCV 2025 | 固定大量前缀视觉 token；编码器后、LLM 前压缩 | 用 ViT 的 CLS→patch 注意力分布做异常值筛选，依图自适应保留关键 token；再按 key 相似性把被删信息并入代表 token | 正式会议摘要称 LLaVA-1.5/Video-LLaVA 约 4× token 减少，任务近似或更好；正文说可免训练也可再微调 | 依赖可用且有意义的 CLS 注意力，迁移到无 CLS、多尺度/动态分辨率编码器需要另造打分（机理推断）；CLS 图像显著性不知用户问题（机理推断）。[早版 arXiv](https://arxiv.org/abs/2403.15388)有“平均 14×”，与正式 ICCV 摘要 4× 的实验口径不可混用。 |
+| [VisionZip](https://openaccess.thecvf.com/content/CVPR2025/html/Yang_VisionZip_Longer_is_Better_but_Not_Necessary_in_Vision_Language_CVPR_2025_paper.html)，CVPR 2025 | 高分辨率视觉 encoder 输出冗余，尤其多轮对话每轮若重跑 LLM 内剪枝成本高；编码器后压缩 | 从编码器注意力取信息聚合的 dominant tokens；剩余局部/上下文 token 相似合并；可选少量 projector 调优 | LLaVA-1.5 192/576 token 时表 1 平均相对性能 98.5%，64/576 时 94.0%；文中报告最高 8× prefill 加速，跨图像/视频和多轮 | 不看当前问题，某问题需要的细粒度区域可能不在图像通用显著性中（机理推断）；合并可能破坏空间定位/OCR 字符（机理推断）；最高性能版本有额外 projector 调优，不能都称零训练。 |
+| [SparseVLM](https://openreview.net/forum?id=80faIPZ67S)，ICML 2025 | 无训练前提下，让剪枝随文本查询与层深变化；LLM 内压缩 | 选视觉相关文本 token，利用 LLM 自注意力衡量视觉 token；基于 rank 自适应每层稀疏比例；token recycling 压缩被删信息 | LLaVA 上官方摘要报告 FLOPs −54%、CUDA 时间 −37%、准确率维持 97%；无新增参数/微调 | 必须运行部分 LLM 层才得到分数，早期 prefill/encoder 开销仍在（机理推断）；指标依赖相关文本筛选和注意力可靠性，含糊提示或误导提示可能影响选择（机理推断）；与预编码复用的多轮场景存在重复打分成本（机理推断）。 |
+| [PyramidDrop](https://openaccess.thecvf.com/content/CVPR2025/html/Xing_Conical_Visual_Concentration_for_Efficient_Large_Vision-Language_Models_CVPR_2025_paper.html)，CVPR 2025 | 早层视觉信息重要，深层冗余渐增；兼顾训练及推理 | 将 LLM 分阶段，每阶段末用轻量相似度依预定比例删视觉 token，形成逐层收窄的金字塔 | 官方摘要报告 LLaVA-NeXT 等训练时间降低 >40%、推理 FLOPs 降低 55%，性能接近基线；亦可插入式推理 | 比例和阶段为预设，未按样本、问题或细节需求动态分配（机理推断）；早层仍保留全部 token，不能节省全部 prefill 成本（机制直接推论）。**书目信息陷阱**：CVPR 官方库题名是 *Conical Visual Concentration for Efficient Large Vision-Language Models*，网页称 ViCo；同页 PDF/IEEE 摘要却仍称 PyramidDrop，引用应采用官方库题名并注明别名。 |
+| [HiPrune](https://ojs.aaai.org/index.php/AAAI/article/view/42240)，AAAI 2026 **Student Abstract**；[扩展预印本](https://arxiv.org/abs/2508.00553) | 单用后层或 CLS 得分容易遗漏对象局部及上下文；视觉编码器后压缩 | 中层选对象 anchor、补空间邻居 buffer、深层选全局 register；免训练 | 扩展预印本报告 LLaVA-1.5、LLaVA-NeXT、Qwen2.5-VL 多模型，在部分预算下维持 99% 左右性能，最高约 9× prefill/计算改善；须注明该数值来自扩展预印本，不应归于三页 student abstract | 中层“对象”先验对密集文字/图表未必适用（机理推断）；固定邻域 buffer 会占据紧预算、未必对不规则目标最优（机理推断）。AAAI 收录为 Student Abstract，不能称 AAAI 主会长文。 |
+| [TokenPacker](https://doi.org/10.1007/S11263-025-02491-7)，**IJCV 2025 期刊** | MLP projector 输出高冗余；普通 resampler 易丢细节；训练时改 projector | 粗到细低分辨率 query + 高分辨率多层局部区域注入，形成少量信息密集 token | 期刊摘要称 token 压缩 75–89%，性能维持或提高；适合高分辨率任务 | 更改并训练 projector，不是纯推理即插即用（方法性质）；其收益不能直接与免训练剪枝比较（比较口径）；query 密度仍约束极小文字保真（机理推断）。**不是顶会论文**。 |
+| [FlashVLM: Text-Guided Visual Token Selection](https://arxiv.org/abs/2512.20561)，见 [ECCV 2026 官方视频页](https://eccv.ecva.net/Conferences/2026/Videos) | 图像通用显著性忽视提问；LLM 注意力在激进剪枝下不稳；编码器与 LLM 接口压缩 | 投影后图像 token 与文本 embedding 显式相似，融合图像内在显著性；保留背景多样性 | 作者摘要称 LLaVA-1.5 在 77.8% 剪枝时略超原模型，94.4% 剪枝时保持 92.8% 准确率；14 图像/视频基准 | 文本与图像 embedding 对齐若不佳，相关性评分会偏（机理推断）；每个不同 query 需重新选择，影响多轮复用（机理推断）；“超原模型”是特定汇总/协议，不能泛化为每项任务无损。**同名辨析**：[另一篇 FlashVLM](https://openreview.net/pdf?id=dT4ijGCYSs) 是 AAAI 2026 Workshop 的 decode 层跳过，并非视觉 token 压缩。 |
+
+## 可用于定位空白的结论
+
+1. 研究问题已分层：输入前压缩（PruMerge、VisionZip、HiPrune、FlashVLM）、LLM 内剪枝（FastV、SparseVLM、PyramidDrop）、训练 projector（TokenPacker）。三者的总耗时构成不同，必须统一汇报视觉编码、选择/合并、prefill、decode、显存和准确率。
+2. 视觉显著性与查询相关性之间有真实取舍：前者支持多轮复用，后者能聚焦当次问题；实证空白应以多轮、OCR/文档/图表、稀疏细节和动态预算的**同后端同预算**实验检验，不要仅靠新打分公式叙事。
+3. 注意力并非已证实的因果重要性；尤其跨模型的 CLS、SigLIP、Qwen 动态 patch 架构不同。主张“通用”须展示架构适配及真实速度，而不只 FLOPs。
+
+检索日期 2026-09-20；来源：ECCV/ICCV/CVPR 官方库、ICML OpenReview、AAAI OJS、IJCV Springer、ECCV 2026 官方页及作者预印本。未使用无法连接的学术 MCP 数据源；未做系统综述式穷尽检索。
