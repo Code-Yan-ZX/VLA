@@ -14,7 +14,7 @@ separable (internals not exposed without surgery -- reported as such).
 Parity gate: instrumented replica must reproduce generate_pruned token ids
 exactly on 3 warmup requests, else ABORT.
 """
-import argparse, json, sys, time
+import argparse, json, os, sys, time
 import torch
 sys.path.insert(0, "src/v3_premerger")
 import baselines_hf as B
@@ -151,8 +151,16 @@ if a.engine == "harness":
     print("[timing] parity OK", flush=True)
 
     results = {}
+    if os.path.exists(a.out):   # idempotent restart: keep finished configs
+        try:
+            results.update(json.load(open(a.out))["results"])
+            print(f"[timing] resume with {list(results)} done", flush=True)
+        except Exception:
+            pass
     for cfgname, keep in CONFIGS:
         tag = f"{cfgname}_{keep}" if keep else "none"
+        if tag in results:
+            continue
         torch.cuda.reset_peak_memory_stats()
         # warmup 3 requests (excluded)
         for (sid, s) in REQS[:3]:
@@ -161,21 +169,39 @@ if a.engine == "harness":
         t_cfg0 = time.perf_counter()
         for (sid, s) in REQS:
             reps = []
+            oom = False
             for r in range(REPEATS):
-                t, gen = instrumented(cfgname, keep, sid, s)
-                reps.append(t)
+                try:
+                    t, gen = instrumented(cfgname, keep, sid, s)
+                    reps.append(t)
+                except (torch.cuda.OutOfMemoryError, RuntimeError) as e:
+                    if "out of memory" not in str(e).lower():
+                        raise
+                    oom = True
+                    torch.cuda.empty_cache()
+                    break
+            if oom or not reps:
+                rows.append({"id": sid, "oom": True})   # honest: excluded from
+                continue                                # p50/p95, listed as OOM
             med = {k: (sorted(r[k] for r in reps)[REPEATS // 2]
                        if reps[0].get(k) is not None else None) for k in reps[0]}
             med["id"] = sid
             med["repeats_raw"] = reps
             rows.append(med)
         wall_cfg = time.perf_counter() - t_cfg0
+        ok_rows = [r for r in rows if not r.get("oom")]
         results[tag] = {"requests": rows,
+                        "n_oom": len(rows) - len(ok_rows),
                         "workload_wall_s": round(wall_cfg, 1),
-                        "throughput_req_per_s": round(600 / wall_cfg, 3),
+                        "throughput_req_per_s": round(3 * len(ok_rows) / wall_cfg, 3),
                         "peak_alloc_GB": round(torch.cuda.max_memory_allocated() / 2**30, 2),
                         "peak_reserved_GB": round(torch.cuda.max_memory_reserved() / 2**30, 2)}
-        print(f"[timing] {tag} done wall={wall_cfg:.0f}s", flush=True)
+        json.dump({"engine": "harness-eager", "bs": 1, "repeats": REPEATS,
+                   "note": "TTFT_gpu=vision+select+prefill of the SAME measured request; "
+                           "processor from decoded image excluded; fastv ranking folded into "
+                           "prefill; OOM requests flagged and excluded from percentiles.",
+                   "results": results}, open(a.out, "w"), indent=1)
+        print(f"[timing] {tag} done wall={wall_cfg:.0f}s oom={results[tag]['n_oom']}", flush=True)
     out = {"engine": "harness-eager", "bs": 1, "repeats": REPEATS,
            "note": "TTFT_gpu=vision+select+prefill segments of the SAME measured "
                    "request; processor from decoded image excluded; fastv ranking "
@@ -188,7 +214,13 @@ else:
     from transformers import AutoConfig, AutoProcessor as AP
     from hilo_prune.models.qwen3_vl import Qwen3VLForConditionalGeneration as HiLo
     from hilo_prune.patches import image_to_merged_patch_features
-    from transformers.streams import BaseStreamer
+    try:
+        from transformers import BaseStreamer
+    except ImportError:
+        try:
+            from transformers.generation.streamers import BaseStreamer
+        except ImportError:
+            from transformers.streams import BaseStreamer
     processor = AP.from_pretrained(MODEL)
     cfg = AutoConfig.from_pretrained(MODEL)
     tc = cfg.text_config
@@ -197,7 +229,16 @@ else:
                           "rope_theta": tc.rope_theta,
                           "mrope_section": rs.get("mrope_section", [24, 20, 20])}
     results = {}
+    model_ref = [None]
+    if os.path.exists(a.out):
+        try:
+            results.update(json.load(open(a.out))["results"])
+            print(f"[timing] resume hilo with {list(results)} done", flush=True)
+        except Exception:
+            pass
     for keep in (0.25, 0.50, 0.75):
+        if f"hilo_{keep}" in results:
+            continue
         tc.hilo_keep_ratio = keep
         tc.hilo_candidate_ratio = max(0.3, keep)
         tc.hilo_prune_layer = 2
@@ -206,17 +247,24 @@ else:
         tc.hilo_top_k_ratio = 0.1
         tc.hilo_attention_threshold = 0.05
         tc.hilo_fusion_layers = [0, 1]
-        if not results:
-            model = HiLo.from_pretrained(MODEL, config=tc.__class__ and cfg,
-                                         dtype=torch.bfloat16,
-                                         attn_implementation="eager").to(DEV).eval()
+        if "model" not in dir() and model_ref[0] is None:
+            model_ref[0] = HiLo.from_pretrained(MODEL, config=cfg, dtype=torch.bfloat16,
+                                                attn_implementation="sdpa").to(DEV).eval()
+        model = model_ref[0]
         torch.cuda.reset_peak_memory_stats()
 
         class TTFT(BaseStreamer):
+            """HF generate() feeds the PROMPT to streamer.put BEFORE decoding,
+            so the 1st callback is not a generated token.  TTFT = time of the
+            2nd callback (first generated token).  If the implementation never
+            emits a prompt-put, the 2nd callback would be token #2 -- measured
+            one decode step late (~20ms); acceptable and documented."""
             def __init__(self):
                 self.first = None
+                self.n = 0
             def put(self, value):
-                if self.first is None:
+                self.n += 1
+                if self.n >= 2 and self.first is None:
                     sync(); self.first = time.perf_counter()
             def end(self):
                 pass
@@ -225,32 +273,49 @@ else:
         tw0 = time.perf_counter()
         for (sid, s) in REQS:
             reps = []
+            oom = False
             for r in range(REPEATS):
-                sync(); t0 = time.perf_counter()
-                img = Image.open(s.image).convert("RGB")
-                inputs = B.build_inputs(processor, img, s.question, PX, DEV)
-                grid = inputs["image_grid_thw"][0].cpu()
-                pf = image_to_merged_patch_features(
-                    img, grid, patch_size=processor.image_processor.patch_size,
-                    merge_size=processor.image_processor.merge_size).to(DEV)
-                st = TTFT()
-                sync(); t1 = time.perf_counter()
-                with torch.inference_mode():
-                    gen = model.generate(**inputs, image_tensor=pf, do_sample=False,
-                                         max_new_tokens=MAXTOK, streamer=st)
-                sync(); t2 = time.perf_counter()
-                reps.append({"processor_s": t1 - t0, "total_s": t2 - t0,
-                             "ttft_s": (st.first - t0) if st.first else None,
-                             "out_len": int(gen.shape[1] - inputs["input_ids"].shape[1])})
-            med = {k: sorted(r[k] for r in reps)[1] for k in reps[0] if reps[0][k] is not None}
+                try:
+                    sync(); t0 = time.perf_counter()
+                    img = Image.open(s.image).convert("RGB")
+                    inputs = B.build_inputs(processor, img, s.question, PX, DEV)
+                    grid = inputs["image_grid_thw"][0].cpu()
+                    pf = image_to_merged_patch_features(
+                        img, grid, patch_size=processor.image_processor.patch_size,
+                        merge_size=processor.image_processor.merge_size).to(DEV)
+                    st = TTFT()
+                    sync(); t1 = time.perf_counter()
+                    with torch.inference_mode():
+                        gen = model.generate(**inputs, image_tensor=pf, do_sample=False,
+                                             max_new_tokens=MAXTOK, streamer=st)
+                    sync(); t2 = time.perf_counter()
+                    reps.append({"processor_s": t1 - t0, "total_s": t2 - t0,
+                                 "ttft_s": (st.first - t0) if st.first else None,
+                                 "out_len": int(gen.shape[1] - inputs["input_ids"].shape[1])})
+                except (torch.cuda.OutOfMemoryError, RuntimeError) as e:
+                    if "out of memory" not in str(e).lower():
+                        raise
+                    oom = True
+                    torch.cuda.empty_cache()
+                    break
+            if oom or not reps:
+                rows.append({"id": sid, "oom": True})
+                continue
+            med = {k: sorted(rr[k] for rr in reps)[1] for k in reps[0] if reps[0][k] is not None}
             med["id"] = sid; med["repeats_raw"] = reps
             rows.append(med)
+        ok_rows = [r for r in rows if not r.get("oom")]
         results[f"hilo_{keep}"] = {"requests": rows,
+                                   "n_oom": len(rows) - len(ok_rows),
                                    "workload_wall_s": round(time.perf_counter()-tw0,1),
-                                   "throughput_req_per_s": round(600/(time.perf_counter()-tw0),3),
+                                   "throughput_req_per_s": round(3*len(ok_rows)/(time.perf_counter()-tw0),3),
                                    "peak_alloc_GB": round(torch.cuda.max_memory_allocated() / 2**30, 2),
                                    "peak_reserved_GB": round(torch.cuda.max_memory_reserved() / 2**30, 2),
                                    "note": "vendored official path; vision/select inside generate; segments not separable without surgery -- reported as wall/TTFT only"}
-        print(f"[timing hilo] keep={keep} done", flush=True)
+        json.dump({"engine": "hilo-vendored", "bs": 1, "repeats": REPEATS,
+                   "note": "vendored official path (sdpa, same as predictions); vision/select inside "
+                           "generate -> wall/TTFT only; OOM flagged & excluded from percentiles.",
+                   "results": results}, open(a.out, "w"), indent=1)
+        print(f"[timing hilo] keep={keep} done oom={results[f'hilo_{keep}']['n_oom']}", flush=True)
     json.dump({"engine": "hilo-vendored", "bs": 1, "repeats": REPEATS,
                "results": results}, open(a.out, "w"), indent=1)
