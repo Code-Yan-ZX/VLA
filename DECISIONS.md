@@ -428,3 +428,24 @@
 - **可行性依据**：只读服务器已有JSON元数据，HF全TextVQA单臂约49–50min，OCRBench约12.5–14.2min；无HF full none或50/75完整曲线。以smoke实测ETA排队，预算曲线用预先固定TextVQA1000/OCR1000，25%强基线确认使用full5000/1000，DocVQA500作压力测试；n500/n1000明确为subset。
 - **预算与科研边界**：总≤24h、GPU计算≤20h、单卡串行，无训练/调参；保留4h评分和交接。固定上游四任务评分，失败主分母记零；现代方法负结果和未达95%质量目标都照实报告，不允许按成绩选择预算/样本。
 - **交付**：`notes/cvm2027_server_experiment_prompt_20261025.txt`含22条可直接执行指令、源仓库、正确性门、对照/预算、延迟边界和HANDOFF要求。现稿结论/外部投稿继续等实验回传与作者决定。
+
+## 2026-10-25 CVM2027 one-day supplement (worktree codex/cvm-24h-supplement @1600bfe)
+- D-S1: modern baseline = Hi-Lo official (29265e3) via vendored model, 1 upstream
+  dead-code fix (top_index_1 guard) + rope_parameters shim; algo verbatim.
+  Reason: directive 6 requires official path, recon verified Qwen3-VL exists.
+  Fallback chain DivPrune(+1h) then "report missing" per directive 7.
+- D-S2: candidate_ratio=max(0.30,keep) frozen pre-run (their keep<=cand constraint;
+  fusion set empty at keep .5/.75 -- official default degeneracy, documented).
+- D-S3: reuse expB/p1 full-25% predictions after fingerprint+ID check (directive 10,
+  PASS: engine/prompt/px/seed/tap/ids all identical, 5000/1000 complete).
+- D-S4: field-semantics trap found: pre-mode per-sample n_image_full records
+  post-selection LLM rows; true full taken from `none` baseline run. K formulas
+  verified at 25/50/75 (directive 4c) -- no 4x compensation added.
+- D-S5: P0 gate PASS before any formal run: bitwise-identical LLM inputs at keep=1,
+  logit diff 0.0 on 8 samples, 3-stream deepstack slices share kept ids, text kept.
+- D-S6: subsets pre-fixed BEFORE results: TextVQA-1000 stratified by n_image_full,
+  DocVQA-500 by pixel area (seed 20261025, hashes in p2_subsets_meta.json);
+  timing 200 requests resolution-stratified. Never selected by correctness.
+- D-S7: scoring via pinned analyze_cvm_*_official logic; local official TextVQA
+  annotation copy hash-verified (SHA==pin) because dl.fbaipublicfiles unreachable;
+  driver self-check reproduces historical .75504/.76826/-1.322pp exactly.
