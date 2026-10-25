@@ -1,0 +1,232 @@
+{
+  "reference_commit": "8f40097532a7bf4db6123713f1a905e02c8f5971",
+  "reference_url": "https://raw.githubusercontent.com/EvolvingLMMs-Lab/lmms-eval/8f40097532a7bf4db6123713f1a905e02c8f5971/lmms_eval/api/metrics.py",
+  "reference_sha256": "eaf48195af80a46d22e545a03a1bd7e4cad4fcbadeb3d2d817ac7d148390d8f4",
+  "method": "Execute pinned upstream anls and levenshtein_distance functions directly",
+  "ground_truth_source": "Saved semicolon-delimited GT variants; original unjoined DocVQA arrays not independently recovered",
+  "denominator": "5349 attempted IDs; skipped score zero",
+  "cells": {
+    "qwen3vl_none": {
+      "source": "F:\\doct\\VLA\\tmp\\cvm_cpu_rescore_20261025\\matrix\\r2_qwen3vl_none_docvqa_full5349.json",
+      "uncompressed_sha256": "ee143791084a611765bac36bfa947fef6afffd7415c99392983c9707cc81b6fc",
+      "attempted": 5349,
+      "skipped": 0,
+      "score_attempted": 0.9563361633969865,
+      "legacy_score_attempted": 0.9562265353525414,
+      "affected_samples": 14,
+      "max_abs_per_sample_change": 0.08333333333333326
+    },
+    "qwen3vl_pre": {
+      "source": "F:\\doct\\VLA\\tmp\\cvm_cpu_rescore_20261025\\matrix\\j7_qwen3vl_pre_docvqa_r0.750_full.json",
+      "uncompressed_sha256": "3addec8ac017af68136ad376002f21eca39d01eefd3933cc3e85683156f5f15e",
+      "attempted": 5349,
+      "skipped": 0,
+      "score_attempted": 0.48089674725244647,
+      "legacy_score_attempted": 0.480639055258442,
+      "affected_samples": 12,
+      "max_abs_per_sample_change": 0.5555555555555556
+    },
+    "qwen3vl_post": {
+      "source": "F:\\doct\\VLA\\artifacts\\acmmm_final_controls\\p0_1\\p0_1_qwen3_post_docvqa_r0.750_full.json.gz",
+      "uncompressed_sha256": "6e6ecb487e0b10aff864067c452ebe5dd263666eb8a57564fb6861c177e61a10",
+      "attempted": 5349,
+      "skipped": 0,
+      "score_attempted": 0.2378017010518618,
+      "legacy_score_attempted": 0.23765760599229524,
+      "affected_samples": 7,
+      "max_abs_per_sample_change": 0.5
+    },
+    "qwen3vl_pre_final": {
+      "source": "F:\\doct\\VLA\\artifacts\\acmmm_final_controls\\p0_1\\p0_1_qwen3_pre-final_docvqa_r0.750_full.json.gz",
+      "uncompressed_sha256": "59b699433243fa8b98814e72e06784149c810e2c1d262e84db725ceb83e798de",
+      "attempted": 5349,
+      "skipped": 0,
+      "score_attempted": 0.28369566035226007,
+      "legacy_score_attempted": 0.2835742331054224,
+      "affected_samples": 5,
+      "max_abs_per_sample_change": 0.5
+    },
+    "qwen3vl_post_main": {
+      "source": "F:\\doct\\VLA\\tmp\\cvm_cpu_rescore_20261025\\expA\\full_docvqa_main.json",
+      "uncompressed_sha256": "041b4b95ef68f30c3602dce9438e263b632ee8aac973bf5db9f721843c4cfffe",
+      "attempted": 5349,
+      "skipped": 0,
+      "score_attempted": 0.3736841884846667,
+      "legacy_score_attempted": 0.3735386780106047,
+      "affected_samples": 8,
+      "max_abs_per_sample_change": 0.5
+    },
+    "qwen2vl_none": {
+      "source": "F:\\doct\\VLA\\tmp\\cvm_cpu_rescore_20261025\\matrix\\j7_qwen2vl_none_docvqa_r0.000_full.json",
+      "uncompressed_sha256": "d774c92cd9f881dcd46b8378e3fea8988f8d828e3c8c8865ff7414a69111c6e5",
+      "attempted": 5349,
+      "skipped": 0,
+      "score_attempted": 0.9491552934257667,
+      "legacy_score_attempted": 0.9490576831397967,
+      "affected_samples": 12,
+      "max_abs_per_sample_change": 0.08333333333333326
+    },
+    "internvl3_none": {
+      "source": "F:\\doct\\VLA\\experiments\\artifact_anonymous_tcsvt_20260904\\results\\internvl3_none_docvqa_r0.000_full.json",
+      "uncompressed_sha256": "06e8a00c3b437be6d37872a0bf9702991e85b98ad13c16e74b1fdbb558747974",
+      "attempted": 5349,
+      "skipped": 0,
+      "score_attempted": 0.9223498999789502,
+      "legacy_score_attempted": 0.9221427240707208,
+      "affected_samples": 15,
+      "max_abs_per_sample_change": 0.5384615384615384
+    },
+    "qwen2vl_pre": {
+      "source": "F:\\doct\\VLA\\tmp\\cvm_cpu_rescore_20261025\\matrix\\j7_qwen2vl_pre_docvqa_r0.750_full.json",
+      "uncompressed_sha256": "e13258abd2a6f4c85354557bf036a009ef2d349b20c27339ee39134b6d6a4206",
+      "attempted": 5349,
+      "skipped": 0,
+      "score_attempted": 0.6361258078840474,
+      "legacy_score_attempted": 0.6360934949483626,
+      "affected_samples": 4,
+      "max_abs_per_sample_change": 0.08333333333333326
+    },
+    "internvl3_pre": {
+      "source": "F:\\doct\\VLA\\experiments\\artifact_anonymous_tcsvt_20260904\\results\\internvl3_pre_docvqa_r0.750_full.json",
+      "uncompressed_sha256": "b806924b89f39aaf080b9b33da1908c190743e405bac843414da28c4a7eaba61",
+      "attempted": 5349,
+      "skipped": 0,
+      "score_attempted": 0.7284984788194957,
+      "legacy_score_attempted": 0.7283816149204216,
+      "affected_samples": 13,
+      "max_abs_per_sample_change": 0.16666666666666663
+    },
+    "qwen2vl_post": {
+      "source": "F:\\doct\\VLA\\tmp\\cvm_cpu_rescore_20261025\\matrix\\j7_qwen2vl_post_docvqa_r0.750_full.json",
+      "uncompressed_sha256": "bf41867fe44dced9dc45e8898e23f266f42bbbd3a76aabcc8c863b8e0674078e",
+      "attempted": 5349,
+      "skipped": 0,
+      "score_attempted": 0.5258276220504273,
+      "legacy_score_attempted": 0.5256469382717576,
+      "affected_samples": 14,
+      "max_abs_per_sample_change": 0.5555555555555556
+    },
+    "internvl3_post": {
+      "source": "F:\\doct\\VLA\\experiments\\artifact_anonymous_tcsvt_20260904\\results\\internvl3_post_docvqa_r0.750_full.json",
+      "uncompressed_sha256": "0f32b710a241eb84175d81f6ed781a1269e16e959f495bf9e63c0bb28ff4cb6f",
+      "attempted": 5349,
+      "skipped": 0,
+      "score_attempted": 0.382034476003981,
+      "legacy_score_attempted": 0.3819670370432428,
+      "affected_samples": 6,
+      "max_abs_per_sample_change": 0.16666666666666663
+    }
+  },
+  "pairs": {
+    "qwen3vl_pre_minus_qwen3vl_post": {
+      "n_paired": 5349,
+      "n_paired_answered": 5349,
+      "mean_a": 0.48089674725244647,
+      "denominator": "all attempted; skipped score zero",
+      "mean_b": 0.2378017010518618,
+      "delta_pp": 24.309504620058465,
+      "ci95_pp": [
+        23.00991870833937,
+        25.5905731085499
+      ],
+      "sign_flip_p_two_sided": 4.999750012499375e-05,
+      "skipped_a": 0,
+      "skipped_b": 0,
+      "skip_ids_equal": true,
+      "prompt_token_count_mismatches": 0,
+      "actual_visual_count_field_present": false,
+      "actual_visual_count_check_n": 5349,
+      "actual_visual_count_mismatches": null,
+      "resamples": 20000,
+      "seed": 20261110
+    },
+    "qwen2vl_pre_minus_qwen2vl_post": {
+      "n_paired": 5349,
+      "n_paired_answered": 5349,
+      "mean_a": 0.6361258078840474,
+      "denominator": "all attempted; skipped score zero",
+      "mean_b": 0.5258276220504273,
+      "delta_pp": 11.029818583362012,
+      "ci95_pp": [
+        9.550127820023949,
+        12.494735521655025
+      ],
+      "sign_flip_p_two_sided": 4.999750012499375e-05,
+      "skipped_a": 0,
+      "skipped_b": 0,
+      "skip_ids_equal": true,
+      "prompt_token_count_mismatches": 0,
+      "actual_visual_count_field_present": false,
+      "actual_visual_count_check_n": 5349,
+      "actual_visual_count_mismatches": null,
+      "resamples": 20000,
+      "seed": 20261111
+    },
+    "internvl3_pre_minus_internvl3_post": {
+      "n_paired": 5349,
+      "n_paired_answered": 5349,
+      "mean_a": 0.7284984788194957,
+      "denominator": "all attempted; skipped score zero",
+      "mean_b": 0.382034476003981,
+      "delta_pp": 34.64640028155147,
+      "ci95_pp": [
+        33.20374093942183,
+        36.10597856653125
+      ],
+      "sign_flip_p_two_sided": 4.999750012499375e-05,
+      "skipped_a": 0,
+      "skipped_b": 0,
+      "skip_ids_equal": true,
+      "prompt_token_count_mismatches": 0,
+      "actual_visual_count_field_present": false,
+      "actual_visual_count_check_n": 5349,
+      "actual_visual_count_mismatches": null,
+      "resamples": 20000,
+      "seed": 20261112
+    },
+    "qwen3vl_pre_final_minus_qwen3vl_post": {
+      "n_paired": 5349,
+      "n_paired_answered": 5349,
+      "mean_a": 0.28369566035226007,
+      "denominator": "all attempted; skipped score zero",
+      "mean_b": 0.2378017010518618,
+      "delta_pp": 4.5893959300398235,
+      "ci95_pp": [
+        3.4112593111920955,
+        5.767856866979805
+      ],
+      "sign_flip_p_two_sided": 4.999750012499375e-05,
+      "skipped_a": 0,
+      "skipped_b": 0,
+      "skip_ids_equal": true,
+      "prompt_token_count_mismatches": 0,
+      "actual_visual_count_field_present": false,
+      "actual_visual_count_check_n": 5349,
+      "actual_visual_count_mismatches": null,
+      "resamples": 20000,
+      "seed": 20261113
+    },
+    "qwen3vl_pre_final_minus_qwen3vl_post_main": {
+      "n_paired": 5349,
+      "n_paired_answered": 5349,
+      "mean_a": 0.28369566035226007,
+      "denominator": "all attempted; skipped score zero",
+      "mean_b": 0.3736841884846667,
+      "delta_pp": -8.998852813240669,
+      "ci95_pp": [
+        -10.16572875640402,
+        -7.822191837267112
+      ],
+      "sign_flip_p_two_sided": 4.999750012499375e-05,
+      "skipped_a": 0,
+      "skipped_b": 0,
+      "skip_ids_equal": true,
+      "prompt_token_count_mismatches": 0,
+      "actual_visual_count_field_present": false,
+      "actual_visual_count_check_n": 5349,
+      "actual_visual_count_mismatches": null,
+      "resamples": 20000,
+      "seed": 20261114
+    }
+  }
+}

@@ -1,18 +1,27 @@
 # STATE.md — 当前项目状态（主窗口维护，≤30 行）
-> 项目：VLM 视觉 token 压缩；最近更新：2026-09-20。
+> 项目：VLM 视觉 token 压缩；最近更新：2026-10-25。
 
-## 当前方向
-- 用户明确要求放下 RBM 作为研究主线，重新对齐视觉 token 压缩领域；当前阶段为 P1 文献版图与选题判断。
-- 顶会综述：notes/token_compression_landscape_20260920.md；官方来源核验表：notes/lit_venue_map_20260920.md、notes/lit_methods_20260920.md、notes/lit_frontier_20260920.md。
-- 2026 年 QuietPrune、DocPrune、MMTok、MetaCompress 等已占据早期 query 引导、文档压缩、集合覆盖和多轮复用等宽泛命题；不能沿用旧的“无人做”说法。
-- 候选研究问题：同模型同实际 token 预算下，细粒度证据保真与完整服务链 p95 TTFT、请求吞吐、峰值显存的联合权衡；须先做差距诊断，再确定新方法。
+## 当前任务
+- 用户指定 `F:\dcc2027_submission_20260916` 准备 CVM 2027 投稿，要求清理防御性写作并审查真实缺陷。
+- 已核验：该目录与仓库/远端最后论文文本一致；9/19 新实验报告尚未纳入原稿，故不是最终证据版本。
+- 新匿名审阅稿：`drafts/cvm2027_submission_20261025/`；旧 DCC 稿保持原样，尚未对外投稿。
+- 官方审稿模板；≤14页含参考文献；摘要/全文截止北京时间 2026-10-27 07:59。
 
-## 既有结果
-- RBM 相关论文、实验和图表保留为历史材料及可能的对照，不作为当前默认投稿方向。
-- DCC 2027 证据审计稿：drafts/dcc2027_submission_20260916/main.tex，尚未实际投稿；后续是否使用须基于新方向另行判断。
-- 既有 TCSVT 稿：drafts/ieee_tcsvt_submission_20260904/main.tex；部分模型适配和评测经验可复用。
+## 已核验的关键问题
+- ExpA Post-main 使 DocVQA 方向反转；精确ANLS重评后 .3737 > Pre-final .2837，Δ+9.00pp CI[7.82,10.17]。
+- TextVQA 旧评分公式/归一化及分号拼接GT需纠正；已用保存预测、官方10答案和固定版本 EvalAI CPU重评。
+- 同HF TextVQA全5000失败记零：RBM .75504，FastV .76826；不可转抄ExpB二值correct作为官方分。
+- 逐段改写、图内因果词、模型适配方程、强基线/预算曲线不足均已审查；不以“AI多数审稿”为事实。
 
-## 下一步
-- 从同日综述选 3–4 个强基线和 2 个现代模型，设计同后端、同实际 LLM 视觉 token 预算的诊断协议。
-- 先核验 TextVQA/OCRBench/DocVQA/ChartQA 与普通 VQA、多轮下的绝对分数、稀有证据失败切片、端到端延迟及连续批处理吞吐。
-- 若诊断差距稳定，再在 notes/positioning.md 写新颖性句、方法假设和成功/停止判据；不要预设 RBM 或任何新打分器一定有效。
+## 交接材料
+- 总体判断：`notes/cvm2027_revision_plan_20261025.md`。
+- 写作审计：`notes/cvm2027_writing_audit_20261025.md`；科学审计：`notes/cvm2027_evidence_review_20261025.md`。
+- 官方重评：`notes/cvm2027_textvqa_rescore_20261025.md`；脚本 `scripts/analyze_cvm_expB_official.py`。
+- DocVQA 11格精确ANLS重评：`notes/cvm2027_docvqa_rescore_20261025.md`；脚本 `scripts/analyze_cvm_docvqa_official.py`。
+- GQA 11格精确重评、OCRBench 15格零差核验完成；同名报告在notes，脚本为 `scripts/analyze_cvm_{gqa,ocrbench}_official.py`。
+
+## 下一步 / 人工决策
+- 四任务更正合入最终8页审阅稿，51实引；PDF/源包独立编译、全部8页目视QA、字体嵌入及匿名检查通过。
+- 核心claim受新增控制削弱，按ORCHESTRATION §6向用户升级：是否以native-unit方法+条件依赖实证研究继续投CVM。
+- 未启动GPU补实验；未提交会议。实际投稿前必须人工确认最终稿/版权（P5）。
+- 独立科研主线仍保留9/20的P1方向：同模型同预算细粒度保真与服务性能诊断；未擅自恢复RBM为长期主线。

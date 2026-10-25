@@ -1,0 +1,218 @@
+% CVM 2027 anonymous review manuscript, migrated 2026-10-25.
+% Revision review draft; see the separate submission checklist before upload.
+\documentclass[10pt,twocolumn,letterpaper]{article}
+\usepackage{cvm}
+\usepackage{times}
+\usepackage{epsfig}
+\usepackage{graphicx}
+\usepackage{amsmath,amssymb,booktabs,multirow,url,cite,placeins,flushend}
+\usepackage[pagebackref=true,breaklinks=true,letterpaper=true,colorlinks,bookmarks=false]{hyperref}
+\hypersetup{pdftitle={Native-Unit Selection for Visual Token Compression},pdfauthor={},pdfsubject={},pdfkeywords={}}
+\newcommand{\keywords}[1]{{\bf \emph{Keywords: #1}}}
+% Keep the official placeholder until the submission portal assigns the real ID.
+\def\cvmPaperID{****}
+\def\httilde{\mbox{\tt\raisebox{-.5ex}{\symbol{126}}}}
+\ifcvmfinal\pagestyle{empty}\fi
+\begin{document}
+\title{Native-Unit Selection for Visual Token Compression}
+\author{}
+\maketitle
+
+\begin{abstract}
+Visual token compression requires both a token budget and a representation for ranking candidate units. We study norm-based selection at the inputs and outputs of native visual mergers and projectors. Rank-Before-Merge (RBM) selects complete native units without training or changing learned projection weights. At 25\% retention, its deployed adapters exceed their Post-L2 baselines on all nine text-dense model--benchmark pairs across Qwen3-VL, Qwen2.5-VL, and InternVL3. Full-split Qwen3-VL controls show that the preferred representation depends on the task and scoring streams: final-input selection exceeds main-output selection on TextVQA and OCRBench, whereas main-output selection leads by 9.00 percentage points on DocVQA and 6.19 points on GQA. Matched-harness comparisons favor RBM over FastV on OCRBench and FastV over RBM on TextVQA. These results identify scoring representation and auxiliary-stream aggregation as consequential choices in native-unit compression.
+\end{abstract}
+
+\keywords{Vision-language models, visual token compression, token selection, document understanding, efficient inference}
+
+\section{Introduction}
+High-resolution vision--language models convert many image patches into visual inputs for a language model. Native spatial mergers and projectors impose a model-specific unit structure, so additional compression must choose both how many units to retain and which representation to use for selection. Feature magnitudes can change across these operators, giving different retained sets at the same final token budget. We ask how this choice affects text-dense and object-centered visual question answering.
+
+Rank-Before-Merge (RBM) ranks complete native units using feature norms at the inputs of native mergers or projectors. It reuses their learned weights and output dimensions and introduces no training. The implementation uses a shared unit mask across Qwen3-VL's main and auxiliary streams and model-specific adapters for Qwen2.5-VL and InternVL3.
+
+We evaluate three model families on full TextVQA, DocVQA, OCRBench, and GQA splits at 25\% retention. We then decompose the Qwen3-VL design into an early-input selector, a final-input selector, and two output selectors that score either the main stream alone or its concatenation with auxiliary streams. This comparison exposes the role of scoring depth and stream aggregation in the observed accuracy differences.
+
+\begin{figure*}[t]
+\centering
+\input{figure1_review.tex}
+\caption{\label{fig:overview}Native-unit selection before spatial compression. RBM selects complete units and reuses the native merger weights; the same retained identities align the surviving output streams. Qwen3-VL uses the layer-8 deepstack input for deployed RBM and the final-block main-merger input for the Pre-final variant.}
+\end{figure*}
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=.72\textwidth]{figs/fig2_word.png}
+\caption{\label{fig:ocr-cases}Selected OCRBench cases at 25\% retention. Blue cells show retained visual units; checkmarks indicate correctness under the official answer rule for these selected examples.}
+\end{figure*}
+
+The deployed RBM adapters exceed Post-L2 on all nine text-dense comparisons. The Qwen3-VL controls reveal a task-dependent pattern: final-input selection favors TextVQA and OCRBench, while main-output selection favors DocVQA and GQA. Our contributions are a native-unit norm selector integrated with three existing interfaces, full-split comparisons at matched final token budgets, and Qwen3-VL controls that characterize scoring representation and auxiliary-stream aggregation.
+
+\section{Related Work}
+Visual-token reduction uses different signals and pruning locations. FastV and progressive methods remove tokens inside the language model using attention or layerwise decisions~\cite{chen2024fastv,xing2024pyramiddrop,zhang2024fastervlm,zhang2024sparsevlm}. Encoder-output methods instead use attention, graph propagation, fitted predictors, or combined cues~\cite{wang2024vtccls,shang2024prumerge,ye2024fitprune,jiang2025gprune,luan2025adaptprune}. Unified selectors combine saliency with diversity or text guidance~\cite{yu2026visiontrim,baek2026agilepruner,fang2026prunesid}. RBM uses an image-only norm score on complete native units at a merger or projector input.
+
+Token merging also changes the representation used by a selector. ToMe, VisionZip, and AdaptMerge employ matching, dominant-token preservation, or language guidance~\cite{bolya2023tome,yang2024visionzip,islam2025adaptmerge}; TokenPacker learns a compact projector~\cite{li2024tokenpacker}. GlimpsePrune, VScan, and AnchorPrune adapt reduction to inputs or model families~\cite{zeng2025glimpseprune,zhang2025vscan,oh2026anchorprune}. RBM reuses an existing model's native operator and dimensions, selecting its input units rather than learning a new projection or synthesizing a new merged representation.
+
+QuietPrune maps a textual query to a visual-domain [Q-CLS] token and ranks spatial $2\times2$ groups by mean query-to-visual attention inside the vision transformer, preserving compatibility with native merging~\cite{gao2026quietprune}. RBM uses image-only feature norms at native merger/projector inputs and introduces no query adapter. Its deployed paths retain the full vision-transformer computation.
+
+Recent work varies the reduction stage and the information preserved by selection. PixelPrune, TransPrune, V2Drop, and HiLoPrune move pruning earlier or vary it across tokens and layers~\cite{wang2026pixelprune,li2026transprune,chen2026v2drop,sun2026hiloprune}. ApET, SCORE, COIN, ZOO-Prune, and SPARE use coverage, reconstruction, approximation, or sensitivity objectives~\cite{ma2026apet,xu2026score,du2026coin,kim2026zooprune,lee2026spare}. MetaCompress, EvoComp, IFPrune, and HAWK model semantics, information flow, or attention-head importance~\cite{wang2026metacompress,song2026evocomp,sun2026ifprune,zhu2026hawk}. Layer-dependent analysis identifies when pruning can be worse than random~\cite{wang2026informationhorizon}, while adaptive layerwise, pre-LLM text-driven, object-centered, local/global, and hybrid approaches vary the unit or context used for reduction~\cite{chen2026alvts,li2026crisp,lei2026core,li2026aot,zhang2026hybrid}. These approaches motivate evaluating the scoring representation together with the pruning stage and the model's native unit structure.
+
+Document-focused pruning and provenance audits examine spatial evidence in text-dense inputs~\cite{choi2026docprune,liu2026provenance}, while EffiVLM-Bench and LMMs-Eval support systematic efficiency and accuracy evaluation~\cite{wang2025effivlmbench,zhang2024lmmseval}. We study Qwen2.5-VL, Qwen3-VL, and InternVL3~\cite{bai2025qwen25vl,bai2025qwen3vl,zhu2025internvl3}, whose native compression interfaces differ. Post-L2 provides a representation diagnostic from the same magnitude-based family; FastV supplies an attention-based comparison.
+
+\section{Native-Unit Compression}
+\subsection{Selection representation and token budget}
+For each budgeted collection of $N$ native spatial units (an image or a tile), each unit groups four patch vectors. At retention $\rho$, retain
+\begin{equation}
+k=\max\{1,\operatorname{round}(\rho N)\}.
+\end{equation}
+For the Qwen adapters, features $h^{(t)}_{u,j}$ at tap $t$ give the unit score
+\begin{equation}
+a_u^{(t)}=\frac{1}{4}\sum_{j=1}^{4}\|h^{(t)}_{u,j}\|_2,
+\qquad K_{\mathrm{RBM}}=\operatorname{TopK}_k\{a_u^{(t)}\}.
+\label{eq:pre}
+\end{equation}
+InternVL3 scores the concatenated vector after pixel shuffle:
+\begin{equation}
+a_u^{(t)}=\left(\sum_{j=1}^{4}\|h^{(t)}_{u,j}\|_2^2\right)^{1/2}.
+\label{eq:intern}
+\end{equation}
+Both implementations rank complete native units; their within-unit norm aggregation differs.
+
+An output selector instead scores a returned visual vector $z_u$:
+\begin{equation}
+b_u=\|z_u\|_2,\qquad
+K_{\mathrm{post}}=\operatorname{TopK}_k\{b_u\}.
+\label{eq:post}
+\end{equation}
+Input and output norms can induce different top-$k$ sets. We measure selection disagreement with Jaccard overlap and evaluate its task-level consequences. For a fixed retained set, an independent per-unit merger returns the same retained representations whether units are gathered before or after that merger.
+
+\subsection{Deployed adapters and controlled variants}
+RBM retains complete units and aligns their identities with each adapter's output streams. Weights and interface dimensions are reused. For feature dimension $d$, norm scoring costs $O(Nd)$, followed by top-$k$ selection. Table~\ref{tab:adapters} specifies the deployed paths; their feature depth, aggregation, ordering, and allocation are part of the implementation comparison.
+
+\begin{table*}[t]
+\centering
+\caption{\label{tab:adapters}Deployed adapter definitions. Post-L2 is the model-specific output-norm baseline. The Qwen3-VL main stream and three auxiliary deepstack streams share retained identities.}
+\small
+\begin{tabular}{@{}p{.13\textwidth}p{.25\textwidth}p{.24\textwidth}p{.29\textwidth}@{}}
+\toprule
+Model & RBM scoring representation & Post-L2 scoring representation & Allocation and sequence handling\\
+\midrule
+Qwen3-VL & Layer-8 deepstack input; mean of four patch norms & Concatenated main and three deepstack outputs & One per-image set, shared across four merger streams; adapter compressed positions\\
+Qwen2.5-VL & Main-merger input; mean of four patch norms & Main-merger output & Per-image budget; pre/post ordering differs; vLLM assigns the first $k$ grid positions\\
+InternVL3 & Post-pixel-shuffle input to projector; concatenated-vector norm & Post-projector vector & RBM budgets per tile; Post-L2 pools image tiles; adapter compressed positions\\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+The Qwen3-VL controls compare four variants. Deployed RBM scores the early layer-8 input. \emph{Pre-final} scores final-block features at the main-merger input. \emph{Post-main} scores only the main-merger output. \emph{Post-concat}, the Qwen3-VL Post-L2 baseline, scores the concatenation of main and auxiliary outputs. The latter three variants execute every merger stream and match samples and per-image final counts. Pre-final versus Post-main compares four input-patch norms with the main-output norm; Post-main versus Post-concat changes the scored output streams. These definitions make the measured representation and aggregation choices explicit.
+
+\section{Evaluation Protocol}
+We evaluate Qwen3-VL-8B, Qwen2.5-VL-7B, and InternVL3-8B in bf16 with greedy decoding. The main matrix and final-input control use vLLM 0.19 V1~\cite{kwon2023vllm}; FastV uses HuggingFace eager attention. We report vLLM and HuggingFace results in separate comparisons.
+
+The full evaluation sets contain 5,000 TextVQA examples, 5,349 DocVQA examples, 1,000 OCRBench examples, and 12,578 GQA examples~\cite{singh2019textvqa,mathew2021docvqa,liu2024ocrbench,hudson2019gqa}. Saved predictions are rescored with pinned lmms-eval benchmark implementations~\cite{zhang2024lmmseval}. TextVQA uses answer normalization and leave-one-annotator-out consensus over the original ten-answer annotations. DocVQA uses ANLS with case and whitespace normalization and a 0.5 similarity threshold. OCRBench applies fullwidth-to-ASCII normalization and case-insensitive answer containment, with case-sensitive containment after removing spaces for handwritten mathematical expressions, and is scored out of 1,000. GQA uses exact match ignoring case and punctuation. The three former benchmarks are designated text-dense; GQA provides an object-centered question-answering contrast.
+
+All comparisons retain 25\% of native units and match per-image final counts. Qwen3-VL controls use native resolution, greedy decoding to 32 tokens, and vLLM eager execution; sequence limits are 8,192 with eight concurrent sequences, except DocVQA at 32,768 and four. The operational compressed arms and final-input controls complete every sample. Uncompressed TextVQA anchors have two failures for each Qwen model, and the Qwen3-VL OCRBench anchor has 18; these failures receive zero. Qwen2.5-VL OCRBench and InternVL3 DocVQA use four-million-pixel caps, precluding absolute cross-family ranking.
+
+Control-comparison 95\% intervals use 20,000 paired-bootstrap resamples of per-example scores. Failed samples receive zero in complete-split scores and their paired analyses.
+
+\section{Results}
+\subsection{Operational accuracy across model families}
+Table~\ref{tab:main} compares deployed RBM with Post-L2. Across the six TextVQA/DocVQA cells, RBM gains 11.0--38.0 percentage points; the three OCRBench gains are 298--432 points out of 1,000. On Qwen3-VL DocVQA, RBM scores .481 compared with .956 without compression.
+
+\begin{table*}[t]
+\centering
+\caption{\label{tab:main}Full-split operational results at 25\% retention. None denotes no compression. Qwen3-VL RBM uses the early tap. Deltas use unrounded scores and are percentage points except for OCRBench (/1000).}
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{llrrrr}
+\toprule
+Model & Benchmark & None & RBM & Post-L2 & $\Delta$\\
+\midrule
+\multirow{4}{*}{Qwen3-VL}
+& TextVQA & .8343 & .5978 & .2181 & +38.0\\
+& DocVQA & .9563 & .4809 & .2378 & +24.3\\
+& OCRBench & 760 & 547 & 184 & +363\\
+& GQA & .6165 & .4486 & .4769 & $-2.8$\\
+\midrule
+\multirow{4}{*}{Qwen2.5-VL}
+& TextVQA & .8529 & .6941 & .4360 & +25.8\\
+& DocVQA & .9492 & .6361 & .5258 & +11.0\\
+& OCRBench & 817 & 480 & 182 & +298\\
+& GQA & .6045 & .5571 & .5852 & $-2.8$\\
+\midrule
+\multirow{4}{*}{InternVL3}
+& TextVQA & .8251 & .7804 & .4093 & +37.1\\
+& DocVQA & .9223 & .7285 & .3820 & +34.6\\
+& OCRBench & 852 & 753 & 321 & +432\\
+& GQA & .6287 & .5985 & .6028 & $-0.4$\\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+GQA favors Post-L2 in all three point estimates. The small InternVL3 difference has an interval crossing zero in the paired analysis. Thus, the operational advantage on text-dense tasks does not extend to the object-centered GQA workload.
+
+\subsection{Input representation and output-stream aggregation}
+Table~\ref{tab:stage} compares final-input selection with the two output selectors. Changing Post-concat to Post-main raises DocVQA from .2378 to .3737, reversing its relation to Pre-final (.2837). Post-main exceeds Pre-final by 9.00 percentage points on DocVQA and 6.19 points on GQA; Pre-final leads by 17.94 percentage points on TextVQA and 63 points on OCRBench. The direction of input-versus-output selection therefore depends on the task and the scored streams.
+
+\begin{table*}[t]
+\centering
+\caption{\label{tab:stage}Qwen3-VL full-split controls at 25\% retention. Pre-final scores the main-merger input; Post-main scores its output; Post-concat scores the concatenated main-plus-deepstack output. Differences and paired-bootstrap 95\% intervals are percentage points, except OCRBench points out of 1,000.}
+\small
+\begin{tabular}{lrrrll}
+\toprule
+Benchmark & Pre-final & Post-main & Post-concat & Main $-$ Pre [95\% CI] & Pre $-$ Concat [95\% CI]\\
+\midrule
+TextVQA & .4917 & .3123 & .2181 & $-17.94$ [$-19.45$, $-16.45$] & +27.36 [25.88, 28.81]\\
+DocVQA & .2837 & .3737 & .2378 & +9.00 [7.82, 10.17] & +4.59 [3.41, 5.77]\\
+OCRBench & 419 & 356 & 184 & $-63$ [$-100$, $-27$] & +235 [200, 271]\\
+GQA & .4198 & .4816 & .4769 & +6.19 [5.43, 6.96] & $-5.72$ [$-6.50$, $-4.92$]\\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\subsection{Comparison with attention-based selection}
+Table~\ref{tab:fastv} compares RBM with FastV-k3 in the same HuggingFace eager harness at a shared four-million-pixel cap and 25\% final visual budget. Both use native positions, seed 0, greedy decoding, and at most 32 generated tokens, processing examples individually. The retained visual counts match per example. RBM leads on OCRBench by 146 and 87 points for Qwen3-VL and Qwen2.5-VL, respectively. On Qwen3-VL TextVQA, FastV leads by 1.32 percentage points. The preferred selector therefore changes with the workload.
+
+The TextVQA comparison has five shared loading failures. OCRBench has 79 and 88 shared context or memory failures for the two Qwen models. These shared failures receive zero in complete-split scores. Figure~\ref{fig:ocr-cases} shows selected OCRBench examples.
+
+\begin{table*}[t]
+\centering
+\caption{\label{tab:fastv}Matched-harness HF eager comparisons. Scores use all attempted examples, assigning zero to shared failures. TextVQA uses official VQA accuracy; OCRBench is scored out of 1,000. Intervals use 20,000 paired-bootstrap resamples over all attempted IDs.}
+\small
+\begin{tabular}{llrrll}
+\toprule
+Model & Benchmark & RBM & FastV-k3 & RBM $-$ FastV [95\% CI] & Completed / attempted\\
+\midrule
+Qwen3-VL & TextVQA & .7550 & .7683 & $-1.32$ pp [$-2.30$, $-0.32$] & 4,995 / 5,000\\
+Qwen3-VL & OCRBench & 559 & 413 & +146 points [118, 174] & 921 / 1,000\\
+Qwen2.5-VL & OCRBench & 382 & 295 & +87 points [54, 120] & 912 / 1,000\\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\section{Diagnostics and Interpretation}
+The two operational Qwen3-VL rankings differ substantially. On 64 diagnostic images per benchmark, sampled with seed 0 from the corresponding 200-example subsets, DocVQA, TextVQA, and GQA Spearman correlations are .137, .332, and .360, and top-25\% Jaccard overlaps are .180, .243, and .278. These measurements quantify the selection disagreement between the deployed representations.
+
+Rank shifts also associate with local edge energy: post-minus-pre rank correlations with Sobel energy are +.439, +.155, and +.036 in the same task order. On DocVQA, RBM-only versus Post-L2-only units have mean energy .641 versus .124, and 92\% versus 35\% exceed their image's median. Sobel energy measures local edges; we use it to characterize spatial selection rather than text localization. Figure~\ref{fig:survival} visualizes the spatial allocation in two audited cases.
+
+\begin{figure*}[t]
+\centering
+\input{figure4_review.tex}
+\caption{\label{fig:survival}Selected spatial allocations at 25\% retention from the historical $n=200$ TextVQA and DocVQA diagnostics. Columns show early-tap RBM, Post-L2, and their kept-set overlap. Kept-unit colors range from purple to yellow by the norm within each kept set. Overlap marks RBM in green, Post-L2 in red, and RBM-only units in orange.}
+\end{figure*}
+
+A ranking-swap check fixes the post-merger computation but substitutes RBM's kept identities. Qwen3-VL kept-set Jaccard overlap is 1.000 on 31 TextVQA and 30 DocVQA probes. Separate 200-example diagnostics show answer agreement on 198/200 TextVQA examples and 200/200 DocVQA examples. These checks show that fixing the retained identities nearly reproduces the deployed outputs. Qwen2.5-VL uses different pre/post ordering conventions; the InternVL3 checks compare accuracy.
+
+\section{Cost and Discussion}
+The retained-unit fraction $k/N$ measures the final visual sequence budget. FastV processes all candidates through early language-model layers, whereas RBM scores before the language model. Deployed RBM retains the full vision-transformer computation; selection reduces merger/projector outputs and the language model's visual sequence. Pre-final executes all merger streams. Resolution, output length, batching, and backend also determine wall-clock performance.
+
+On one A40, a 200-example Qwen3-VL TextVQA offline workload achieves 6.91 requests/s with RBM at 25\% retention, 6.89 with Post-L2, and 4.11 without compression. Runs use native resolution, at most eight concurrent sequences, greedy decoding capped at 32 tokens, and one untimed warmup. Timing covers generation after engine construction and initial image loading. The measured 1.68$\times$ improvement over no compression applies to this workload; RBM and Post-L2 have similar throughput.
+
+The main-only control makes stream aggregation central to interpretation. On DocVQA, output scoring can outperform final-input scoring even though the concatenated-output baseline is weaker. The three-model operational matrix combines the adapter choices in Table~\ref{tab:adapters}; the Qwen3-VL control identifies task-dependent behavior within that architecture. Post-L2 is a diagnostic baseline. The matched-backend comparisons favor RBM on OCRBench and FastV on TextVQA. Broader selectors, additional retention levels, and quality-matched cost comparisons are needed to establish general competitiveness. Direct text-region interventions would additionally test whether a selected unit carries answer-relevant text.
+
+\section{Conclusion}
+Native-unit selection reduces visual inputs while reusing a VLM's existing merger and projector interfaces. At 25\% retention, the tested RBM implementations improve text-dense accuracy over their Post-L2 baselines. Qwen3-VL controls show that the preferred scoring representation changes with the task and auxiliary-stream aggregation: final-input scoring favors TextVQA and OCRBench, while main-output scoring favors DocVQA and GQA. Visual token compression should therefore evaluate the scoring representation together with the retained budget, native unit structure, and target workload.
+
+\FloatBarrier
+{\small
+\bibliographystyle{cvm}
+\bibliography{references}
+}
+\end{document}
