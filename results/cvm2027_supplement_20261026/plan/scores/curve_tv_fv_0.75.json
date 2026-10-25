@@ -1,0 +1,134 @@
+{
+ "bench": "textvqa",
+ "ids_subset": null,
+ "label_a": "results/cvm2027_supplement_20261026/predictions/c25_fastv_textvqa1k_keep0.75.json",
+ "label_b": "results/cvm2027_supplement_20261026/predictions/c25_none_textvqa1k.json",
+ "sha_a": "3c146a7303ff7e83",
+ "sha_b": "bac32dd9a79009c7",
+ "resamples": 20000,
+ "A": {
+  "source": "results/cvm2027_supplement_20261026/predictions/c25_fastv_textvqa1k_keep0.75.json",
+  "n": 1000,
+  "attempted_score": 0.8256999999999994,
+  "answered_score": 0.826526526526526,
+  "skipped": 1,
+  "n_image_kept_hist": {
+   "n": 999,
+   "min": 264,
+   "max": 768,
+   "distinct_top": [
+    [
+     576,
+     366
+    ],
+    [
+     504,
+     311
+    ],
+    [
+     768,
+     74
+    ],
+    [
+     480,
+     36
+    ],
+    [
+     432,
+     33
+    ],
+    [
+     552,
+     32
+    ]
+   ]
+  }
+ },
+ "B": {
+  "source": "results/cvm2027_supplement_20261026/predictions/c25_none_textvqa1k.json",
+  "n": 1000,
+  "attempted_score": 0.8292999999999994,
+  "answered_score": 0.8301301301301295,
+  "skipped": 1,
+  "n_image_kept_hist": {
+   "n": 999,
+   "min": 352,
+   "max": 1024,
+   "distinct_top": [
+    [
+     768,
+     366
+    ],
+    [
+     672,
+     311
+    ],
+    [
+     1024,
+     74
+    ],
+    [
+     640,
+     36
+    ],
+    [
+     576,
+     33
+    ],
+    [
+     736,
+     32
+    ]
+   ]
+  }
+ },
+ "paired_attempted_all": {
+  "n_paired": 1000,
+  "n_paired_answered": 999,
+  "mean_a": 0.8257000000000001,
+  "denominator": "all attempted; skipped score zero",
+  "mean_b": 0.8292999999999999,
+  "delta_pp": -0.36,
+  "ci95_pp": [
+   -0.9399999999999998,
+   0.18
+  ],
+  "sign_flip_p_two_sided": 0.22388880555972202,
+  "skipped_a": 1,
+  "skipped_b": 1,
+  "skip_ids_equal": true,
+  "prompt_token_count_mismatches": 999,
+  "actual_visual_count_field_present": true,
+  "actual_visual_count_check_n": 999,
+  "actual_visual_count_mismatches": 999,
+  "resamples": 20000,
+  "seed": 20261235
+ },
+ "paired_common_answered_sensitivity": {
+  "n_paired": 999,
+  "n_paired_answered": 999,
+  "mean_a": 0.8265265265265266,
+  "denominator": "common answered",
+  "mean_b": 0.83013013013013,
+  "delta_pp": -0.36036036036036034,
+  "ci95_pp": [
+   -0.9509509509509511,
+   0.18018018018018017
+  ],
+  "sign_flip_p_two_sided": 0.22573871306434679,
+  "skipped_a": 1,
+  "skipped_b": 1,
+  "skip_ids_equal": true,
+  "prompt_token_count_mismatches": 999,
+  "actual_visual_count_field_present": true,
+  "actual_visual_count_check_n": 999,
+  "actual_visual_count_mismatches": 999,
+  "resamples": 20000,
+  "seed": 20261236
+ },
+ "failures": {
+  "a_only_skip": [],
+  "b_only_skip": [],
+  "both_skip": 1
+ }
+}
