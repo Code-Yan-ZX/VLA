@@ -40,9 +40,14 @@ sc p1_oc_hl_fv   ocrbench $D/c25_hl_ocrbench_keep0.25.json $D/c25_fv_ocrbench_ke
 i=20
 for K in 0.25 0.50 0.75; do
   for M in rb fv hl; do
-    sc "curve_tv_${M}_$K" textvqa $D/c25_${M}_textvqa1k_keep$K.json $D/c25_none_textvqa1k.json "" $i; i=$((i+1))
-    f50=$D/c25_${M/b/pre}_ocrbench_keep$K.json
-    sc "curve_oc_${M}_$K" ocrbench $D/c$(echo $M)_${M}_ocrbench_keep$K.json $D/c25_none_ocrbench.json "" $i; i=$((i+1))
+    case $M in rb) FULL=pre;; fv) FULL=fastv;; hl) FULL=hilo;; esac
+    if [ "$K" = "0.25" ]; then
+      TVF=$D/c25_${M}_textvqa1k_keep0.25.json; OCF=$D/c25_${M}_ocrbench_keep0.25.json
+    else
+      TVF=$D/c25_${FULL}_textvqa1k_keep$K.json; OCF=$D/c25_${FULL}_ocrbench_keep$K.json
+    fi
+    sc "curve_tv_${M}_$K" textvqa $TVF $D/c25_none_textvqa1k.json "" $i; i=$((i+1))
+    sc "curve_oc_${M}_$K" ocrbench $OCF $D/c25_none_ocrbench.json "" $i; i=$((i+1))
   done
 done
 # --- DocVQA 500 ---
