@@ -1,0 +1,45 @@
+你在服务器上负责 VLA 项目 CVM 2027 投稿前的一天补实验。请直接执行，完成实现、串行评测、官方评分、统计和交接报告；不要只给计划。目标是验证真实竞争力和质量—成本权衡，不预设 RBM 获胜。
+
+【工作区、时间和范围】
+1. 仓库预计在 /media/disk2/YZX/research/vla；Python 环境曾为 /home/dell/miniconda3/envs/qwen3vl_clean/bin/python。路径不符时自行定位。先读 AGENTS.md、STATE.md，fetch origin，使用包含 2e172f2 的最新 origin/main，在隔离 worktree/分支 codex/cvm-24h-supplement 上工作；不要 reset 或覆盖已有分支、未提交修改与历史结果。复用只读模型/数据缓存，不重复下载权重。
+2. 从启动记录 T0：总时间最多24小时；GPU任务目标在第20小时内结束，预留4小时评分、检查和交接。只有1×A40 46GB，同一时刻只运行一个GPU任务，CPU整理可以并行；先检查现有进程，不抢占或终止他人任务。不做训练、模型规模扩展、超参搜索、Cascade或RankBridge新方法。本轮不改论文、不投稿。
+3. 先读 notes/cvm2027_revision_plan_20261025.md、四份 cvm2027_*_rescore_20261025.md 和 drafts/cvm2027_submission_20261025/main.tex。旧报告中的“official”标签并不保证正确，以10/25固定上游评分结果为准。
+
+【已知事实，不能忽略】
+- 同HF TextVQA全5000、共同5失败置0：RBM=.75504，FastV=.76826，差−1.322pp，95%CI[−2.30205,−.32000]。不能只报告RBM在OCRBench的胜例。
+- Qwen3主输出控制在DocVQA/GQA反超Pre-final约9.00/6.19pp；现有证据不支持“先选普遍更好”。
+- HF原生位置的RBM TextVQA .75504，旧vLLM路径 .59784；该差异可能涉及tap/位置/实现，不能简单归因后端精度。新比较优先统一HF原生位置路径。
+- HF pre分支可能在完整视觉/merger计算后才gather：查真实执行图，禁止把未节省的ViT或merger计算算成RBM加速。
+
+【P0：正确性与耗时门检，先做，最多约2小时】
+4. 固定Qwen/Qwen3-VL-8B-Instruct、本地同一权重、bf16、greedy、max_new_tokens=32；冻结prompt、processor、分辨率上限、后端版本。用32题检查以下不变量；smoke只用于排错和估时，不用于选择有利参数或样本。
+   a) RBM/Post/FastV在keep=1时恢复同一HF原生模型；Hi-Lo的no-op检查须显式关闭剪枝与融合，不能假定只设keep=1就关闭所有机制。检查输入、位置、logits误差及greedy答案，记录dtype与误差。固定kept IDs时，按同集合选择的对应merger输出应匹配；不把bf16近似说成byte-identical。
+   b) 视觉unit不可拆散；kept IDs、原始空间顺序、mRoPE坐标、mask/cache及Qwen3三条deepstack流同步，保留文本token。记录各层实际活跃视觉token数，不能把四流特征宽度当作4倍LLM token数。
+   c) 统一 keep_fraction={.25,.50,.75}。逐图断言实际K一致；CLI的r可能是drop，r-pre可能是keep，post帮助文字也可能过时，必须读代码并检验n_image_kept，不能照说明文字补偿4倍预算。
+   d) 在相同ID、保留集合和特征上小规模诊断native/mimic位置差异，明确旧HF/vLLM差异的已确认因素。最多约1小时查这个原因，不把一天花在重做vLLM。索引/位置/预算校验失败的路径不得进正式主比较。
+5. 每种方法先用32题估算25/50/75%运行时间、显存和失败率，写机器可读计划与固定任务队列。根据耗时而非得分缩减可选项。禁止修改既有环境来迁就新方法；需要时隔离依赖。
+
+【P1：最重要——补一个有效现代强基线】
+6. 首选Hi-Lo Prune官方Qwen3-VL-8B单图路径：https://github.com/sealost/Hi-Lo_Prune 。锁定commit，读官方代码/依赖和测试；它有已发布的Qwen3图像路径，不要沿用“尚无代码”的旧判断。接入最多2小时，核心选择和融合不可用自己的近似替代；按官方规则满足candidate与keep等约束，正式跑前固定合法参数并记录，不看验证集得分调参。
+7. 若Hi-Lo在时限内不能形成同版本、同处理器、同位置规则的可靠HF比较，改用DivPrune作者仓库 https://github.com/vbdi/divprune 的真实max-min diversity选择，额外接入最多1小时。若需Qwen3适配，明确标注adaptation，核对官方选择算法，kept IDs同步所有视觉流；不要把普通cosine top-k或旧VisionZip-style proxy冒充DivPrune。两个都无法可靠运行时明确报告缺失，不伪造现代基线结果；继续其余有效实验。
+8. 主模型固定Qwen3-VL-8B。主表为None、RBM、FastV（沿用已验证K=3及其实际索引语义）、一个已通过P0的现代方法；keep=25%。TextVQA val全5000、OCRBench全1000；每个已冻结配置都跑，不因中途输赢删任务。None只需跑一次100%参考。
+9. 所有方法同一HF基础实现/版本、权重、prompt、解码、像素上限和输入；优先复刻既有max_pixels=4000000。若需要降cap，必须在正式评测前对该任务所有方法统一，作为新协议，旧4M结果不得直接拼表。不同方法在不同层剪枝时，最终K相同不等于计算量相同，保留逐层token轨迹并实际计时。
+10. 优先复用通过协议指纹核验的已有完整预测：results/dcc_presubmit/expB/、results/acmmm_final_controls/p1/。复用要求权重、版本、processor、分辨率、prompt、tap、排序、mRoPE、K和样本ID一致；不能用n=16答案近似一致证明全split等价。记录预测SHA256和原命令。不满足就重跑，并按smoke估时调整队列。旧runs/rankbridge/locked_none_*只有n200，Doc又是600k，不能冒充当前full none。
+
+【P2：预算曲线与任务边界】
+11. 在看新结果前，用seed=20261025固定TextVQA 1000题（可按原始视觉unit数量分层，不能按答题成败选题），OCRBench仍用全1000。三种压缩方法统一跑keep=25/50/75%；25%和None从P1的相同ID预测抽取即可。每条曲线使用相同ID/分母。预测到总时间充裕时才将TextVQA曲线扩至全5000，不能按哪个预算赢了决定补哪格。
+12. 补一个小而公平的DocVQA压力测试：预先固定500题，None/RBM/FastV/现代方法在25%跑同一HF协议；高分辨率attention若OOM，在正式运行前统一选能通过smoke的像素cap并注明。不得复用600k的None来对比另一分辨率。50/75%的Doc曲线列为可选，只有主实验和计时预算有保证才补。
+13. 如仍有余量，补25%时的空间均匀采样及随机选择控制（固定500题，随机3个预定seed）；使用相同native unit、坐标、排序和K。不要为此挤掉现代基线、主曲线或计时。新模型、新相关性/热图及三模型全矩阵全部不做。
+
+【P3：完整成本，不能仅报token/FLOPs】
+14. 在同HF、单图batch=1、同显式attention设置下，对None及三种方法各预算点测量。正式前固定200个请求（TextVQA/OCRBench各100，按分辨率分层），所有方法共用；预热后重复3次。Hi-Lo现有公开路径仅bs1，不在今天临时实现连续批处理。
+15. 记录processor/传输、完整视觉编码、选择/融合、LLM prefill/TTFT、decode、总请求时延、实际输出长度、峰值allocated/reserved显存及整体完成吞吐。TTFT包含视觉与选择成本；区分从已解码图像开始的计算请求与磁盘/网络/排队，写清边界。用正确CUDA同步/事件计时；不可把片段之和当作另一次未测的端到端结果。
+16. 报p50/p95及完整workload wall time；重复相同请求不是600个独立样本，可先取每个请求三次中位数再统计200请求的分位数，并保留原始重复数据。质量评测仍用正常greedy，记录输出长度，不能以不同输出长度的decode节省冒充prefill节省。
+17. 输出score-vs-latency、score-vs-actual-K及显存表。预先定义质量目标为同协议None分数的95%，仅在实际测得的预算点报告“达标的最低成本”；未达标就写未达标。不要插值制造未跑过的同质量加速，也不要用p值不显著冒充质量等价。
+
+【评分、止损与交付】
+18. 保留原始答案数组、question_id/image_id、预测、失败原因、原始/保留token数、配置和执行版本；TextVQA必须按question_id取得官方十个标注，不能用';'.join再split恢复。全部尝试样本为主分母，失败双方各按0；另给common answered敏感性和失败ID对照，不悄悄丢难例。
+19. 使用最新main的 scripts/analyze_cvm_expB_official.py、analyze_cvm_docvqa_official.py、analyze_cvm_gqa_official.py、analyze_cvm_ocrbench_official.py 中固定的上游评分与验证逻辑；将机器临时路径参数化到本次结果。不要使用旧在线correct/acc、旧official_scorers.py或旧ExpB分析作为权威指标。保留官方源码/标注hash。每个新对照做20,000次配对bootstrap 95%CI、固定seed；随机seed的波动单列，Doc同图多题可加image-cluster敏感性。预定主终点是25%的full TextVQA/OCRBench；其他预算与Doc小样本作为扩展，不挑出少量显著格宣称普适优势。
+20. 单个baseline的环境/适配到达timebox就停止该方法；基础正确性错误要先修，不把失败输出当正常低分。若确认旧核心结论建立在实现bug上，立即写最小复现和claim影响，升级作者判断；不要偷偷改历史文件。单纯输给强基线按预定计划如实完成，不调参追胜。任何样本/分辨率/预算缩减必须由时间或资源触发并留记录，不能由成绩触发。
+21. 第20小时停止本次GPU计算，提前禁止启动预计越过此时限的任务，未完成产物保留为partial并注明；不动其他人的GPU任务。收束前确认已跑单元格、数据/ID/配置完整性、评分一致性、失败分母与实际K。输出 reports/cvm2027_supplement_20261026.md 和 results/cvm2027_supplement_20261026/：完整配置表、质量/CI表、预算与成本曲线、原始预测/计时、可复现命令和缺失项；以及一份≤20行HANDOFF，列最重要发现、支持/削弱哪一句claim、可入论文的表图路径和仍不能声称的内容。n500/n1000结果必须明确是subset，不能称full split。
+22. 按AGENTS更新STATE/DECISIONS。阶段完成以已有用户Git身份commit并push origin/main，保留他人改动、不force push；仅提交代码、轻量报告/绘图输入摘要，权重、数据集、完整预测和日志留本地。所有正式方法/配置结果都在最终报告可见，包括不利或失败结果。不要代作者投稿。
