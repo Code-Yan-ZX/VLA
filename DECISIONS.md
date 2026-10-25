@@ -449,3 +449,10 @@
 - D-S7: scoring via pinned analyze_cvm_*_official logic; local official TextVQA
   annotation copy hash-verified (SHA==pin) because dl.fbaipublicfiles unreachable;
   driver self-check reproduces historical .75504/.76826/-1.322pp exactly.
+- D-S8 (21:15): queue runner died on `local extra=$6` with 5-arg calls (set -u)
+  -> fixed ${6:-}; hourly cron + broadened monitor added after 20-min idle gap
+  (user-suggested guard). None-full outputs unaffected.
+- D-S9 (21:3x): DocVQA unified pixel cap 4M->2M: None smoke OOMs 23/32 at 4M,
+  22/32 at 3M, 0/32 at 2M (also pre/fastv/hilo verified at 2M). TextVQA/OCRBench
+  main protocol stays 4M for all methods. DocVQA block labeled new protocol;
+  no mixing with historical 600k runs.

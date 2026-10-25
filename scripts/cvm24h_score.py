@@ -53,7 +53,7 @@ def textvqa_scores(rows):
     return out
 
 def ocrbench_scores(rows):
-    ref = fetch(OCR_URL, CACHE / "ocrbench_utils_reference.py", OCR_SHA256)
+    ref = fetch(OCR_URL, CACHE / "ocrbench_utils_reference.py", OCR_SHA)
     raw = ref.read_bytes()
     nodes = [n for n in ast.parse(raw).body
              if isinstance(n, ast.FunctionDef)

@@ -18,20 +18,20 @@ GPU_DEADLINE=$(($(cat /tmp/cvm24h_T0.txt)+20*3600-3600))  # stop launching 1h ea
 wait_none(){ while [ ! -f $L/none_full.done ]; do sleep 60; done; }
 past(){ [ "$(date +%s)" -gt "$GPU_DEADLINE" ] && echo "[ABORT] past gpu deadline" && exit 0; }
 hfrun(){ # tag benchmark subset n mode extra
-  local tag=$1 bench=$2 sub=$3 n=$4 mode=$5 extra=$6
+  local tag=$1 bench=$2 sub=$3 n=$4 mode=$5 extra=${6:-} px=${7:-$PX}
   [ -f "$D/$tag.json" ] && { echo "[skip] $tag"; return; }
   past
   echo "[start] $tag $(date +%T)"
   timeout 14400 $P $HF --mode $mode --model $Q3 --benchmark $bench --subset $sub \
-      --n $n $extra $PX --seed 0 --max-tokens 32 --out $D/$tag.json > $L/$tag.log 2>&1
+      --n $n $extra $px --seed 0 --max-tokens 32 --out $D/$tag.json > $L/$tag.log 2>&1
   echo "[end] $tag rc=$? $(date +%T)"; }
 hilorun(){ # tag bench subset n keep extra
-  local tag=$1 bench=$2 sub=$3 n=$4 keep=$5 extra=$6
+  local tag=$1 bench=$2 sub=$3 n=$4 keep=$5 extra=${6:-} px=${7:-$PX}
   [ -f "$D/$tag.json" ] && { echo "[skip] $tag"; return; }
   past
   echo "[start] $tag $(date +%T)"
   timeout 14400 $P scripts/cvm24h_hilo_eval.py --benchmark $bench --subset $sub \
-      --n $n --keep-frac $keep $extra $PX --seed 0 --out $D/$tag.json > $L/$tag.log 2>&1
+      --n $n --keep-frac $keep $extra $px --seed 0 --out $D/$tag.json > $L/$tag.log 2>&1
   echo "[end] $tag rc=$? $(date +%T)"; }
 
 # make subset jsonls from pre-fixed ids (TextVQA 1000 stratified)
@@ -73,9 +73,12 @@ for KEEP in 0.50 0.75; do
   hilorun c25_hilo_ocrbench_keep$KEEP ocrbench eval/full_splits/ocrbench.jsonl 1000 $KEEP
 done
 # ---- P2 DocVQA 500 stress (subset, 25%, same HF protocol)
-hfrun doc500_none docvqa $Q/p2_docvqa_500.jsonl 500 none
-hfrun doc500_pre25 docvqa $Q/p2_docvqa_500.jsonl 500 pre "--r-pre 0.25 --mrope native"
-hfrun doc500_fastv25 docvqa $Q/p2_docvqa_500.jsonl 500 fastv "--r 0.75 --fastv-k 3"
-hilorun doc500_hilo25 docvqa $Q/p2_docvqa_500.jsonl 500 0.25
+# unified DocVQA pixel cap: 4M/3M fail the None baseline on smoke (22-23/32 OOM);
+# 2M passes 32/32 for all methods (resource-triggered protocol choice, logged in
+# plan/doc_cap_probe.jsonl). NOT a score-based decision. All four arms share it.
+hfrun doc500_none docvqa $Q/p2_docvqa_500.jsonl 500 none "" "--max-pixels 2000000"
+hfrun doc500_pre25 docvqa $Q/p2_docvqa_500.jsonl 500 pre "--r-pre 0.25 --mrope native" "--max-pixels 2000000"
+hfrun doc500_fastv25 docvqa $Q/p2_docvqa_500.jsonl 500 fastv "--r 0.75 --fastv-k 3" "--max-pixels 2000000"
+hilorun doc500_hilo25 docvqa $Q/p2_docvqa_500.jsonl 500 0.25 "" "--max-pixels 2000000"
 echo "[queue] MAIN QUEUE DONE $(date +%T)"
 # ---- P3 timing after this (separate script), then optional extensions
