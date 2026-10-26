@@ -1,0 +1,386 @@
+{
+  "machine_checks": "pass",
+  "built_at_utc": "2026-10-26T10:38:46.889726+00:00",
+  "engine": {
+    "path": "/tmp/cvm-tectonic-bin/tectonic",
+    "sha256": "4df19452c202c5bef9f7c7e4a01a3f2b9d5199f0a1f73b70b4fe1bffbc9837f6",
+    "version": "tectonic 0.15.0Tectonic 0.15.0",
+    "flags": [
+      "--only-cached",
+      "--reruns",
+      "3",
+      "--keep-logs",
+      "--keep-intermediates"
+    ]
+  },
+  "pdf": {
+    "pages": 11,
+    "bytes": 2443396,
+    "sha256": "a0c6e166763a062f273a2f173bf0c8ad298bf636339641eeb3fc5133e1c8f7be",
+    "page_size": "612 x 792 pts (letter)",
+    "pdf_author_empty": true,
+    "fonts": [
+      {
+        "name": "IHAIZV+NimbusRomNo9L-Regu",
+        "type": "Type 1C",
+        "encoding": "Custom",
+        "embedded": "yes",
+        "subset": "yes",
+        "unicode": "yes"
+      },
+      {
+        "name": "BZIVMZ+NimbusRomNo9L-Medi",
+        "type": "Type 1C",
+        "encoding": "Custom",
+        "embedded": "yes",
+        "subset": "yes",
+        "unicode": "yes"
+      },
+      {
+        "name": "IXFAWU+NimbusSanL-Bold",
+        "type": "Type 1C",
+        "encoding": "Custom",
+        "embedded": "yes",
+        "subset": "yes",
+        "unicode": "yes"
+      },
+      {
+        "name": "TQTHRL+CMSY10",
+        "type": "Type 1C",
+        "encoding": "Builtin",
+        "embedded": "yes",
+        "subset": "yes",
+        "unicode": "yes"
+      },
+      {
+        "name": "YEUUOC+CMR10",
+        "type": "Type 1C",
+        "encoding": "Builtin",
+        "embedded": "yes",
+        "subset": "yes",
+        "unicode": "yes"
+      },
+      {
+        "name": "AKHCZK+NimbusRomNo9L-MediItal",
+        "type": "Type 1C",
+        "encoding": "Custom",
+        "embedded": "yes",
+        "subset": "yes",
+        "unicode": "yes"
+      },
+      {
+        "name": "VDVGTR+CMMI10",
+        "type": "Type 1C",
+        "encoding": "Builtin",
+        "embedded": "yes",
+        "subset": "yes",
+        "unicode": "yes"
+      },
+      {
+        "name": "CAFSZL+CMR7",
+        "type": "Type 1C",
+        "encoding": "Builtin",
+        "embedded": "yes",
+        "subset": "yes",
+        "unicode": "yes"
+      },
+      {
+        "name": "DDIEWW+CMMI7",
+        "type": "Type 1C",
+        "encoding": "Builtin",
+        "embedded": "yes",
+        "subset": "yes",
+        "unicode": "yes"
+      },
+      {
+        "name": "FKPJSN+CMEX10",
+        "type": "Type 1C",
+        "encoding": "Builtin",
+        "embedded": "yes",
+        "subset": "yes",
+        "unicode": "yes"
+      },
+      {
+        "name": "PVTTLK+NimbusRomNo9L-ReguItal",
+        "type": "Type 1C",
+        "encoding": "Custom",
+        "embedded": "yes",
+        "subset": "yes",
+        "unicode": "yes"
+      },
+      {
+        "name": "JAGKKY+CMMI9",
+        "type": "Type 1C",
+        "encoding": "Builtin",
+        "embedded": "yes",
+        "subset": "yes",
+        "unicode": "yes"
+      },
+      {
+        "name": "NOMARO+NimbusMonL-Regu",
+        "type": "Type 1C",
+        "encoding": "Custom",
+        "embedded": "yes",
+        "subset": "yes",
+        "unicode": "yes"
+      },
+      {
+        "name": "KPXLOM+CMR9",
+        "type": "Type 1C",
+        "encoding": "Builtin",
+        "embedded": "yes",
+        "subset": "yes",
+        "unicode": "yes"
+      },
+      {
+        "name": "UTACNV+CMSY9",
+        "type": "Type 1C",
+        "encoding": "Builtin",
+        "embedded": "yes",
+        "subset": "yes",
+        "unicode": "yes"
+      },
+      {
+        "name": "BMQQDV+DejaVuSans",
+        "type": "CID TrueType",
+        "encoding": "Identity-H",
+        "embedded": "yes",
+        "subset": "yes",
+        "unicode": "yes"
+      },
+      {
+        "name": "BMQQDV+DejaVuSans",
+        "type": "CID TrueType",
+        "encoding": "Identity-H",
+        "embedded": "yes",
+        "subset": "yes",
+        "unicode": "yes"
+      }
+    ],
+    "all_fonts_embedded": true,
+    "type3_font_count": 0,
+    "page_text_sha256": [
+      "2c8efb7b9d17f7f646c144fccd8f5bc24be83c2b9bbf68970d43d9c76b64c6e1",
+      "cb468cd15bab51aa97bba8b1907a5c362b5e43643a27ca2d7fc5669d7f1e4550",
+      "74376865ab55f0aac8975b95b5685a0e73ccc9e42ce9416f282e6f5bbd150a88",
+      "a0cd50ec5e02b6335daff785c709b1e8203453ea9f21ae6d0b24811e4f5422dd",
+      "e77b6062d413f9bd46935fc4511220571df21ece384b6497b8b9da4de20a282c",
+      "fcc8006915f39ed237c3bb4f4b8834d782a2a8bf2323a3c1db9d8e479aa8fe11",
+      "21ad51a96c04d54dd01e075497ed5f15a25409d483610cc27b65cd0851e3aa56",
+      "a5d479e826673b3082d7a0a5fbd9c3bdac37e2c3ec9e441deb775a65bf4caf3a",
+      "a87076e5a7a008090889e048296dbaee61dee8fb3c4773d592dcf4ac1911f2ba",
+      "a84e09f141e0e375df311930aa09da87bf5af672ac92b57d496fd7219077f163",
+      "28ab18132e7adbebf513561672063840b8aba690368bddf7fe18b96769911807"
+    ]
+  },
+  "source_manifest": {
+    "files": [
+      "README.md",
+      "cvm.bst",
+      "cvm.sty",
+      "cvm_eso.sty",
+      "eso-pic.sty",
+      "figs/budget_curves.pdf",
+      "figs/fig1_user_20260915_v2.png",
+      "figs/fig2_word.png",
+      "figs/fig4_vector.pdf",
+      "figs/score_vs_latency.pdf",
+      "figure1_review.tex",
+      "figure4_review.tex",
+      "main.tex",
+      "references.bib"
+    ],
+    "sha256": {
+      "README.md": "eeac75a2cce8fe1c2d47059163f0fec938fda8ea4e4fc779bd046c02bc1ca603",
+      "cvm.bst": "5cfc4a10441fcd362f85e13f9ed21ce5a7814eed6cd76a522fab4179887ee88e",
+      "cvm.sty": "1130dbfe57b5f97d711277e1d7a5aa16fe75989893a577cac4fda682fc7851a7",
+      "cvm_eso.sty": "d198f4c276516b07fcd6200246c0aec3380dca3bd64f872f4b2adf9c74d59183",
+      "eso-pic.sty": "7458c91867d8a6646118271ca6dbca27fef3fbeabaf83ec90cfc547a5d4106b5",
+      "figs/budget_curves.pdf": "903350c854144e3f6912ed67d79773386209c6df404b57311b1037c813a642f3",
+      "figs/fig1_user_20260915_v2.png": "01545bccdb99b3f5a1b9fffd062f5fc3424fa8adbf2e836fb8823a94ebbe4c71",
+      "figs/fig2_word.png": "4ce58debf39da62cebc5dbaba6797cb3ad910707ff33ba11c6e1fdf0bb82322d",
+      "figs/fig4_vector.pdf": "8d61ef06adc5cbf5ea8038b517d77ff0d282a2c7ce46b516e27295496fe24e9c",
+      "figs/score_vs_latency.pdf": "213c34d456472587f0359cc71772c97fb7a1679faf085ada8f10dd9e411c720f",
+      "figure1_review.tex": "07cc37b028e4ca79bea1d13a05c33989bd5a922d66bc73f24dfae82f11aec453",
+      "figure4_review.tex": "9ab97611d721467b7f56165e6c63fc4cdde3ddf5128165eb44dfa945e7a44a6c",
+      "main.tex": "18b2b874080bc8dac7c8de6d54ab67a39416b98a3bc2a0e3306eec66a57148c7",
+      "references.bib": "a87751c9daa4dc5854bc4b7b42c1c85cb979cd7466dd290605a58ecb7cad095f"
+    },
+    "citation_count": 51,
+    "citation_keys": [
+      "baek2026agilepruner",
+      "bai2025qwen25vl",
+      "bai2025qwen3vl",
+      "bolya2023tome",
+      "chen2024fastv",
+      "chen2026alvts",
+      "chen2026v2drop",
+      "choi2026docprune",
+      "du2026coin",
+      "fang2026prunesid",
+      "gao2026quietprune",
+      "hudson2019gqa",
+      "islam2025adaptmerge",
+      "jiang2025gprune",
+      "kim2026zooprune",
+      "kwon2023vllm",
+      "lee2026spare",
+      "lei2026core",
+      "li2024tokenpacker",
+      "li2026aot",
+      "li2026crisp",
+      "li2026transprune",
+      "liu2024ocrbench",
+      "liu2026provenance",
+      "luan2025adaptprune",
+      "ma2026apet",
+      "mathew2021docvqa",
+      "oh2026anchorprune",
+      "shang2024prumerge",
+      "singh2019textvqa",
+      "song2026evocomp",
+      "sun2026hiloprune",
+      "sun2026ifprune",
+      "wang2024vtccls",
+      "wang2025effivlmbench",
+      "wang2026informationhorizon",
+      "wang2026metacompress",
+      "wang2026pixelprune",
+      "xing2024pyramiddrop",
+      "xu2026score",
+      "yang2024visionzip",
+      "ye2024fitprune",
+      "yu2026visiontrim",
+      "zeng2025glimpseprune",
+      "zhang2024fastervlm",
+      "zhang2024lmmseval",
+      "zhang2024sparsevlm",
+      "zhang2025vscan",
+      "zhang2026hybrid",
+      "zhu2025internvl3",
+      "zhu2026hawk"
+    ],
+    "figure_count": 5,
+    "figures": [
+      "figs/budget_curves.pdf",
+      "figs/fig1_user_20260915_v2.png",
+      "figs/fig2_word.png",
+      "figs/fig4_vector.pdf",
+      "figs/score_vs_latency.pdf"
+    ],
+    "label_count": 17
+  },
+  "experiment_evidence": {
+    "matched_main": {
+      "path": "/media/disk2/YZX/research/vla/.claude/worktrees/cvm-oneday-20261025/reports/cvm2027_matched_main_20261026.json",
+      "sha256": "52327601d0c59663bdcf3b9a781348e739cc3dfc4a1d12b51669eafe3c126341",
+      "complete": true,
+      "cell_count": 8,
+      "planned_pair_count": 12
+    },
+    "corrected_quality_cost": {
+      "path": "/media/disk2/YZX/research/vla/.claude/worktrees/cvm-oneday-20261025/reports/cvm2027_corrected_quality_cost.json",
+      "sha256": "c467dedf007d42979c777e959ac50ec34c47c47e243c37206de1bcca6398a723",
+      "complete": true,
+      "cell_count": 10,
+      "quality_examples_per_task": 100
+    },
+    "verified_raw_sha256": {
+      "textvqa/none": "c606cc6b2a861387335048a50850122530ca8b3bed6d8146293573e20722d68b",
+      "textvqa/pre": "7c6f492baaafc2fe59c374c864ddc9a145feb7238ebce80803ed16d9681667fc",
+      "textvqa/fastv": "f308fa4dcffe41c0f99187edc310e8084094a1906b50028c52fe20b30669e1e2",
+      "textvqa/hilo": "a8f1e2e92cb06638715ee251e51f167bb19b98e0d096e3781a8d221d1edf1a61",
+      "ocrbench/none": "c68e041e923644870855fbe0196015f721e8abc5c2a2184f7b16a44530efb56d",
+      "ocrbench/pre": "68aeb5d85b2e3f4fa0b61c4f5c17600f2e8035471753d350ff8a5f790578cb19",
+      "ocrbench/fastv": "049d59d1c10c048d41fc49fc381f851d8b2e078a5f90465237ec7c8dfe9be106",
+      "ocrbench/hilo": "e98ea739b96f6afe6b6124a806e5511370aaf92571d30104e494337480765b9d",
+      "timing/harness": "e9b730e18fe21621798911645cb9ab89c3ca77755b5fc2bf5e08ccc517a35197",
+      "timing/hilo": "5fe379ea3f1b36953677f6cc2e50fa65fab7ff3351e4d8fc90e70eb929f39e40"
+    }
+  },
+  "source_zip_sha256": "844cdcc791a0c820ae20a1874b6ede6a91fd825dcbae9becc2a53a77fe9a20c6",
+  "source_zip_bytes": 2944505,
+  "independent_rebuild": {
+    "pass": true,
+    "page_text_identical": true,
+    "pages": 11,
+    "pdf_sha256": "336314c79cae36a178fc43ff29b43efc71f4e7ec9f4df5c4232446d775419e0f"
+  },
+  "visual_qa": {
+    "status": "pass",
+    "render_dpi": 120,
+    "page_count": 11,
+    "directory": "/media/disk2/YZX/research/vla/.claude/worktrees/cvm-oneday-20261025/output/qa/cvm2027_review_20261026/pages",
+    "reviewed_at": "2026-10-26T18:41:06+08:00",
+    "reviewed_pages": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11
+    ],
+    "coverage": "Every final rendered page inspected; independent passes cover pages1-4,5-8,9-11, with an additional check of main-result/cost/reference pages.",
+    "checks": [
+      "no clipping or overlap",
+      "readable figures, legends and tables",
+      "normal glyphs and column layout",
+      "main score units and completion counts correct",
+      "fixed-subset and mixed-attention labels preserved"
+    ],
+    "page_image_sha256": {
+      "page-01.png": "90da73e032a4bbe811510ae90be98b39a10c49a5f65951ca56a0e7406994b065",
+      "page-02.png": "68801843863586eafc13e0363389b666205f082eae365b6dbe22fedca22cabb2",
+      "page-03.png": "a81104ef7c160d044f9889a12c28de064ddeac0e759ad5d900dd8127cf33c0ab",
+      "page-04.png": "a2cb745ea18ba8c00073a1a23c35407f34731f946125cfc10cdb65cfe2b2d8e4",
+      "page-05.png": "23e103f589cd0567808e177ce138f577f02409cbea6b48b6f5119c4ce7e3b4e4",
+      "page-06.png": "80c7ee274a2049accf8698f45ae9bb2bfda093c863071ddb7a49f631f6b75329",
+      "page-07.png": "4792a227773ce8992be910d116aa0581ea57264fb825d715b14f0af7cf158cb6",
+      "page-08.png": "ad845797c4497ce74cbe8ca6ed24929a6a97c18b483608a2bc87ec6042c9be8e",
+      "page-09.png": "b22fd81239a8f7e02edc8a9b7c0b3fce63d422b94b516772f197aa0998d139a7",
+      "page-10.png": "2f0c4429c75ac3f996338d8a971a19bd1f81bac57d070b648ee8ee3a56752ad3",
+      "page-11.png": "3825483023ecd729a77e33e265606c85a1514b30f5147d8b71d74c099b68b76a"
+    }
+  },
+  "artifacts": {
+    "manuscript_pdf": "/media/disk2/YZX/research/vla/.claude/worktrees/cvm-oneday-20261025/drafts/cvm2027_submission_20261025/main.pdf",
+    "review_pdf": "/media/disk2/YZX/research/vla/.claude/worktrees/cvm-oneday-20261025/output/pdf/cvm2027_review_draft_20261026.pdf",
+    "source_zip": "/media/disk2/YZX/research/vla/.claude/worktrees/cvm-oneday-20261025/output/source/cvm2027_review_source_20261026.zip",
+    "manuscript_source_zip": "/media/disk2/YZX/research/vla/.claude/worktrees/cvm-oneday-20261025/drafts/cvm2027_submission_20261025/cvm2027_review_source.zip",
+    "qa_json": "/media/disk2/YZX/research/vla/.claude/worktrees/cvm-oneday-20261025/reports/cvm2027_build_qa_20261026.json",
+    "qa_report": "/media/disk2/YZX/research/vla/.claude/worktrees/cvm-oneday-20261025/reports/cvm2027_build_qa_20261026.md",
+    "page_images": "/media/disk2/YZX/research/vla/.claude/worktrees/cvm-oneday-20261025/output/qa/cvm2027_review_20261026/pages"
+  },
+  "staging_directory": "/tmp/cvm2027-release-8te5etgv",
+  "submission_performed": false,
+  "source_asset_metadata_check": {
+    "pass": true,
+    "checked_at": "2026-10-26T18:41:06+08:00",
+    "assets": {
+      "fig2_word.png": {
+        "exif_absent": true,
+        "metadata_keys": [
+          "dpi"
+        ]
+      },
+      "score_vs_latency.pdf": {
+        "pdf_author_empty": true
+      },
+      "budget_curves.pdf": {
+        "pdf_author_empty": true
+      },
+      "fig1_user_20260915_v2.png": {
+        "exif_absent": true,
+        "metadata_keys": []
+      },
+      "fig4_vector.pdf": {
+        "pdf_author_empty": true
+      }
+    }
+  }
+}

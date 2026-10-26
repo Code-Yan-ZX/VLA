@@ -1,3 +1,16 @@
+# October 26 experimental and writing supplement
+
+- Adds fresh None/RBM/FastV/official Hi-Lo adaptation comparisons on full TextVQA and OCRBench under shared vision-SDPA/text-eager attention, with all-attempt denominators, paired intervals and explicit vendored-model implementation boundaries.
+- All eight new cells complete without failure. RBM trails FastV by 1.32 percentage points on TextVQA but exceeds it by 157 OCRBench points; RBM exceeds Hi-Lo on TextVQA, while the OCRBench difference of -2 points has a confidence interval crossing zero and does not establish equivalence.
+- Adds fixed 25/50/75% retention curves, a common-921 OCRBench sensitivity, and a 500-example DocVQA stress test at a shared 2M pixel cap. These earlier experiments retain their separate mixed-attention protocol. A document-page cluster bootstrap checks the 500-question result over 417 pages.
+- Updates the abstract, introduction and conclusion to report task-dependent comparisons with stronger selectors and the DocVQA-subset result together, retaining the main-output representation-control reversal.
+- Adds retention-curve and same-request quality-versus-latency figures while preserving all three prior figure assets and all 51 substantive references.
+- Clarifies that the HF adapter executes the complete vision encoder and native mergers before gathering selected outputs.
+- Withdraws the defective initial timing data; corrected measurements cover ten configurations under shared vision SDPA / text eager, fixed 200 requests with three repetitions and official quality scoring of those same requests. Reports direct latency, TTFT, output lengths, raw allocated/reserved memory peaks, workload wall time, and discrete measured-cost targets without assuming compression guarantees speedups or quality equivalence.
+- Uses standard T1 font encoding so the Times review template also builds correctly with the isolated XeTeX/Tectonic engine; official style files, font size and margins are unchanged.
+- Final corrected cost values, page count and source/PDF hashes are recorded in the October 26 build QA after validation. No external submission.
+- Places all figures and tables before the conclusion without changing the official review style or margins; the final manuscript is 11 pages including references.
+
 # CVM 2027 revision, 2026-10-25
 
 - Copied only the manuscript, bibliography, and four used figure assets; the

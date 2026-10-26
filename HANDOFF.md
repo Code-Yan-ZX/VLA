@@ -1,18 +1,18 @@
-# HANDOFF — CVM补实验与论文（2026-10-26）
-- 工作树：.claude/worktrees/cvm-oneday-20261025；codex/cvm-24h-supplement；原工作区修改保留。
-- 用户要求20:00前完成实验和写作；批准为新主表延长原GPU停线，未授权投稿。
-- 新统一attention主表8/8于17:56:51完成，每方法TV5000/OCR1000均零失败，独立评分和24个20k CI复核通过。
-- 新TV accuracy% None/RBM/FV/HiLo=83.45/75.58/76.90/66.75；OCR points/1000=765/610/453/612。
-- TV RBM−FV−1.32pp[-2.32,-.34]；RBM−HiLo+8.83[7.63,10.04]；OCR−HiLo−2[-31,27]，不称等价。
-- visionSDPA/text eager、native/bf16/greedy32/4M，None100%、其余25%；HiLo vendored路径仍是实现边界。
-- 正式数据/源SHA/全部比较：reports/cvm2027_matched_main_20261026.{md,json}；独立audit另表，CPU脚本已归档。
-- 预定TV1000/OCR1000三预算曲线齐；可选旧TV5000扩展5/6，HiLo75于17:57:25启动，硬停19:00。
-- 可选资源门3445秒、两次GPU空闲/缓存与冻结源校验通过；session99339，19:00前TERM/KILL；不评partial。
-- 修正P3十组6000请求全过，固定TV100+OCR100×3；95%成本达标只对相同100题/任务。
-- 旧成本全部撤回，raw保留；当前HF完整ViT/merger后gather，不宣称视觉加速。
-- 旧mixed主表/79共同OOM另列，不能当新主表；Doc500统一2M，417页聚类CI方向保持，不是full split。
-- 权威稿drafts/cvm2027_submission_20261025/main.tex已11页，51实引/原3图保留，主表与摘要结论均已同步。
-- 待最后可选收束后拷最新预算/成本图，运行scripts/cvm2027_build_release.py，再全页目视QA/独立源包复编。
-- 总报告含22条审计/表图/复现；原始预测/日志/权重不进Git；manifest最终重新生成。
-- 最后更新STATE/本HANDOFF≤20行、commit/push main；当前阶段最新47d1cc9，最终以HEAD为准。
-- 原三模型操作性矩阵和Qwen主输出控制反转保留，不恢复普遍阶段优势，不代投稿。
+# HANDOFF — CVM实验与论文已完成（2026-10-26）
+- 隔离树.claude/worktrees/cvm-oneday-20261025；codex/cvm-24h-supplement；原工作区修改保留。
+- 用户要求20:00交付并批准GPU延时；全部GPU18:37:55结束，18:38:06评分收束，未投稿。
+- 新主表8/8：每方法TV5000/OCR1000均零失败，同visionSDPA/text eager/4M/native/bf16/greedy32。
+- TV accuracy% None/RBM/FV/HiLo=83.45/75.58/76.90/66.75；OCR points/1000=765/610/453/612。
+- TV RBM−FV−1.32pp[-2.32,-.34]，−HiLo+8.83[7.63,10.04]；OCR−FV+157[128,187]，−HiLo−2[-31,27]。
+- 8格上游评分、12对/24个20k CI独立复核通过，800个P3重合答案/完整token/N/K一致；不称跨0为等价。
+- 预定TV1000/OCR1000三预算曲线齐；可选旧TV5000扩展6/6齐，HiLo75=81.864%，旧1k答案全一致。
+- 旧mixed曲线另列；论文固定1k主曲线不换样本；HiLo vendored模型仍是实现边界。
+- 修正成本10组TV100+OCR100×3共6000请求全过；95%成本达标只对相同100题/任务，不外推full split。
+- 旧成本全部撤回并保留raw；HF完整ViT/merger后gather，不宣称视觉加速；有限32题no-op不外推全局等价。
+- Doc500统一2M，417页cluster CI方向保持，不是full split；旧79个OCR OOM不属于新主表。
+- 论文drafts/cvm2027_submission_20261025/main.pdf及cvm2027_review_source.zip；权威源main.tex。
+- 正式11页/51实引/5图件（原3图保留）；匿名/字体/引用/版面/独立ZIP复编/最终11页目视QA均PASS。
+- reports/cvm2027_supplement_20261026.md含完整表图/复现/限制；instruction_audit逐条对应原22条。
+- matched_main、corrected_quality_cost、q10_extension及各独立audit报告保存；raw/日志/数据/权重仅本地。
+- 最终manifest包括raw/代码/论文PDF与ZIP/源/QA哈希；最终提交见HEAD，完整主表阶段a342cf8。
+- 单A40任务均结束，不自动再启动GPU；原三模型操作矩阵及主输出控制反转保留，不恢复普遍优势claim。

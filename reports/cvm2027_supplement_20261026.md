@@ -2,7 +2,7 @@
 
 时间：2026-10-25 19:07:06 开始；2026-10-26 接管审计和收束（Asia/Shanghai）。隔离分支 `codex/cvm-24h-supplement` 基于含 `1600bfe` 的 main。原始执行代码至 `90a5b73`，随后修正与论文版本见 Git 历史。
 
-**当前状态：新增统一attention完整主表8/8于17:56:51完成，全部样本零失败，正式评分与协议核验通过；修正版P3成本10组和预定预算曲线齐全。论文正在按新结果定稿，可选旧协议Hi-Lo75全5000于17:57:25开始补跑，19:00前硬停。下面旧表保留为历史操作性结果。** 原工作区修改、历史预测与日志保留。用户10/26已追加授权补论文，覆盖原提示词“本轮不改论文”；不包含外部投稿。
+**最终状态：统一attention主表8/8、修正P3成本10组、预定25/50/75%曲线与Doc500均完成；可选TextVQA全5000扩展也已6/6完整评分。所有GPU计算于18:37:55结束。论文11页、51实引和5个图件已完成，匿名源包独立复编及最终11页逐页目视全部通过。** 原工作区修改、历史预测与日志保留。用户10/26已追加授权补论文，覆盖原提示词“本轮不改论文”；不包含外部投稿。
 
 ## 0. 统一attention完整主表（8/8完整、零失败）
 
@@ -55,7 +55,8 @@ TextVQA为seed=20261025预固定、按视觉token数代理（旧pre字段为25%�
 
 表图：`reports/figures_cvm2027_supplement/budget_curves.{pdf,svg}`；实际K图 `score_vs_actual_k.{pdf,svg}`。后者基于共同样本真实计数，四路特征宽度不计作四倍LLM token。
 
-Q10可选全5000扩展已完成RBM/FastV50/75及Hi-Lo50，共5/6格，独立表与CI见 `reports/cvm2027_q10_extension_20261026.{md,json}`。对应分数依次为80.75/82.36、82.26/83.00及76.86%，均按5000尝试题官方评分；Hi-Lo75缺失，不能称完整全量曲线。修正P3与统一attention全量主表已优先完成，固定1000题曲线始终是完整的预定结果。最后Hi-Lo75按17:42预先记录的纯资源门于17:57:25启动，保守预留3445秒、19:00前硬停；最终成功或停止状态另记，不把partial计完整。
+Q10可选全5000扩展现已**6/6完整**：RBM50/75为80.754/82.360%，FastV为82.260/83.000%，Hi-Lo为76.862/81.864%；RBM/FastV各4995/5000成功，Hi-Lo各5000/5000，全部分数仍按5000尝试题、失败记0。独立表/CI与完整来源见 `reports/cvm2027_q10_extension_20261026.{md,json}`。Hi-Lo75于17:57:25按提前记录的纯资源门启动，18:37:55零错完成，CPU收束18:38:06结束，未触发19:00硬停。独立核验确认完整ID/K、源码/缓存/参数及旧固定1000题的1000/1000答案一致；官方81.864%、相对旧None差−1.376pp与20,000次CI[−1.920,−0.826]均重现，见 `reports/cvm2027_q10_hilo75_audit_20261026.{md,json}`。全量扩展另图为 `reports/figures_cvm2027_supplement/textvqa_full_budget_curves.{pdf,svg}`，仍是旧mixed-attention协议；论文主曲线始终保留预固定1000题。
+
 
 ## 3. 成本审计：旧结果撤回与新测量边界
 
@@ -65,7 +66,7 @@ Q10可选全5000扩展已完成RBM/FastV50/75及Hi-Lo50，共5/6格，独立表�
 
 单次请求从已经解码的RGB PIL图像开始，不含磁盘、图像解码、模型加载、队列或预热。workload wall包含整个循环、每ID一次本地解码、同步、记账与失败恢复；其吞吐分母不可与单请求边界混淆。选择/融合可能包含在prefill段，禁止重复求和。当前HF RBM确实完整执行ViT与所有merger后才gather，因此不能计入任何未实际省下的视觉加速。修正版手工循环仅对最后prefill token做词表投影，与原生generate的`logits_to_keep=1`一致，并以完整greedy输出核对原helper；这是新的成本测量实现；输出一致的证据限于已经测试的请求，不把历史harness原样时延与优化后结果混称，也不外推全split逐位等价。
 
-新统一attention不同于旧full-quality路径，**质量—成本图只用本次200题产生的答案重新官方评分，按任务各100题与相同请求的成本配对**，不把旧全量分数冒充新协议质量。新文件为 `plan/timing_harness_corrected.json` 和 `plan/timing_hilo_corrected.json`；完成后 `reports/cvm2027_corrected_quality_cost.{md,json}` 给出完整表、同协议质量与95%目标下最低测得p50成本。
+新统一attention不同于旧full-quality路径，**质量—成本图只用本次200题产生的答案重新官方评分，按任务各100题与相同请求的成本配对**，不把旧全量分数冒充新协议质量。新文件为 `plan/timing_harness_corrected.json` 和 `plan/timing_hilo_corrected.json`；`reports/cvm2027_corrected_quality_cost.{md,json}` 已给出完整表、同协议质量与95%目标下最低测得p50成本。
 
 修正版于14:48完成：每配置200个共同ID、各3次，共6000次完整请求，零失败，重复答案全部一致，actual K/36层轨迹/原始中位数与峰值检查通过。10组完整workload wall合计4009.6秒，不含模型加载/预热。全部表、分段、p50/p95、原始峰值与配对CI已写入上述质量成本报告。下表仅列达到预定95%点估计目标的最低实测p50，并非质量等价证明。
 
@@ -106,6 +107,7 @@ bash scripts/cvm24h_reproduce_quality.sh all
 bash scripts/cvm24h_score_all.sh
 bash scripts/cvm24h_score_oc_curve.sh
 bash scripts/cvm24h_score_q10.sh
+$P scripts/cvm24h_q10_report.py --compute-deadline 2026-10-26T19:00:00+08:00 --decision-at 2026-10-26T17:57:25+08:00
 # 修正成本：新文件，先harness后hilo；deadline只用于本次收束
 $P scripts/cvm24h_timing_v2.py --engine harness --out results/cvm2027_supplement_20261026/plan/timing_harness_corrected.json
 $P scripts/cvm24h_timing_v2.py --engine hilo --out results/cvm2027_supplement_20261026/plan/timing_hilo_corrected.json
@@ -115,6 +117,8 @@ $P scripts/cvm24h_build_tables.py
 # 新复现时显式给未来4小时截止；已有同指纹完整cell会幂等复用，不覆盖历史raw。
 CVM_MATCHED_DEADLINE_EPOCH="$(( $(date +%s) + 14400 ))" bash scripts/cvm24h_run_matched_main.sh
 $P scripts/cvm24h_score_matched.py
+$P scripts/cvm24h_audit_matched.py
+$P scripts/cvm24h_audit_q10_hilo75.py
 # 文档页相关性敏感性与最终所有产物哈希
 $P scripts/cvm24h_doc_cluster.py
 $P scripts/cvm24h_manifest.py
@@ -137,6 +141,6 @@ $P scripts/cvm24h_score_matched.py --prediction-dir results/cvm2027_reproduction
 
 论文权威路径 `drafts/cvm2027_submission_20261025/main.tex`。补入四方法主表、预算表/图、Doc500表与质量—实际成本；保留原三模型矩阵和用户选定的图，明确历史vLLM与新HF协议边界。摘要/引言/结论不再推“先选普遍更好”，同时报告FastV的TextVQA优势和RBM的Doc子集优势。
 
-全部正式结果完整后，运行 `python scripts/cvm2027_build_release.py` 生成匿名论文PDF与最小源ZIP。该入口会拒绝pending稿或不完整实验，核对源数据SHA、51个实引、匿名性、字体、页数/大小及TeX错误，并解包源ZIP到独立目录复编；全部机器检查成功后才替换canonical PDF/ZIP。可用 `--check-source-only` 做只读稿件门检，或 `--engine /path/to/tectonic` 指定隔离的TeX引擎。全页PNG在 `output/qa/cvm2027_review_20261026/pages/`，机器检查和人工目视结果在 `reports/cvm2027_build_qa_20261026.{json,md}`；渲染成功本身不等于目视通过。
+已运行 `python scripts/cvm2027_build_release.py`，生成11页匿名论文PDF（2,443,396字节）与最小源ZIP（2,944,505字节）。51实引、原3图及新增预算/成本图全部保留。匿名源ZIP解包到独立目录重新编译，全部11页标准化文本与正式PDF一致；字体全部嵌入、零Type3、作者元数据空白，TeX没有未定义引用、缺字或overfull。最终11页逐页目视全部通过，源图件元数据另行检查通过。该入口会拒绝pending稿或不完整实验，核对源数据SHA、51个实引、匿名性、字体、页数/大小及TeX错误，并解包源ZIP到独立目录复编；全部机器检查成功后才替换canonical PDF/ZIP。可用 `--check-source-only` 做只读稿件门检，或 `--engine /path/to/tectonic` 指定隔离的TeX引擎。正式交付：[PDF](../drafts/cvm2027_submission_20261025/main.pdf)、[匿名源ZIP](../drafts/cvm2027_submission_20261025/cvm2027_review_source.zip)。全页PNG在 `output/qa/cvm2027_review_20261026/pages/`，机器检查和逐页目视结果在 `reports/cvm2027_build_qa_20261026.{json,md}`；本次在渲染后完成了实际逐页目视核验。
 
 本轮不做训练、新模型、Doc50/75、空间均匀/随机控制或连续批处理；其中额外控制按原指令为可选任务。新增现代baseline全split比较已统一attention，Hi-Lo的vendored模型代码仍是实现边界；旧曲线/Doc500的attention差异另行披露，不把小样本no-op或common-answered包装为全量等价。未代作者投稿。

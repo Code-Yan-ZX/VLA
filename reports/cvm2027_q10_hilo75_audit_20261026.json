@@ -1,0 +1,107 @@
+{
+  "status": "PASS",
+  "audited_at": "2026-10-26T18:38:28.639428+08:00",
+  "GPU_work": false,
+  "canonical_results_changed": false,
+  "scope": "Original mixed-attention optional Q10 extension; not the new matched main",
+  "attempted": 5000,
+  "answered": 5000,
+  "failures": 0,
+  "exact_full_ID_order": "PASS",
+  "actual_K_and_original_N": "PASS",
+  "mean_original_N": 744.7134,
+  "mean_actual_K": 558.535,
+  "fixed_subset_overlap": {
+    "n": 1000,
+    "same_original_N_and_K": true,
+    "identical_answers": 1000,
+    "different_answers": [],
+    "fixed_metadata_prefix_sha256": "0cf3c8c555cfe6dd"
+  },
+  "official_score_percent": 81.864,
+  "old_None_score_percent": 83.24000000000001,
+  "old_None_failure_ids": [
+    "35389",
+    "36283",
+    "36747",
+    "36759",
+    "36760"
+  ],
+  "pairs": {
+    "paired_attempted_all": {
+      "n": 5000,
+      "seed": 20261285,
+      "resamples": 20000,
+      "delta_pp": -1.3760000000000003,
+      "ci95_pp": [
+        -1.92,
+        -0.826
+      ],
+      "sign_flip_p_two_sided": 4.999750012499375e-05,
+      "matches_official": true
+    },
+    "paired_common_answered_sensitivity": {
+      "n": 4995,
+      "seed": 20261286,
+      "resamples": 20000,
+      "delta_pp": -1.4574574574574573,
+      "ci95_pp": [
+        -2.008008008008008,
+        -0.928928928928929
+      ],
+      "sign_flip_p_two_sided": 4.999750012499375e-05,
+      "matches_official": true
+    }
+  },
+  "launch_source_and_current_model_cache_fingerprints": "PASS",
+  "launch_completed_before_hard_stop": true,
+  "protocol_configuration": {
+    "model": "Qwen/Qwen3-VL-8B-Instruct",
+    "mode": "hilo_official",
+    "engine": "hilo-vendored-29265e3",
+    "benchmark": "textvqa",
+    "seed": 0,
+    "max_pixels": 4000000,
+    "max_tokens": 32,
+    "attn": "sdpa",
+    "keep_ratio": 0.75,
+    "candidate_ratio": 0.75,
+    "candidate_rule": "official default 0.3 clamped to >= keep",
+    "prune_layer": 2,
+    "use_fusion": true,
+    "fusion_params": {
+      "strength": 0.3,
+      "top_k_ratio": 0.1,
+      "attention_threshold": 0.05,
+      "layers": [
+        0,
+        1
+      ]
+    },
+    "patches": {
+      "hilo_commit": "29265e3b13ef89ecfd2cbd8803f1678a2ce1bdb6",
+      "fix1": "dead-code removal of undefined top_index_1 guard (non-algorithmic)",
+      "shim": "text_config.rope_parameters from rope_scaling (tf 4.57.6)",
+      "transformers": "4.57.6",
+      "torch": "2.10.0+cu128"
+    }
+  },
+  "source_sha256": {
+    "/media/disk2/YZX/research/vla/.claude/worktrees/cvm-oneday-20261025/results/cvm2027_supplement_20261026/predictions/q10_hilo_textvqa5k_keep0.75.json": "a02376df71245020201b731ae3e0d43d2716e24555e183d3e1b4f531f6881e22",
+    "/media/disk2/YZX/research/vla/.claude/worktrees/cvm-oneday-20261025/results/cvm2027_supplement_20261026/predictions/c25_hilo_textvqa1k_keep0.75.json": "a0fa738adc161a479006cd8273e0666d344a587624e824dedf789ce1f6c69369",
+    "/media/disk2/YZX/research/vla/.claude/worktrees/cvm-oneday-20261025/results/cvm2027_supplement_20261026/predictions/p1_none_textvqa_full.json": "4fdc40c6fcccefd1b38b40c582a01948675d4dcfd74e5987bf5a1da9db780de6",
+    "/media/disk2/YZX/research/vla/.claude/worktrees/cvm-oneday-20261025/results/cvm2027_supplement_20261026/plan/p2_textvqa_1000_ids.txt": "8224d94fb859ead6388ac06fd72487bd7252541f4bf7f9b88e5c00521c48a9e4",
+    "/media/disk2/YZX/research/vla/.claude/worktrees/cvm-oneday-20261025/results/cvm2027_supplement_20261026/plan/p2_textvqa_1000.jsonl": "d136d4935f3fa2e996993b2a6abd5e7caf9e8e85ce413bf4969e1a6159fc3d9a",
+    "/media/disk2/YZX/research/vla/.claude/worktrees/cvm-oneday-20261025/results/cvm2027_supplement_20261026/plan/p2_subsets_meta.json": "bf03000178301e1356cfead1a47586532928dfc6255119a33d099eafaa92aecc",
+    "/media/disk2/YZX/research/vla/.claude/worktrees/cvm-oneday-20261025/results/cvm2027_supplement_20261026/plan/optional_hilo75_launch_20261026T175722980236_2551204.json": "93fb4b3b6cddf5655482311588a80f41b09129d6aa3747a02d7f1dd45adb09ae",
+    "/media/disk2/YZX/research/vla/.claude/worktrees/cvm-oneday-20261025/results/cvm2027_supplement_20261026/logs/q10_hilo_textvqa5k_keep0.75_completion_20261026T175722980236_2551204.log": "c967ddce66bbdcbc131d78cd712f1043140bebf98d7c6584ba6353ddc35ace3a",
+    "/media/disk2/YZX/research/vla/.claude/worktrees/cvm-oneday-20261025/results/cvm2027_supplement_20261026/plan/scores/full_q10_hl_0.75.json": "6fd77cdb607aff9ad2c096f8fc46918ac8cfd328984f033c1dd3fdb4eb354225",
+    "/media/disk2/YZX/research/vla/.claude/worktrees/cvm-oneday-20261025/reports/cvm2027_q10_extension_20261026.json": "77bec6ffaf8d6c5c3b3e1a6e9d25ade41679e46add3ac4ac29798f80b2c0448c",
+    "/media/disk2/YZX/research/vla/.claude/worktrees/cvm-oneday-20261025/tmp/cvm_cpu_rescore_20261025/TextVQA_0.5.1_val.json": "4ceb5aadc1a41719d0a3e4dfdf06838bcfee1db569a9a65ee67d31c99893081d"
+  },
+  "audit_script": "/media/disk2/YZX/research/vla/.claude/worktrees/cvm-oneday-20261025/scripts/cvm24h_audit_q10_hilo75.py",
+  "audit_sha256": "0a336866f479291e878790eb19dc3165d385f29568b24fde4153714223908860",
+  "bootstrap_audit_helper_sha256": "56e72feea0adbb35aad2817833d6adf9cd58346d3a74b56c1224b485dd1d3881",
+  "reproduce_command": "/home/dell/miniconda3/envs/qwen3vl_clean/bin/python scripts/cvm24h_audit_q10_hilo75.py",
+  "limitations": "Legacy TV1000 records configuration/commit/version, not original weight-file SHA256s. The new full run has a launch-side cache/source pin; overlap answers provide an additional reproducibility check. These mixed-attention results do not extend the shared-attention main or its cost measurements."
+}

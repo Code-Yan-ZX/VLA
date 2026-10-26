@@ -1,27 +1,26 @@
-# STATE.md — CVM supplement and manuscript (2026-10-26, Asia/Shanghai)
-- Active worktree: `.claude/worktrees/cvm-oneday-20261025`, branch `codex/cvm-24h-supplement`.
-- User now requests completion of experiments AND manuscript supplementation before today 20:00; no submission.
-- Codex is actively coordinating this worktree; old Claude hourly checks must not launch duplicate jobs or commit mid-edit.
-- USER APPROVED ~3h GPU extension to complete uniform-backend full main table; target compute ~18:00, final delivery 20:00.
-- P1 quality complete: TextVQA full5000 None/RBM/FastV/Hi-Lo = 83.24/75.50/76.83/66.77.
-- OCRBench full1000 attempted = 707/559/413/613; 79 harness failures confound Hi-Lo comparison.
-- OCRBench common921: Hi-Lo−RBM CI crosses0; neither superiority nor quality equivalence follows.
-- P2 complete: fixed TextVQA1000 and OCRBench1000 curves at 25/50/75%; DocVQA500 unified2M.
-- DocVQA500 ANLS: None95.73, RBM82.76, FastV70.45, Hi-Lo76.38; subset, not full split.
-- P1 engines differ: harness eager vs vendored Hi-Lo SDPA; disclose adaptation/implementation boundary.
-- P3 OLD TIMING INVALID: missing inference mode, accumulating MergerTap hooks, FastV missing deepstack.
-- P3 OLD Hi-Lo config updates external copied config; budget labels unverified. Do not cite legacy timings.
-- Corrected P3 all10 complete14:48: shared visionSDPA/text eager, fixed200 x3, zero failures/repeat drift.
-- Q10 optional full curves5/6: Hi-Lo .75 full5000 launched17:57:25; hardGPUstop19:00; session99339.
-- Original Q10 parent and old watcher terminated after Hi-Lo50 exit; optional Hi-Lo75 waits until matched-main QC.
-- P3+hilo32 no-op and original eager32 actual-generation gate pass; eager logit maxabs.125, not exact.
-- Manuscript agent owns main.tex/references.bib; scoring agent owns table builder/quality summaries.
-- Cost agent owns timing_v2 script; root owns reports, provenance, state, release packaging and final Git.
-- Preserve original main-worktree changes and all old raw files. No force push, no weights/data/logs in Git.
-- Uniform8-cell main COMPLETE17:56:51, zero failures: TV None/RBM/FV/HiLo83.45/75.58/76.90/66.75; OCR765/610/453/612.
-- New main: all four arms visionSDPA/text eager, same native positions/bf16/greedy32/4M; all compressed keep.25.
-- Raw new main: results/cvm2027_supplement_20261026/matched_main/{mode}_{benchmark}.json; score all6 pairs/task.
-- Costs: TV95% cheapest RBM50/FV25/HiLo75; OCR RBM50/FV75/HiLo75. Only same100/task quality-cost pairs.
-- Main supervisor finished; CPU-independent scoring audit active; matched_main_queue.log and matched_full_*.log retained.
-- Cost manuscript staging11pages (/tmp/cvm2027_revision_build/main.pdf); canonical PDF/ZIP await full main.
-- Optional source/prereq/cache/GPU/time gates pass; launch3755s before19:00 with3445s required; primary1k plots stay fixed.
+# STATE.md — CVM experiments and manuscript complete (2026-10-26, Asia/Shanghai)
+- Active isolated worktree: `.claude/worktrees/cvm-oneday-20261025`, branch `codex/cvm-24h-supplement`.
+- User requested experiments and manuscript before20:00; approved GPU extension for matched main; no submission.
+- All GPU work ended18:37:55, optional closeout finished18:38:06; no active experiment supervisor.
+- Matched main8/8 complete: all four methods TV5000/OCR1000, zero failures; shared visionSDPA/text eager.
+- Main TV accuracy% None/RBM/FV/HiLo83.45/75.58/76.90/66.75; OCR points/1000=765/610/453/612.
+- TV RBM−FV−1.32pp[-2.32,-.34], RBM−HiLo+8.83[7.63,10.04]; OCR−FV+157[128,187], −HiLo−2[-31,27].
+- No equivalence claim from crossing0; all compressed25% full-split scores miss95% None quality.
+- All8 official scores/12pairs/24 twenty-thousand-resampleCIs independently reproduced;800P3 overlap outputs agree.
+- Matched predictions: results/cvm2027_supplement_20261026/matched_main/; source fingerprints frozen, raw local.
+- Corrected P3 ten configs complete: sameTV100+OCR100 x3,6000 executions, zero failures/repeat drift.
+- P3 uses decodedRGB→processor/transfer/fullViT/select/fuse/prefill/decode; memory raw maximaGiB; noViT savings.
+- 95% same100/task minimum observedp50: TV RBM50/FV25/HiLo75; OCR RBM50/FV75/HiLo75, not full-split equivalence.
+- Old timing invalid and withdrawn; original raw retained. No-op checks finite32; eagerlogit maxabs.125, not exact.
+- FixedTV1000/OCR1000 three-budget curves complete; oldmixed protocol and common921 scope explicit.
+- Optional TVfull5000 extension6/6 complete; HiLo75=81.864%,5000successful, old1k answers1000/1000 match.
+- Optional full curves separately reported/plotted; paper primary fixed1k curve unchanged.
+- DocVQA500 shared2M: None95.73/RBM82.76/FV70.45/HiLo76.38;417page cluster sensitivity positive; subset only.
+- HiLo official adapted model remains implementation boundary even under shared attention; no universal advantage claim.
+- Final manuscript: drafts/cvm2027_submission_20261025/main.tex, main.pdf, cvm2027_review_source.zip.
+- Final PDF11pages/51actualcites/5figs(original3 preserved),2,443,396bytes; sourceZIP2,944,505bytes.
+- BuildQA/clean-source independent rebuild/all11pages visual inspection PASS; see reports/cvm2027_build_qa_20261026.
+- reports/cvm2027_supplement_20261026.md has tables/plots/repro/limits; instruction_audit covers all22items.
+- Final manifest hashes raw/code/paper source/PDF/ZIP/QA; canonical PDF/ZIP committed, output/ aliases/PNGs remain local.
+- Preserve original checkout changes and all old raw; do not force push or commit datasets/weights/full predictions/logs.
+- Final publication commit is HEAD; experimental main stage a342cf8. No conference upload/submission performed.

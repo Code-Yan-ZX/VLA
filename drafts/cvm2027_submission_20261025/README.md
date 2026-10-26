@@ -18,9 +18,10 @@ latexmk -pdf -interaction=nonstopmode -halt-on-error main.tex
 
 For a clean project working tree, redirect intermediate files to a temporary
 directory with `-outdir=...`. The main source, bibliography with 51 cited
-references, three used figure assets, and two figure-layout source files are
-sufficient to rebuild. The compiled manuscript contains eight pages including
-references.
+references, five used figure assets in `figs/`, and two figure-layout source
+files rebuild the 11-page manuscript, including references. The source hashes,
+font checks and independent clean-build verification are recorded in the
+October 26 build QA report supplied with the project artifacts.
 
 `figure1_review.tex` uses rectangular crops of the unchanged original PNG to
 omit unsupported explanatory labels and replace them with neutral descriptions.
@@ -42,9 +43,24 @@ intervals have likewise been recalculated with the pinned lmms-eval ANLS
 implementation. GQA scores have been recalculated with the benchmark's official
 case/punctuation-insensitive exact-match rule; the pinned OCRBench scorer
 including fullwidth normalization reproduces all 15 checked cells exactly.
-The matched-harness
-FastV comparison presents both its TextVQA advantage and RBM's OCRBench advantage.
-Shared failures receive zero, and the TextVQA point estimates and interval use
-the same complete 5,000-example denominator. No new model inference was run.
+The October 26 supplement adds fresh complete-split inference for None, RBM,
+FastV and an official Hi-Lo adaptation under shared vision-SDPA/text-eager
+attention. It reports all attempted IDs, zero scores for failures, paired
+intervals and common-completion sensitivity. Hi-Lo retains the authors' vendored
+model path, which remains an implementation boundary. The earlier fixed
+retention curves and DocVQA-500 stress subset retain their mixed-attention
+protocol and are explicitly separated from the new main table. Corrected
+complete-request measurements cover ten configurations on fixed TextVQA-100 and
+OCRBench-100 requests with three repetitions. Quality and actual request cost
+are paired on those same questions; the invalid first timing implementation is
+excluded. A 95% quality target on these subsets is a point-estimate rule, not a
+claim of full-split quality equivalence.
 
-See `CHANGELOG.md` for changes and `SUBMISSION_CHECKLIST.md` for unresolved steps.
+The project checkout separately provides `CHANGELOG.md` and
+`SUBMISSION_CHECKLIST.md` for revision history and author-side review. These
+internal documents are excluded from the minimal anonymous source archive.
+
+The October 26 experimental report and technical audits are maintained outside
+this anonymous source directory in `reports/`. Raw predictions, timing repeats,
+annotations, model weights and machine-specific logs are excluded from the
+review source archive. No conference upload has been made.

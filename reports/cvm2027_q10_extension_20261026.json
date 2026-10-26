@@ -1,8 +1,8 @@
 {
   "scope": "Optional Q10 full-5000 TextVQA 50/75% extension, original mixed attention protocol",
   "planned_extension_cells": 6,
-  "completed_extension_cells": 5,
-  "full_curve_complete": false,
+  "completed_extension_cells": 6,
+  "full_curve_complete": true,
   "protocol_note": "Original None/RBM/FastV eager and official Hi-Lo SDPA. These runs do not form the new vision-SDPA/text-eager matched main. Fixed TV1000 curves remain the complete pre-fixed comparison even if this optional full grid finishes.",
   "none_reference": {
     "path": "/media/disk2/YZX/research/vla/.claude/worktrees/cvm-oneday-20261025/results/cvm2027_supplement_20261026/predictions/p1_none_textvqa_full.json",
@@ -357,16 +357,74 @@
       "actual_budget_mismatches": 0,
       "raw_log": "/media/disk2/YZX/research/vla/.claude/worktrees/cvm-oneday-20261025/results/cvm2027_supplement_20261026/logs/q10_hilo_textvqa5k_keep0.50.log",
       "raw_log_sha256": "175f69da28dd05a3db5f32c65cc3b3a417cea5b1da527b85ae877aa1a3bef640"
-    }
-  },
-  "missing_cells": [
-    {
+    },
+    "hl_0.75": {
       "method": "Hi-Lo",
       "keep": 0.75,
-      "path": "/media/disk2/YZX/research/vla/.claude/worktrees/cvm-oneday-20261025/results/cvm2027_supplement_20261026/predictions/q10_hilo_textvqa5k_keep0.75.json",
-      "reason": "No complete prediction file; no score inferred"
+      "n_attempted": 5000,
+      "n_answered": 5000,
+      "official_score_percent": 81.86400000000043,
+      "prediction_source": "/media/disk2/YZX/research/vla/.claude/worktrees/cvm-oneday-20261025/results/cvm2027_supplement_20261026/predictions/q10_hilo_textvqa5k_keep0.75.json",
+      "prediction_sha256": "a02376df71245020201b731ae3e0d43d2716e24555e183d3e1b4f531f6881e22",
+      "score_source": "/media/disk2/YZX/research/vla/.claude/worktrees/cvm-oneday-20261025/results/cvm2027_supplement_20261026/plan/scores/full_q10_hl_0.75.json",
+      "attempted_pair": {
+        "n_paired": 5000,
+        "n_paired_answered": 4995,
+        "mean_a": 0.81864,
+        "denominator": "all attempted; skipped score zero",
+        "mean_b": 0.8324,
+        "delta_pp": -1.376,
+        "ci95_pp": [
+          -1.92,
+          -0.8260000000000002
+        ],
+        "sign_flip_p_two_sided": 4.999750012499375e-05,
+        "skipped_a": 0,
+        "skipped_b": 5,
+        "skip_ids_equal": false,
+        "prompt_token_count_mismatches": 0,
+        "actual_visual_count_field_present": true,
+        "actual_visual_count_check_n": 4995,
+        "actual_visual_count_mismatches": 4995,
+        "resamples": 20000,
+        "seed": 20261285,
+        "prompt_token_count_check_n": 0,
+        "prompt_token_count_missing_n": 5000,
+        "count_comparison_note": "prompt_token_ids is the post-selection prompt length, not an input-ID sequence; different retention naturally changes both prompt length and actual_visual_count"
+      },
+      "common_pair": {
+        "n_paired": 4995,
+        "n_paired_answered": 4995,
+        "mean_a": 0.8186586586586587,
+        "denominator": "common answered",
+        "mean_b": 0.8332332332332333,
+        "delta_pp": -1.4574574574574573,
+        "ci95_pp": [
+          -2.008008008008008,
+          -0.928928928928929
+        ],
+        "sign_flip_p_two_sided": 4.999750012499375e-05,
+        "skipped_a": 0,
+        "skipped_b": 5,
+        "skip_ids_equal": false,
+        "prompt_token_count_mismatches": 0,
+        "actual_visual_count_field_present": true,
+        "actual_visual_count_check_n": 4995,
+        "actual_visual_count_mismatches": 4995,
+        "resamples": 20000,
+        "seed": 20261286,
+        "prompt_token_count_check_n": 0,
+        "prompt_token_count_missing_n": 4995,
+        "count_comparison_note": "prompt_token_ids is the post-selection prompt length, not an input-ID sequence; different retention naturally changes both prompt length and actual_visual_count"
+      },
+      "failure_ids": [],
+      "actual_budget_common_n": 4995,
+      "actual_budget_mismatches": 0,
+      "raw_log": "/media/disk2/YZX/research/vla/.claude/worktrees/cvm-oneday-20261025/results/cvm2027_supplement_20261026/logs/q10_hilo_textvqa5k_keep0.75.log",
+      "raw_log_sha256": "15fbccb00a360bcb927659bebc9c313b422fb0f57efc9786c3ab8a4be39357f1"
     }
-  ],
+  },
+  "missing_cells": [],
   "runtime_budget": {
     "quality_scores_not_used": true,
     "P3_textvqa_raw_request_mean_total_s": {
@@ -391,10 +449,13 @@
     "load_buffer_s": 120.0,
     "stop_buffer_s": 60,
     "required_conservative_seconds": 3445,
-    "hard_gpu_stop": "2026-10-26T18:30:00+08:00",
-    "latest_start": "2026-10-26T17:32:35+08:00",
+    "hard_gpu_stop": "2026-10-26T19:00:00+08:00",
+    "latest_start": "2026-10-26T18:02:35+08:00",
     "limitation": "Timing estimate, not a guaranteed bound: the fixed P3 sample excludes five earlier TextVQA failures and uses decoder eager, while old Q10 Hi-Lo uses SDPA. The 25% margin and fixed buffers cover some scheduling uncertainty.",
-    "launch_rule": "Only root may decide after all eight matched-main cells complete. Start only when remaining time to 18:30 is at least this budget; otherwise record the optional cell as skipped for time. No score-dependent decision."
+    "launch_rule": "Only root may decide after all eight matched-main cells complete. Start only when remaining time to 2026-10-26T19:00:00+08:00 is at least this budget; otherwise record the optional cell as skipped for time. No score-dependent decision.",
+    "decision_at": "2026-10-26T17:57:25.037365+08:00",
+    "time_budget_available": true,
+    "automatic_gpu_launch": false
   },
-  "reproduce_command": "/home/dell/miniconda3/envs/qwen3vl_clean/bin/python scripts/cvm24h_q10_report.py"
+  "reproduce_command": "/home/dell/miniconda3/envs/qwen3vl_clean/bin/python scripts/cvm24h_q10_report.py --compute-deadline 2026-10-26T19:00:00+08:00 --decision-at 2026-10-26T17:57:25.037365+08:00"
 }

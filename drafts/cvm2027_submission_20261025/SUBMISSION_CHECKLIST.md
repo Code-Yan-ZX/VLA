@@ -12,9 +12,12 @@ Status: revision review draft; upload is not approved.
 - [x] Recalculate DocVQA and GQA with the pinned benchmark scorers and audit OCRBench.
 - [x] Use the same complete-split denominator for TextVQA point estimates and CIs.
 - [x] Replace unsupported tensor-identity claims with verified diagnostic counts.
-- [x] Complete final compilation and inspect every rendered page.
-- [x] Confirm the final PDF is at most 14 pages including references and below 50 MB.
+- [x] Complete final October 26 compilation and inspect every rendered page.
+- [x] Confirm the final October 26 PDF is at most 14 pages including references and below 50 MB.
 - [x] Preserve all original 51 cited references; no `\nocite` or uncited entries.
+- [x] Add modern-selector, retention and document-stress quality results with explicit protocol boundaries.
+- [x] Validate corrected complete-request costs and pair them with quality from the same fixed requests.
+- [x] Independently rebuild the final anonymous source ZIP and verify its PDF text/page count.
 - [ ] Replace `****` only with the actual paper ID from the submission portal.
 - [ ] All authors approve the narrowed scientific claim and the final manuscript.
 - [ ] User gives explicit approval before external submission.

@@ -37,7 +37,13 @@ Shared vision SDPA / text eager for all four methods. Both tasks use complete sp
 
 All twelve planned pair comparisons, 20,000-resample confidence intervals, failure IDs and per-ID input/budget checks are in `cvm2027_matched_main_20261026.md` and its JSON.
 
-Optional full TextVQA grid: partial; subset curves remain the complete comparison. Completed extension cells are retained in scores/full_q10_*.json.
+## TextVQA full 5,000-question grid
+
+| Keep | RBM | FastV-k3 | Hi-Lo | None |
+|---|---:|---:|---:|---:|
+| 0.25 | 75.50 | 76.83 | 66.77 | 83.24 |
+| 0.50 | 80.75 | 82.26 | 76.86 | 83.24 |
+| 0.75 | 82.36 | 83.00 | 81.86 | 83.24 |
 
 ## TextVQA fixed 1,000-question subset
 
@@ -82,6 +88,7 @@ This table gives the minimum **tested retention** meeting the reported None refe
 
 | Scope | None | 95% target | RBM keep | FastV keep | Hi-Lo keep |
 |---|---:|---:|---:|---:|---:|
+| TextVQA full 5,000-question grid | 83.24 | 79.08 | 0.50 | 0.50 | 0.75 |
 | TextVQA fixed 1,000-question subset | 82.93 | 78.78 | 0.50 | 0.50 | 0.75 |
 | OCRBench full 1,000 attempts | 707.00 | 671.65 | 0.75 | 0.75 | 0.50 |
 | OCRBench common 921 answered IDs, normalized ×1,000 | 767.64 | 729.26 | 0.75 | 0.75 | 0.75 |
