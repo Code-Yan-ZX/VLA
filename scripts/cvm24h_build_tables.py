@@ -62,7 +62,7 @@ def summary(d, common=False):
 
 md = ['# CVM2027 supplement — audited tables (2026-10-26)', '',
       'Scores use all attempted IDs, with failures scored zero. Hi-Lo uses the official vendored adaptation with SDPA; RBM/FastV use the eager harness. Common-answered analyses control the failure set, but do not remove implementation differences.', '',
-      '## Main comparison at 25% retention', '',
+      '## Historical mixed-attention comparison at 25% retention', '',
       '| Benchmark | None@100% | RBM | FastV-k3 | Hi-Lo | Attempted / answered |',
       '|---|---:|---:|---:|---:|---|']
 summary_json = {'protocol_caveat': md[2], 'p1': {}, 'curves': {}, 'quality95': [], 'timing': {}}
@@ -137,8 +137,8 @@ for name in ('rb_hl', 'rb_fv'):
     v = summary(load(f'doc_{name}'))
     md.append(f'\n{name}: Δ={v["delta"]:+.2f}pp, CI[{v["ci95"][0]:+.2f}, {v["ci95"][1]:+.2f}], p={pformat(v["p"])}.')
 
-md += ['', '## 95% of None quality target', '',
-       'This table gives the minimum **tested retention** meeting the target. It does not assume retention orders measured latency. The Hi-Lo OCRBench attempted result includes its higher completion rate.', '',
+md += ['', '## Historical mixed-attention curves: 95% of reported None reference', '',
+       'This table gives the minimum **tested retention** meeting the reported None reference target within each original mixed-attention block. Hi-Lo and the reference retain different attention implementations. It does not assume retention orders measured latency. The Hi-Lo OCRBench attempted result includes its higher completion rate.', '',
        '| Scope | None | 95% target | RBM keep | FastV keep | Hi-Lo keep |', '|---|---:|---:|---:|---:|---:|']
 for bench, full, common, label in curve_specs:
     ds = {m: {k: curve(bench, m, k, full) for k in KEEP} for m in METHODS}

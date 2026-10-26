@@ -1,18 +1,18 @@
 # HANDOFF — CVM补实验与论文（2026-10-26）
-- 工作树：.claude/worktrees/cvm-oneday-20261025；codex/cvm-24h-supplement；保护原工作区修改。
-- 用户要求今天20:00前完成实验和补写；已批准为统一后端主表延长15:07 GPU停线，未授权投稿。
-- 当前：修正P3成本10/10完成、全部门检通过；8格smoke通过，完整matched主表14:51开始推理。
-- 单A40串行；两个supervisor为finish_corrected和run_matched_main，不重复启动GPU任务。
-- 新主表：TV5000/OCR1000，四方法visionSDPA/text eager，None100%、其余25%，全部重新推理。
-- 冻结GPU源码：timing_v2 SHA25b526d6...；matched_quality SHA67ae3554...；勿运行中修改。
-- 新主表原始文件：results/cvm2027_supplement_20261026/matched_main/；完整8格才发布报告。
-- 旧mixed主表：TV None/RBM/FV/HiLo=83.24/75.50/76.83/66.77；不是新matched结论。
-- 旧OCR attempted=707/559/413/613；79共同OOM；common921的HiLo/RBM差CI跨0，不称等价。
-- 固定TV1000/OCR1000的25/50/75%曲线齐全；可选TV5000扩展5/6，缺HiLo75，另表如实保留。
-- DocVQA500统一2M：95.73/82.76/70.45/76.38；417页cluster CI方向保持；不是full split。
-- 旧P3时延/显存全部撤回：autograd、tap累积、FastV漏DS、HiLo config失效；不删raw。
-- 新成本固定TV100+OCR100×3，仅和这些新答案配对；完整ViT/merger后gather，不宣称视觉加速。
-- 权威稿：drafts/cvm2027_submission_20261025/main.tex；待新主表/成本补齐再发布PDF/ZIP。
-- 复现入口/图表/22条证据：reports/cvm2027_supplement_20261026.md及instruction_audit；不提交raw数据。
-- 最后需：8格主表完整CPU评分和论文、全页目视QA/独立源包复编、更新manifest/STATE/本HANDOFF、push main。
-- 已推送9193aa2；原三模型操作性结果保留，Qwen主输出控制反转不抹除；不恢复普遍阶段优势claim。
+- 工作树：.claude/worktrees/cvm-oneday-20261025；codex/cvm-24h-supplement；原工作区修改保留。
+- 用户要求20:00前完成实验和写作；批准为新主表延长原GPU停线，未授权投稿。
+- 新统一attention主表8/8于17:56:51完成，每方法TV5000/OCR1000均零失败，独立评分和24个20k CI复核通过。
+- 新TV accuracy% None/RBM/FV/HiLo=83.45/75.58/76.90/66.75；OCR points/1000=765/610/453/612。
+- TV RBM−FV−1.32pp[-2.32,-.34]；RBM−HiLo+8.83[7.63,10.04]；OCR−HiLo−2[-31,27]，不称等价。
+- visionSDPA/text eager、native/bf16/greedy32/4M，None100%、其余25%；HiLo vendored路径仍是实现边界。
+- 正式数据/源SHA/全部比较：reports/cvm2027_matched_main_20261026.{md,json}；独立audit另表，CPU脚本已归档。
+- 预定TV1000/OCR1000三预算曲线齐；可选旧TV5000扩展5/6，HiLo75于17:57:25启动，硬停19:00。
+- 可选资源门3445秒、两次GPU空闲/缓存与冻结源校验通过；session99339，19:00前TERM/KILL；不评partial。
+- 修正P3十组6000请求全过，固定TV100+OCR100×3；95%成本达标只对相同100题/任务。
+- 旧成本全部撤回，raw保留；当前HF完整ViT/merger后gather，不宣称视觉加速。
+- 旧mixed主表/79共同OOM另列，不能当新主表；Doc500统一2M，417页聚类CI方向保持，不是full split。
+- 权威稿drafts/cvm2027_submission_20261025/main.tex已11页，51实引/原3图保留，主表与摘要结论均已同步。
+- 待最后可选收束后拷最新预算/成本图，运行scripts/cvm2027_build_release.py，再全页目视QA/独立源包复编。
+- 总报告含22条审计/表图/复现；原始预测/日志/权重不进Git；manifest最终重新生成。
+- 最后更新STATE/本HANDOFF≤20行、commit/push main；当前阶段最新47d1cc9，最终以HEAD为准。
+- 原三模型操作性矩阵和Qwen主输出控制反转保留，不恢复普遍阶段优势，不代投稿。

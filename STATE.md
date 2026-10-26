@@ -5,20 +5,23 @@
 - USER APPROVED ~3h GPU extension to complete uniform-backend full main table; target compute ~18:00, final delivery 20:00.
 - P1 quality complete: TextVQA full5000 None/RBM/FastV/Hi-Lo = 83.24/75.50/76.83/66.77.
 - OCRBench full1000 attempted = 707/559/413/613; 79 harness failures confound Hi-Lo comparison.
-- OCRBench common921: Hi-Lo and RBM tie statistically; do not infer selection superiority from attempted totals.
+- OCRBench common921: Hi-Lo−RBM CI crosses0; neither superiority nor quality equivalence follows.
 - P2 complete: fixed TextVQA1000 and OCRBench1000 curves at 25/50/75%; DocVQA500 unified2M.
 - DocVQA500 ANLS: None95.73, RBM82.76, FastV70.45, Hi-Lo76.38; subset, not full split.
 - P1 engines differ: harness eager vs vendored Hi-Lo SDPA; disclose adaptation/implementation boundary.
 - P3 OLD TIMING INVALID: missing inference mode, accumulating MergerTap hooks, FastV missing deepstack.
 - P3 OLD Hi-Lo config updates external copied config; budget labels unverified. Do not cite legacy timings.
 - Corrected P3 all10 complete14:48: shared visionSDPA/text eager, fixed200 x3, zero failures/repeat drift.
-- Q10 optional full curves: RBM/FastV .50/.75 and Hi-Lo .50 complete (5/6); Hi-Lo .75 deferred.
-- Original Q10 parent and old watcher terminated after Hi-Lo50 exit; corrected P3 active; optional Hi-Lo75 remains deferred.
+- Q10 optional full curves5/6: Hi-Lo .75 full5000 launched17:57:25; hardGPUstop19:00; session99339.
+- Original Q10 parent and old watcher terminated after Hi-Lo50 exit; optional Hi-Lo75 waits until matched-main QC.
 - P3+hilo32 no-op and original eager32 actual-generation gate pass; eager logit maxabs.125, not exact.
 - Manuscript agent owns main.tex/references.bib; scoring agent owns table builder/quality summaries.
 - Cost agent owns timing_v2 script; root owns reports, provenance, state, release packaging and final Git.
 - Preserve original main-worktree changes and all old raw files. No force push, no weights/data/logs in Git.
-- Uniform8-cell full main passed all8 runtime smokes and began14:51; Hi-Lo TextVQA first, no competing GPU jobs.
+- Uniform8-cell main COMPLETE17:56:51, zero failures: TV None/RBM/FV/HiLo83.45/75.58/76.90/66.75; OCR765/610/453/612.
 - New main: all four arms visionSDPA/text eager, same native positions/bf16/greedy32/4M; all compressed keep.25.
 - Raw new main: results/cvm2027_supplement_20261026/matched_main/{mode}_{benchmark}.json; score all6 pairs/task.
 - Costs: TV95% cheapest RBM50/FV25/HiLo75; OCR RBM50/FV75/HiLo75. Only same100/task quality-cost pairs.
+- Main supervisor finished; CPU-independent scoring audit active; matched_main_queue.log and matched_full_*.log retained.
+- Cost manuscript staging11pages (/tmp/cvm2027_revision_build/main.pdf); canonical PDF/ZIP await full main.
+- Optional source/prereq/cache/GPU/time gates pass; launch3755s before19:00 with3445s required; primary1k plots stay fixed.

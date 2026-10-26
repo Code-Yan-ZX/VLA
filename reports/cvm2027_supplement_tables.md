@@ -2,7 +2,7 @@
 
 Scores use all attempted IDs, with failures scored zero. Hi-Lo uses the official vendored adaptation with SDPA; RBM/FastV use the eager harness. Common-answered analyses control the failure set, but do not remove implementation differences.
 
-## Main comparison at 25% retention
+## Historical mixed-attention comparison at 25% retention
 
 | Benchmark | None@100% | RBM | FastV-k3 | Hi-Lo | Attempted / answered |
 |---|---:|---:|---:|---:|---|
@@ -25,6 +25,17 @@ Answered counts are shown in RBM/FastV/Hi-Lo order; None answers 4,995 TextVQA a
 | hl_none | ocrbench | -94.00 [-126.00, -63.00] | -163.95 [-193.27, -134.64] | 921 |
 | hl_rb | ocrbench | +54.00 [+23.00, +85.00] | -3.26 [-33.66, +26.09] | 921 |
 | hl_fv | ocrbench | +200.00 [+168.00, +233.00] | +155.27 [+122.69, +187.84] | 921 |
+
+## New attention-matched main comparison at 25% retention
+
+Shared vision SDPA / text eager for all four methods. Both tasks use complete splits and the same inputs; the official Hi-Lo model remains an adapted implementation. The preceding operational table and the following original budget curves keep their original protocols.
+
+| Benchmark | None@100% | RBM@25% | FastV-k3@25% | Hi-Lo@25% |
+|---|---:|---:|---:|---:|
+| textvqa | 83.45 | 75.58 | 76.90 | 66.75 |
+| ocrbench | 765.00 | 610.00 | 453.00 | 612.00 |
+
+All twelve planned pair comparisons, 20,000-resample confidence intervals, failure IDs and per-ID input/budget checks are in `cvm2027_matched_main_20261026.md` and its JSON.
 
 Optional full TextVQA grid: partial; subset curves remain the complete comparison. Completed extension cells are retained in scores/full_q10_*.json.
 
@@ -65,9 +76,9 @@ rb_hl: Δ=+6.39pp, CI[+3.04, +9.78], p=0.0005.
 
 rb_fv: Δ=+12.32pp, CI[+8.15, +16.47], p=<0.0001.
 
-## 95% of None quality target
+## Historical mixed-attention curves: 95% of reported None reference
 
-This table gives the minimum **tested retention** meeting the target. It does not assume retention orders measured latency. The Hi-Lo OCRBench attempted result includes its higher completion rate.
+This table gives the minimum **tested retention** meeting the reported None reference target within each original mixed-attention block. Hi-Lo and the reference retain different attention implementations. It does not assume retention orders measured latency. The Hi-Lo OCRBench attempted result includes its higher completion rate.
 
 | Scope | None | 95% target | RBM keep | FastV keep | Hi-Lo keep |
 |---|---:|---:|---:|---:|---:|

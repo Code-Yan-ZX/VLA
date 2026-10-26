@@ -85,6 +85,16 @@ def main():
         paths.update(snapshot.glob("*.jinja"))
     paths.add(ROOT / "src/v3_premerger/baselines_hf.py")
     paths.add(ROOT / "notes/cvm2027_server_experiment_prompt_20261025.txt")
+    paths.add(ROOT / "scripts/cvm2027_build_release.py")
+    # Once a release exists, include its exact source whitelist and canonical
+    # artifacts. The separate build QA retains the clean-rebuild evidence.
+    release_qa = ROOT / "reports/cvm2027_build_qa_20261026.json"
+    if release_qa.exists():
+        release = json.loads(release_qa.read_text())
+        paper = ROOT / "drafts/cvm2027_submission_20261025"
+        paths.update(paper / name for name in release["source_manifest"]["files"])
+        paths.update((release_qa, release_qa.with_suffix(".md"),
+                      paper / "main.pdf", paper / "cvm2027_review_source.zip"))
     output = {
         "generated_at": datetime.now(ZoneInfo("Asia/Shanghai")).isoformat(timespec="seconds"),
         "git_head_at_generation": subprocess.check_output(
