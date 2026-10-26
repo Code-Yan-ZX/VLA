@@ -3,10 +3,11 @@
   "planned_extension_cells": 6,
   "completed_extension_cells": 5,
   "full_curve_complete": false,
-  "protocol_note": "Original None/RBM/FastV eager and official Hi-Lo SDPA. These runs do not form the new vision-SDPA/text-eager matched main. Fixed TV1000 curves remain the complete 3-method 25/50/75 comparison.",
-  "missing_cells": [
-    "hilo keep=.75 full5000"
-  ],
+  "protocol_note": "Original None/RBM/FastV eager and official Hi-Lo SDPA. These runs do not form the new vision-SDPA/text-eager matched main. Fixed TV1000 curves remain the complete pre-fixed comparison even if this optional full grid finishes.",
+  "none_reference": {
+    "path": "/media/disk2/YZX/research/vla/.claude/worktrees/cvm-oneday-20261025/results/cvm2027_supplement_20261026/predictions/p1_none_textvqa_full.json",
+    "sha256": "4fdc40c6fcccefd1b38b40c582a01948675d4dcfd74e5987bf5a1da9db780de6"
+  },
   "cells": {
     "rb_0.50": {
       "method": "RBM",
@@ -14,8 +15,8 @@
       "n_attempted": 5000,
       "n_answered": 4995,
       "official_score_percent": 80.75400000000036,
-      "source": "/media/disk2/YZX/research/vla/.claude/worktrees/cvm-oneday-20261025/results/cvm2027_supplement_20261026/predictions/q10_pre_textvqa5k_keep0.50.json",
-      "sha256": "1ff7b56d7278b742ede07da123bbcbfad64c3cf9bb8dd532cdc9180ad71cc0e4",
+      "prediction_source": "/media/disk2/YZX/research/vla/.claude/worktrees/cvm-oneday-20261025/results/cvm2027_supplement_20261026/predictions/q10_pre_textvqa5k_keep0.50.json",
+      "prediction_sha256": "1ff7b56d7278b742ede07da123bbcbfad64c3cf9bb8dd532cdc9180ad71cc0e4",
       "score_source": "/media/disk2/YZX/research/vla/.claude/worktrees/cvm-oneday-20261025/results/cvm2027_supplement_20261026/plan/scores/full_q10_rb_0.50.json",
       "attempted_pair": {
         "n_paired": 5000,
@@ -67,8 +68,17 @@
         "prompt_token_count_missing_n": 0,
         "count_comparison_note": "prompt_token_ids is the post-selection prompt length, not an input-ID sequence; different retention naturally changes both prompt length and actual_visual_count"
       },
+      "failure_ids": [
+        "35389",
+        "36283",
+        "36747",
+        "36759",
+        "36760"
+      ],
       "actual_budget_common_n": 4995,
-      "actual_budget_mismatches": 0
+      "actual_budget_mismatches": 0,
+      "raw_log": "/media/disk2/YZX/research/vla/.claude/worktrees/cvm-oneday-20261025/results/cvm2027_supplement_20261026/logs/q10_pre_textvqa5k_keep0.50.log",
+      "raw_log_sha256": "cad982e92a3c82ba4146cc7121affa3695ea2287344b4390f48fa356b4cc73c5"
     },
     "rb_0.75": {
       "method": "RBM",
@@ -76,8 +86,8 @@
       "n_attempted": 5000,
       "n_answered": 4995,
       "official_score_percent": 82.36400000000044,
-      "source": "/media/disk2/YZX/research/vla/.claude/worktrees/cvm-oneday-20261025/results/cvm2027_supplement_20261026/predictions/q10_pre_textvqa5k_keep0.75.json",
-      "sha256": "43522b736f43eeddc104eff7d270061edf461e3cee3040beb93917caf0b22a10",
+      "prediction_source": "/media/disk2/YZX/research/vla/.claude/worktrees/cvm-oneday-20261025/results/cvm2027_supplement_20261026/predictions/q10_pre_textvqa5k_keep0.75.json",
+      "prediction_sha256": "43522b736f43eeddc104eff7d270061edf461e3cee3040beb93917caf0b22a10",
       "score_source": "/media/disk2/YZX/research/vla/.claude/worktrees/cvm-oneday-20261025/results/cvm2027_supplement_20261026/plan/scores/full_q10_rb_0.75.json",
       "attempted_pair": {
         "n_paired": 5000,
@@ -129,8 +139,17 @@
         "prompt_token_count_missing_n": 0,
         "count_comparison_note": "prompt_token_ids is the post-selection prompt length, not an input-ID sequence; different retention naturally changes both prompt length and actual_visual_count"
       },
+      "failure_ids": [
+        "35389",
+        "36283",
+        "36747",
+        "36759",
+        "36760"
+      ],
       "actual_budget_common_n": 4995,
-      "actual_budget_mismatches": 0
+      "actual_budget_mismatches": 0,
+      "raw_log": "/media/disk2/YZX/research/vla/.claude/worktrees/cvm-oneday-20261025/results/cvm2027_supplement_20261026/logs/q10_pre_textvqa5k_keep0.75.log",
+      "raw_log_sha256": "fa8b465fdd4781cd2b69a57eb3c1443b88cffbc854101a80a48fa12a56fc1180"
     },
     "fv_0.50": {
       "method": "FastV-k3",
@@ -138,8 +157,8 @@
       "n_attempted": 5000,
       "n_answered": 4995,
       "official_score_percent": 82.26400000000044,
-      "source": "/media/disk2/YZX/research/vla/.claude/worktrees/cvm-oneday-20261025/results/cvm2027_supplement_20261026/predictions/q10_fastv_textvqa5k_keep0.50.json",
-      "sha256": "c1303b4d110d0f6a4c6de9477a80cc4dbc7e142b3038838c67631f5bdc944371",
+      "prediction_source": "/media/disk2/YZX/research/vla/.claude/worktrees/cvm-oneday-20261025/results/cvm2027_supplement_20261026/predictions/q10_fastv_textvqa5k_keep0.50.json",
+      "prediction_sha256": "c1303b4d110d0f6a4c6de9477a80cc4dbc7e142b3038838c67631f5bdc944371",
       "score_source": "/media/disk2/YZX/research/vla/.claude/worktrees/cvm-oneday-20261025/results/cvm2027_supplement_20261026/plan/scores/full_q10_fv_0.50.json",
       "attempted_pair": {
         "n_paired": 5000,
@@ -191,8 +210,17 @@
         "prompt_token_count_missing_n": 0,
         "count_comparison_note": "prompt_token_ids is the post-selection prompt length, not an input-ID sequence; different retention naturally changes both prompt length and actual_visual_count"
       },
+      "failure_ids": [
+        "35389",
+        "36283",
+        "36747",
+        "36759",
+        "36760"
+      ],
       "actual_budget_common_n": 4995,
-      "actual_budget_mismatches": 0
+      "actual_budget_mismatches": 0,
+      "raw_log": "/media/disk2/YZX/research/vla/.claude/worktrees/cvm-oneday-20261025/results/cvm2027_supplement_20261026/logs/q10_fastv_textvqa5k_keep0.50.log",
+      "raw_log_sha256": "dee0353e39d8445752db7dd5f9a51992b6c85b7fdd0ea5172e24abbbb0736977"
     },
     "fv_0.75": {
       "method": "FastV-k3",
@@ -200,8 +228,8 @@
       "n_attempted": 5000,
       "n_answered": 4995,
       "official_score_percent": 82.99600000000048,
-      "source": "/media/disk2/YZX/research/vla/.claude/worktrees/cvm-oneday-20261025/results/cvm2027_supplement_20261026/predictions/q10_fastv_textvqa5k_keep0.75.json",
-      "sha256": "e7ff978d86c69c41cdbfe9ed3d2c46651fca22feebeab6ba98988bd7d184dc9b",
+      "prediction_source": "/media/disk2/YZX/research/vla/.claude/worktrees/cvm-oneday-20261025/results/cvm2027_supplement_20261026/predictions/q10_fastv_textvqa5k_keep0.75.json",
+      "prediction_sha256": "e7ff978d86c69c41cdbfe9ed3d2c46651fca22feebeab6ba98988bd7d184dc9b",
       "score_source": "/media/disk2/YZX/research/vla/.claude/worktrees/cvm-oneday-20261025/results/cvm2027_supplement_20261026/plan/scores/full_q10_fv_0.75.json",
       "attempted_pair": {
         "n_paired": 5000,
@@ -253,8 +281,17 @@
         "prompt_token_count_missing_n": 0,
         "count_comparison_note": "prompt_token_ids is the post-selection prompt length, not an input-ID sequence; different retention naturally changes both prompt length and actual_visual_count"
       },
+      "failure_ids": [
+        "35389",
+        "36283",
+        "36747",
+        "36759",
+        "36760"
+      ],
       "actual_budget_common_n": 4995,
-      "actual_budget_mismatches": 0
+      "actual_budget_mismatches": 0,
+      "raw_log": "/media/disk2/YZX/research/vla/.claude/worktrees/cvm-oneday-20261025/results/cvm2027_supplement_20261026/logs/q10_fastv_textvqa5k_keep0.75.log",
+      "raw_log_sha256": "d3c8867d8c8ec2921b52fc79d97d1ff4162e1c5b7d9db08b43d682ba53d72b19"
     },
     "hl_0.50": {
       "method": "Hi-Lo",
@@ -262,8 +299,8 @@
       "n_attempted": 5000,
       "n_answered": 5000,
       "official_score_percent": 76.86200000000044,
-      "source": "/media/disk2/YZX/research/vla/.claude/worktrees/cvm-oneday-20261025/results/cvm2027_supplement_20261026/predictions/q10_hilo_textvqa5k_keep0.50.json",
-      "sha256": "1f2e5eb42ce37208bf5606166a264579042c700e5586ff44cadf8009fa044bec",
+      "prediction_source": "/media/disk2/YZX/research/vla/.claude/worktrees/cvm-oneday-20261025/results/cvm2027_supplement_20261026/predictions/q10_hilo_textvqa5k_keep0.50.json",
+      "prediction_sha256": "1f2e5eb42ce37208bf5606166a264579042c700e5586ff44cadf8009fa044bec",
       "score_source": "/media/disk2/YZX/research/vla/.claude/worktrees/cvm-oneday-20261025/results/cvm2027_supplement_20261026/plan/scores/full_q10_hl_0.50.json",
       "attempted_pair": {
         "n_paired": 5000,
@@ -315,23 +352,49 @@
         "prompt_token_count_missing_n": 4995,
         "count_comparison_note": "prompt_token_ids is the post-selection prompt length, not an input-ID sequence; different retention naturally changes both prompt length and actual_visual_count"
       },
+      "failure_ids": [],
       "actual_budget_common_n": 4995,
-      "actual_budget_mismatches": 0
+      "actual_budget_mismatches": 0,
+      "raw_log": "/media/disk2/YZX/research/vla/.claude/worktrees/cvm-oneday-20261025/results/cvm2027_supplement_20261026/logs/q10_hilo_textvqa5k_keep0.50.log",
+      "raw_log_sha256": "175f69da28dd05a3db5f32c65cc3b3a417cea5b1da527b85ae877aa1a3bef640"
     }
   },
-  "hilo50_validation": {
-    "prediction_sha256": "1f2e5eb42ce37208bf5606166a264579042c700e5586ff44cadf8009fa044bec",
-    "raw_log": "/media/disk2/YZX/research/vla/.claude/worktrees/cvm-oneday-20261025/results/cvm2027_supplement_20261026/logs/q10_hilo_textvqa5k_keep0.50.log",
-    "raw_log_sha256": "175f69da28dd05a3db5f32c65cc3b3a417cea5b1da527b85ae877aa1a3bef640",
-    "raw_log_completion": "n=5000 ok=5000 err=0",
-    "unique_ids": 5000,
-    "fullsplit_order_match": true,
-    "errors": 0,
-    "actual_K_formula_mismatches_all5000": 0,
-    "keep_ratio": 0.5,
-    "candidate_ratio": 0.5,
-    "attn": "sdpa",
-    "max_pixels": 4000000
+  "missing_cells": [
+    {
+      "method": "Hi-Lo",
+      "keep": 0.75,
+      "path": "/media/disk2/YZX/research/vla/.claude/worktrees/cvm-oneday-20261025/results/cvm2027_supplement_20261026/predictions/q10_hilo_textvqa5k_keep0.75.json",
+      "reason": "No complete prediction file; no score inferred"
+    }
+  ],
+  "runtime_budget": {
+    "quality_scores_not_used": true,
+    "P3_textvqa_raw_request_mean_total_s": {
+      "0.5": 0.4462475288845599,
+      "0.75": 0.5223860626791914
+    },
+    "P3_textvqa_mean_of_request_medians_total_s": {
+      "0.5": 0.4453245094418526,
+      "0.75": 0.5214724109880626
+    },
+    "P3_source": "/media/disk2/YZX/research/vla/.claude/worktrees/cvm-oneday-20261025/results/cvm2027_supplement_20261026/plan/timing_hilo_corrected.json",
+    "P3_sha256": "5fe379ea3f1b36953677f6cc2e50fa65fab7ff3351e4d8fc90e70eb929f39e40",
+    "old_hilo50_source": "/media/disk2/YZX/research/vla/.claude/worktrees/cvm-oneday-20261025/results/cvm2027_supplement_20261026/predictions/q10_hilo_textvqa5k_keep0.50.json",
+    "old_hilo50_sha256": "1f2e5eb42ce37208bf5606166a264579042c700e5586ff44cadf8009fa044bec",
+    "old_hilo50_full5000_wall_s": 2092.5,
+    "old_hilo50_load_s": 6.4,
+    "ratio_P3_mean75_over_mean50": 1.1706195079330688,
+    "projection_old50_scaled_s": 2449.5213203499466,
+    "projection_direct_P3_mean75_times5000_s": 2611.930313395957,
+    "policy": "max(old full50 wall \u00d7 P3 mean75/mean50, P3 mean75 \u00d7 5000) \u00d7 1.25 + max(120s, observed old load) + 60s stop buffer",
+    "contingency_multiplier": 1.25,
+    "load_buffer_s": 120.0,
+    "stop_buffer_s": 60,
+    "required_conservative_seconds": 3445,
+    "hard_gpu_stop": "2026-10-26T18:30:00+08:00",
+    "latest_start": "2026-10-26T17:32:35+08:00",
+    "limitation": "Timing estimate, not a guaranteed bound: the fixed P3 sample excludes five earlier TextVQA failures and uses decoder eager, while old Q10 Hi-Lo uses SDPA. The 25% margin and fixed buffers cover some scheduling uncertainty.",
+    "launch_rule": "Only root may decide after all eight matched-main cells complete. Start only when remaining time to 18:30 is at least this budget; otherwise record the optional cell as skipped for time. No score-dependent decision."
   },
-  "missing_hilo75_evidence": "No prediction file. The existing old log contains only the earlier python-python SyntaxError; no evaluation result exists."
+  "reproduce_command": "/home/dell/miniconda3/envs/qwen3vl_clean/bin/python scripts/cvm24h_q10_report.py"
 }

@@ -46,7 +46,7 @@ def plot_quality_cost(result, figure_dir):
                             fontsize=10.5, color=colors[method])
         ax.set(xlabel='p50 total request latency (s)',
                ylabel='Official score (%)' if bench == 'textvqa' else 'Official score normalized ×1,000',
-               title=f'{bench}: fixed 100-question subset')
+               title=f'{dict(textvqa="TextVQA", ocrbench="OCRBench")[bench]}: fixed 100-question subset')
         ax.margins(x=.15, y=.18)
     handles, labels = axes[0].get_legend_handles_labels()
     lookup = dict(zip(labels, handles))

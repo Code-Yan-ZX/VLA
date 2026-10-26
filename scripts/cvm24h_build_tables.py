@@ -160,7 +160,7 @@ md += ['', '## Actual visual token budgets', '',
        '| Scope | Keep | Common n | Mean input N | Mean K (RBM / FastV / Hi-Lo) | K equal on every common ID |', '|---|---:|---:|---:|---:|---|']
 actual = {}
 for bench in ('textvqa', 'ocrbench'):
-    full = full_ready and bench == 'textvqa'
+    full = False  # Keep the pre-fixed TV1000 scope regardless of optional full-grid completion.
     actual[bench] = {}
     for k in KEEP:
         ds = {m: curve(bench, m, k, full) for m in METHODS}
@@ -203,7 +203,7 @@ else:
 # Curves: show the attempted OCRBench view alongside its fixed-ID sensitivity.
 fig, axes = plt.subplots(1, 3, figsize=(10.8, 3.9))
 for ax, (bench, full, common, title) in zip(axes, [
-    ('textvqa', full_ready, False, f'TextVQA {"full 5,000" if full_ready else "subset 1,000"}'),
+    ('textvqa', False, False, 'TextVQA subset 1,000'),
     ('ocrbench', False, False, 'OCRBench: all 1,000 attempts'),
     ('ocrbench', False, True, 'OCRBench: same 921 answered')]):
     ref = vals(curve(bench, 'rb', '0.25', full), common)[1] * SCALE[bench]
@@ -223,9 +223,28 @@ fig.tight_layout(rect=(0, .16, 1, 1))
 save_figure(fig, 'budget_curves')
 plt.close(fig)
 
+# Optional full-grid results are a separate artifact, never a silent swap.
+if full_ready:
+    fig, ax = plt.subplots(figsize=(7, 3.8))
+    ref = vals(curve('textvqa', 'rb', '0.25', True))[1] * 100
+    ax.axhline(ref, ls='--', c='black', lw=1, label='None')
+    ax.axhline(.95 * ref, ls=':', c='gray', lw=1, label='95% target')
+    for method, label in METHODS.items():
+        ax.plot([25, 50, 75], [vals(curve('textvqa', method, k, True))[0] * 100 for k in KEEP],
+                'o-', c=COLORS[method], label=label)
+    ax.set(xlabel='Retained visual tokens (%)', ylabel='Official score (%)',
+           title='Optional TextVQA full 5,000 grid (original mixed protocol)')
+    ax.set_xticks([25, 50, 75])
+    ax.margins(x=.07, y=.10)
+    handles, labels = ax.get_legend_handles_labels()
+    fig.legend(handles, labels, loc='lower center', ncol=5, fontsize=9.5, frameon=False)
+    fig.tight_layout(rect=(0, .12, 1, 1))
+    save_figure(fig, 'textvqa_full_budget_curves')
+    plt.close(fig)
+
 fig, axes = plt.subplots(1, 2, figsize=(10, 4))
 for ax, bench in zip(axes, ('textvqa', 'ocrbench')):
-    full = full_ready and bench == 'textvqa'
+    full = False  # The main actual-K plot uses the same fixed TV1000 IDs.
     for m, label in METHODS.items():
         ax.plot([actual[bench][k]['mean_k'][m] for k in KEEP], [vals(curve(bench,m,k,full), bench=='ocrbench')[0]*SCALE[bench] for k in KEEP], 'o-', c=COLORS[m], label=label)
     ax.set(xlabel='Mean actual retained K', ylabel='Official score (%)' if bench=='textvqa' else 'Common-answered score ×1,000', title=bench)
