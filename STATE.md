@@ -11,10 +11,10 @@
 - P1 engines differ: harness eager vs vendored Hi-Lo SDPA; disclose adaptation/implementation boundary.
 - P3 OLD TIMING INVALID: missing inference mode, accumulating MergerTap hooks, FastV missing deepstack.
 - P3 OLD Hi-Lo config updates external copied config; budget labels unverified. Do not cite legacy timings.
-- Corrected P3 in preparation: shared visionSDPA/text eager, fixed200 requests x3, actual K/trace/answers.
+- Corrected P3 running: shared visionSDPA/text eager, fixed200 requests x3, actual K/trace/answers.
 - Q10 optional full curves: RBM/FastV .50/.75 and Hi-Lo .50 complete (5/6); Hi-Lo .75 deferred.
 - Original Q10 parent and old watcher terminated after Hi-Lo50 exit; corrected P3 active; optional Hi-Lo75 remains deferred.
-- Corrected queue is running mixed-attention smoke, then harness/hilo formal P3; no competing GPU jobs.
+- Corrected P3 harness7/7 and Hi-Lo25 complete; Hi-Lo50/75 running, no competing GPU jobs.
 - Manuscript agent owns main.tex/references.bib; scoring agent owns table builder/quality summaries.
 - Cost agent owns timing_v2 script; root owns reports, provenance, state, release packaging and final Git.
 - Preserve original main-worktree changes and all old raw files. No force push, no weights/data/logs in Git.

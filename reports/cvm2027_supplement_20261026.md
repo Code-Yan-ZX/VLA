@@ -44,7 +44,7 @@ TextVQA为seed=20261025预固定、按视觉token数代理（旧pre字段为25%�
 
 表图：`reports/figures_cvm2027_supplement/budget_curves.{pdf,svg}`；实际K图 `score_vs_actual_k.{pdf,svg}`。后者基于共同样本真实计数，四路特征宽度不计作四倍LLM token。
 
-Q10可选全5000扩展：接管时RBM/FastV50/75四格完成，Hi-Lo50在跑，Hi-Lo75未启动。修正P3优先；只有六格全部完成并评分才将全量扩展表称完整曲线。固定1000题曲线始终是完整的预定结果。
+Q10可选全5000扩展已完成RBM/FastV50/75及Hi-Lo50，共5/6格，独立表与CI见 `reports/cvm2027_q10_extension_20261026.{md,json}`。对应分数依次为80.75/82.36、82.26/83.00及76.86%，均按5000尝试题官方评分；Hi-Lo75缺失，不能称完整全量曲线。修正P3与统一attention全量主表优先，固定1000题曲线始终是完整的预定结果。
 
 ## 3. 成本审计：旧结果撤回与新测量边界
 
@@ -60,6 +60,7 @@ Q10可选全5000扩展：接管时RBM/FastV50/75四格完成，Hi-Lo50在跑，H
 
 - 模型snapshot `0c351dd01ed87e9c1b53cbc748cba10e6187ff3b`；transformers4.57.6、torch2.10.0+cu128；无环境改装、无重复权重下载。
 - Hi-Lo上游commit `29265e3b13ef89ecfd2cbd8803f1678a2ce1bdb6`。仅移除引用未定义`top_index_1`的转换guard，并提供4.57版本所需rope配置shim。官方选择/融合代码保留。`scripts/cvm24h_prepare_hilo.py` 可重建精确修复并输出源码SHA。
+- 官方仓库两个CPU测试文件共5个测试全部通过（CUDA设备屏蔽）：候选/保留/融合集合划分、确定性、非法预算拒绝、merged图格对齐及视频输入拒绝；未修改既有环境。逐条执行证据与边界另见 `reports/cvm2027_instruction_audit_20261026.md`。
 - 冻结Hi-Lo参数：prune_layer=2、fusion=.3、top_k_ratio=.1、attention_threshold=.05、candidate=max(.30,keep)、fusion_layers=[0,1]。50/75%时candidate与keep相同，融合候选集合退化为空；不是根据验证成绩调参。
 - 实际K已逐共同样本核验为round(N×keep)，Hi-Lo融合不额外保留token。RBM同kept IDs对齐主流及三条deepstack；不能照旧CLI描述再乘4补偿。
 - 旧P0检查涵盖32题no-op答案/K和8题部分张量检查；其logits probe没有完整传入deepstack，Post/FastV/Hi-Lo未形成全面的logits/位置/cache证明，不能统称“全部P0逐位等价”。新P3补真实生成parity、live配置与逐层actualK门检；BF16误差按实值记录。

@@ -28,6 +28,7 @@ EXPECTED_PROTOCOL = {'attention': {'vision_config': 'sdpa', 'text_config': 'eage
                      'seed': 0, 'mrope': 'native', 'do_sample': False,
                      'model': 'Qwen/Qwen3-VL-8B-Instruct'}
 WEIGHT_REVISION = '0c351dd01ed87e9c1b53cbc748cba10e6187ff3b'
+TEXT_ANNOTATIONS_SHA256 = '4ceb5aadc1a41719d0a3e4dfdf06838bcfee1db569a9a65ee67d31c99893081d'
 
 
 def sha(raw):
@@ -53,6 +54,30 @@ def pformat(value):
     return '<0.0001' if value < 0.0001 else f'{value:.4f}'
 
 
+def check_row_metadata(row, reference, bench, official_text):
+    sid = str(row['id'])
+    assert row['gt'] == reference['gt'] and row['question'] == reference['question'], (bench, sid, 'question/GT drift')
+    assert str(row['question_id']) == sid, (bench, sid, 'question_id drift')
+    if bench == 'textvqa':
+        annotation = official_text[sid]
+        assert row['answers'] == annotation['answers'] and len(row['answers']) == 10, (bench, sid, 'original ten-answer array drift')
+        assert row['image_id'] == annotation['image_id'], (bench, sid, 'official image_id drift')
+        assert row['image_id_source'] == 'official TextVQA_0.5.1_val.json question_id lookup'
+    else:
+        expected_image_id = reference.get('image_id', sid)
+        expected_source = ('preserved OCRBench row image_id' if reference.get('image_id') is not None
+                           else 'preserved OCRBench row index alias')
+        assert row['image_id'] == expected_image_id and row['image_id_source'] == expected_source, (bench, sid, 'OCRBench image alias drift')
+
+
+def check_image_grid(row):
+    grid = row['image_grid_thw']
+    assert len(grid) == 1 and len(grid[0]) == 3
+    t, h, w = grid[0]
+    assert all(isinstance(value, int) and value > 0 for value in (t, h, w))
+    assert t * h * w == 4 * row['n_image_full'], (row['id'], 'native 2x2 unit/grid mismatch')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--prediction-dir', type=Path,
@@ -64,6 +89,9 @@ def main():
     missing = [str(path) for path in paths.values() if not path.exists()]
     if missing:
         raise SystemExit('Matched main incomplete; no report overwritten. Missing: ' + ', '.join(missing))
+    annotation_raw = (SC.CACHE / 'TextVQA_0.5.1_val.json').read_bytes()
+    assert sha(annotation_raw) == TEXT_ANNOTATIONS_SHA256
+    official_text = {str(row['question_id']): row for row in json.loads(annotation_raw)['data']}
     sources, data, records, split_meta, expected_ids, split_hashes = {}, {}, {}, {}, {}, {}
     protocol = None
     shared_sources = None
@@ -123,8 +151,7 @@ def main():
                     assert source[key] == shared_sources[key], (path, key, 'source fingerprint differs')
             for row in rows_list:
                 sid = str(row['id'])
-                assert row['gt'] == split_meta[bench][sid]['gt'], (path, sid, 'GT drift')
-                assert row.get('question') == split_meta[bench][sid]['question'], (path, sid, 'prompt/question drift')
+                check_row_metadata(row, split_meta[bench][sid], bench, official_text)
                 if row.get('error'):
                     row['skipped'] = True
                 else:
@@ -153,6 +180,7 @@ def main():
                 assert n > 0 and k == (n if mode == 'none' else max(1, round(.25 * n))), (bench, mode, sid, 'invalid actual budget')
                 assert len(row['input_ids_sha256']) == 64 and row['n_prompt_full'] >= n
                 assert row['actual_k_verified'], (bench, mode, sid, 'unchecked budget')
+                check_image_grid(row)
                 kept = row['kept_image_ids']
                 if mode == 'none':
                     assert row['kept_all'] and (kept is None or kept == list(range(n))), (bench, mode, sid, 'nonidentity None')
@@ -171,8 +199,9 @@ def main():
             assert len(hashes) == 1 and len(next(iter(hashes))) == 64, (bench, sid, 'input IDs differ')
             assert len({rows[m][sid]['n_prompt_full'] for m in MODES}) == 1, (bench, sid, 'full prompt lengths differ')
             assert len({rows[m][sid]['image'] for m in MODES}) == 1, (bench, sid, 'image path differs')
+            assert len({json.dumps(rows[m][sid]['image_grid_thw']) for m in MODES}) == 1, (bench, sid, 'processed image grid differs')
         validation['input_and_budget'][bench] = {
-            'common_answered_n': len(common), 'checks_per_common_id': ['same original N', 'same original input-ID SHA256', 'same full prompt length', 'same image source', 'None K=N', 'RBM/FastV/Hi-Lo K=round(.25N)'],
+            'common_answered_n': len(common), 'checks_per_common_id': ['same original N', 'same original input-ID SHA256', 'same full prompt length', 'same image source', 'same processed image_grid_thw', 'official TextVQA image IDs and ten-answer arrays', 'explicit OCRBench image-ID alias provenance', 'None K=N', 'RBM/FastV/Hi-Lo K=round(.25N)'],
             'mismatches': 0,
             'mean_original_n': statistics.mean(rows['none'][sid]['n_image_full'] for sid in common),
             'mean_kept_k': statistics.mean(rows['pre'][sid]['n_image_kept'] for sid in common)}
@@ -183,7 +212,7 @@ def main():
               'score_sources': {
                   'textvqa': {'commit': SC.EX.REFERENCE_COMMIT, 'url': SC.EX.REFERENCE_URL,
                               'sha256': SC.EX.REFERENCE_SHA256,
-                              'official_annotations_sha256': '4ceb5aadc1a41719d0a3e4dfdf06838bcfee1db569a9a65ee67d31c99893081d'},
+                              'official_annotations_sha256': TEXT_ANNOTATIONS_SHA256},
                   'ocrbench': {'commit': SC.COMMIT, 'url': SC.OCR_URL, 'sha256': SC.OCR_SHA}},
               'statistics': {'resamples': RESAMPLES, 'seed_rule': '20261500 + benchmark_index*100 + pair_index*2; common-answered uses +1',
                              'pair_order': PAIRS, 'failures': 'zero in all-attempted primary score; all IDs retained',
