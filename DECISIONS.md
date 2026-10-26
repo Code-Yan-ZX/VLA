@@ -456,3 +456,9 @@
   22/32 at 3M, 0/32 at 2M (also pre/fastv/hilo verified at 2M). TextVQA/OCRBench
   main protocol stays 4M for all methods. DocVQA block labeled new protocol;
   no mixing with historical 600k runs.
+- D-S10 (08:4x): Q10 first launch was all-rc1 "python python" arg bug (run() doubled
+  $P) -> fixed & relaunched 08:4x; order kept frozen (no score-based reorder);
+  cells not finishing before 12:07 stop stay labeled PARTIAL.
+- D-S11: hilo TTFT first measurement was streamer prompt-put artifact (0.04s);
+  re-measured with 2nd-callback rule -> p50 0.234s plausible; superseded file
+  deleted before rerun (no silent overwrite of a wrong metric).

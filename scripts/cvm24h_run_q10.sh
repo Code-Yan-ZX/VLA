@@ -12,12 +12,12 @@ HF=src/v3_premerger/baselines_hf.py
 D=results/cvm2027_supplement_20261026/predictions
 L=results/cvm2027_supplement_20261026/logs
 Q=results/cvm2027_supplement_20261026/plan
-STOP=$(($(cat /tmp/cvm24h_T0.txt)+17*3600-3*3600))  # 12:07 stop launching new cells
+STOP=$(($(cat /tmp/cvm24h_T0.txt)+19*3600))  # 14:07 stop = GPU deadline 15:07 minus 1h cell margin
 run(){ local tag=$1; shift
   [ -f "$D/$tag.json" ] && { echo "[skip] $tag"; return; }
   [ "$(date +%s)" -gt "$STOP" ] && { echo "[q10] stop $(date +%T)"; return; }
   echo "[q10 start] $tag $(date +%T)"
-  timeout 4000 $P "$@" --out $D/$tag.json > $L/$tag.log 2>&1
+  timeout 4000 "$@" --out $D/$tag.json > $L/$tag.log 2>&1
   echo "[q10 end] $tag rc=$? $(date +%T)"; }
 FS=eval/full_splits/textvqa_val.jsonl
 M="--model Qwen/Qwen3-VL-8B-Instruct --benchmark textvqa --subset $FS --n 5000 --max-pixels 4000000 --seed 0 --max-tokens 32"
