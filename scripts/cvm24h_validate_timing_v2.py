@@ -86,7 +86,8 @@ def validate(paths):
                                     "inconsistent_answer_ids": inconsistent}
     expected_tags = {"none"} | {f"{m}_{k}" for m in ("pre", "fastv", "hilo") for k in (.25, .5, .75)}
     report["missing_cells"] = sorted(expected_tags - all_tags)
-    report["complete"] = not report["missing_cells"] and all(c["failed"] == 0 for c in report["cells"].values())
+    report["complete"] = not report["missing_cells"] and all(
+        c["failed"] == 0 and not c["inconsistent_answer_ids"] for c in report["cells"].values())
     return report
 
 

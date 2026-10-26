@@ -10,7 +10,9 @@ from pathlib import Path
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-matplotlib.rcParams.update({'pdf.fonttype': 42, 'ps.fonttype': 42})
+matplotlib.rcParams.update({'pdf.fonttype': 42, 'ps.fonttype': 42,
+                           'axes.labelsize': 12.5, 'axes.titlesize': 13,
+                           'xtick.labelsize': 11, 'ytick.labelsize': 11})
 from cvm24h_validate_timing_v2 import validate as validate_timing
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -82,6 +84,25 @@ for bench, prefix in (('textvqa', 'p1_tv'), ('ocrbench', 'p1_oc')):
         if d:
             a, b = summary(d), summary(d, True)
             md.append(f'| {pair} | {bench} | {a["delta"]:+.2f} [{a["ci95"][0]:+.2f}, {a["ci95"][1]:+.2f}] | {b["delta"]:+.2f} [{b["ci95"][0]:+.2f}, {b["ci95"][1]:+.2f}] | {b["n"]} |')
+
+# A replacement main table never changes the retained operational results.
+matched_path = REPORT / 'cvm2027_matched_main_20261026.json'
+if matched_path.exists():
+    matched = json.loads(matched_path.read_text())
+    assert matched['complete'] and matched['cell_count'] == 8 and matched['validation']['complete']
+    for bench in ('textvqa', 'ocrbench'):
+        for source in matched['sources'][bench].values():
+            path = Path(source['path'])
+            assert path.exists() and hashlib.sha256(path.read_bytes()).hexdigest() == source['sha256'], 'Matched main summary is stale'
+    summary_json['matched_main'] = matched
+    md += ['', '## New attention-matched main comparison at 25% retention', '',
+           'Shared vision SDPA / text eager for all four methods. Both tasks use complete splits and the same inputs; the official Hi-Lo model remains an adapted implementation. The preceding operational table and the following original budget curves keep their original protocols.', '',
+           '| Benchmark | None@100% | RBM@25% | FastV-k3@25% | Hi-Lo@25% |',
+           '|---|---:|---:|---:|---:|']
+    for bench in ('textvqa', 'ocrbench'):
+        cells = matched['benchmarks'][bench]['cells']
+        md.append(f'| {bench} | ' + ' | '.join(f'{cells[m]["attempted_score"]:.2f}' for m in ('none', 'pre', 'fastv', 'hilo')) + ' |')
+    md += ['', 'All twelve planned pair comparisons, 20,000-resample confidence intervals, failure IDs and per-ID input/budget checks are in `cvm2027_matched_main_20261026.md` and its JSON.']
 
 full_ready = all(curve('textvqa', m, k, True) and curve('textvqa', m, k, True)['A']['n'] == 5000
                  for m in METHODS for k in KEEP)
@@ -180,7 +201,7 @@ else:
 (REPORT / 'cvm2027_supplement_summary.json').write_text(json.dumps(summary_json, indent=2) + '\n')
 
 # Curves: show the attempted OCRBench view alongside its fixed-ID sensitivity.
-fig, axes = plt.subplots(1, 3, figsize=(14, 4.0))
+fig, axes = plt.subplots(1, 3, figsize=(10.8, 3.5))
 for ax, (bench, full, common, title) in zip(axes, [
     ('textvqa', full_ready, False, f'TextVQA {"full 5,000" if full_ready else "subset 1,000"}'),
     ('ocrbench', False, False, 'OCRBench: all 1,000 attempts'),
@@ -191,7 +212,8 @@ for ax, (bench, full, common, title) in zip(axes, [
     for m, label in METHODS.items():
         ax.plot([25, 50, 75], [vals(curve(bench,m,k,full), common)[0]*SCALE[bench] for k in KEEP], 'o-', c=COLORS[m], label=label)
     ax.set(xlabel='Retained visual tokens (%)', ylabel='Official score (%)' if bench == 'textvqa' else 'Score normalized to 1,000', title=title)
-    ax.legend(fontsize=7)
+    ax.set_xticks([25, 50, 75])
+    ax.legend(fontsize=10.5)
 fig.tight_layout()
 save_figure(fig, 'budget_curves')
 plt.close(fig)
@@ -202,7 +224,7 @@ for ax, bench in zip(axes, ('textvqa', 'ocrbench')):
     for m, label in METHODS.items():
         ax.plot([actual[bench][k]['mean_k'][m] for k in KEEP], [vals(curve(bench,m,k,full), bench=='ocrbench')[0]*SCALE[bench] for k in KEEP], 'o-', c=COLORS[m], label=label)
     ax.set(xlabel='Mean actual retained K', ylabel='Official score (%)' if bench=='textvqa' else 'Common-answered score ×1,000', title=bench)
-    ax.legend(fontsize=8)
+    ax.legend(fontsize=10.5)
 fig.tight_layout()
 save_figure(fig, 'score_vs_actual_k')
 plt.close(fig)

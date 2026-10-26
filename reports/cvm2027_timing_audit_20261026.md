@@ -40,3 +40,28 @@ $P scripts/cvm24h_timing_v2.py --engine hilo \
 ```
 
 The script refuses to resume an artifact from a different script hash. Original timing raw files are neither rewritten nor reused as valid cells. Final counts and any no-op mismatch or failed requests must be checked before exporting a paper table.
+
+An independent original-quality-protocol gate is prepared in `scripts/cvm24h_noop_verify.py`. It uses eager vision/text attention and the previously fixed 32-request TextVQA smoke set to compare actual native generation with pre keep=1, post keep=1 and FastV drop=0. All three deepstack streams are passed to every manual call. A vocabulary-head hook captures first-step logits from the actual generation calls; input/position/mask/deepstack identity, kept index sets and complete greedy token sequences are retained. Numerical errors are reported explicitly. A structural/token mismatch writes evidence and fails instead of relaxing a tolerance. This additional gate is to be run only after mandatory cost measurements, with enough margin before the same GPU deadline; preparation is not a claim that the gate has passed.
+
+```bash
+$P scripts/cvm24h_noop_verify.py \
+  --out results/cvm2027_supplement_20261026/plan/p0_noop32_verified.json \
+  --deadline-epoch 1792998426
+```
+
+Completed corrected timing files can be checked without the GPU:
+
+```bash
+$P scripts/cvm24h_validate_timing_v2.py \
+  results/cvm2027_supplement_20261026/plan/timing_harness_corrected.json \
+  results/cvm2027_supplement_20261026/plan/timing_hilo_corrected.json \
+  --out results/cvm2027_supplement_20261026/plan/timing_corrected_validation.json
+```
+
+## Matched full main-table quality extension
+
+After the author explicitly authorized extending the historical GPU deadline, a fresh common-backend main-table runner was prepared in `scripts/cvm24h_matched_quality.py`. It leaves the frozen corrected timing runner unchanged. The new quality run uses the same vision SDPA/text eager, bf16, native-position, greedy-32, 4M-pixel protocol, with weights pinned to the exact cached snapshot `0c351dd01ed87e9c1b53cbc748cba10e6187ff3b` used by P3. All four methods freshly infer TextVQA 5000 and OCRBench 1000 at the frozen main comparison point (None 100%; RBM/FastV/Hi-Lo 25%). Full-prediction reuse is disabled.
+
+The new runner directly imports the frozen corrected manual generation function for None/RBM/FastV and uses official Hi-Lo generation for the modern baseline. Three warmups and every common fixed P3 request compare complete generated token sequences, answers, full N and actual K against the first timing repeat without reading scores. Every planned ID is present from initialization, including explicit pending/failed states; checkpoints occur every 100 attempts, and deadline exits preserve partial results. TextVQA stores the original ten official answers. Weight/processor/implementation fingerprints and each request's full input-ID hash and actual K support cross-method CPU validation. Any protocol or blind-agreement mismatch saves evidence and aborts the cell.
+
+The intended destination is `results/cvm2027_supplement_20261026/matched_main/{mode}_{benchmark}.json`. Before full inference, the root supervisor is to run all eight mode/task combinations with n=3 in a separate `smoke/` directory; these are runtime checks and never full-main results. The new deadline is supplied explicitly by the author-controlled serial supervisor. At script preparation, CPU metadata checks over all 5000 TextVQA records passed; GPU smoke and full-main completion remain to be verified from the resulting artifacts.

@@ -11,7 +11,9 @@ import sys
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-matplotlib.rcParams.update({'pdf.fonttype': 42, 'ps.fonttype': 42})
+matplotlib.rcParams.update({'pdf.fonttype': 42, 'ps.fonttype': 42,
+                           'axes.labelsize': 12.5, 'axes.titlesize': 13,
+                           'xtick.labelsize': 11, 'ytick.labelsize': 11})
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'scripts'))
@@ -73,7 +75,11 @@ for engine in ('harness', 'hilo'):
                                    'n': len(rows), 'n_success': sum(not r['skipped'] for r in rows.values()),
                                    'official_score': sum(scores.values()) / len(rows) * SCALE[bench],
                                    'total_s': percentiles(timed,'total_s'), 'ttft_s': percentiles(timed,'ttft_s'),
-                                   'peak_alloc_GB': max((r['peak_alloc_GB'] for r in timed if r.get('status')=='ok'), default=None)}
+                                   'peak_alloc_GB': max((rep['peak_alloc_GB'] for r in timed if r.get('status')=='ok' for rep in r['repeats_raw']), default=None),
+                                   'peak_reserved_GB': max((rep['peak_reserved_GB'] for r in timed if r.get('status')=='ok' for rep in r['repeats_raw']), default=None),
+                                   'memory_unit': 'GiB',
+                                   'segments_s': {field: percentiles(timed, field) for field in
+                                                  ('processor_cpu_s', 'transfer_s', 'vision_s', 'selection_s', 'fusion_s', 'prefill_s', 'decode_s')}}
 
 if 'none' not in configs:
     raise SystemExit('Corrected None timing not yet complete; no quality-cost result emitted')
@@ -111,6 +117,20 @@ for bench in ('textvqa','ocrbench'):
                     'cheapest_p50_s':winner[1]['total_s']['p50'] if winner else None}
         md.append(f'- {bench} {method}: '+(f'{winner[0]}, p50={winner[1]["total_s"]["p50"]:.3f}s' if winner else 'not met at completed measured points')+f' (target={target:.2f}).')
 
+md += ['', '## Request segments (p50 seconds) and raw peak memory', '',
+       'Each task uses its fixed 100 requests; three repeats are reduced to one median per request before the p50. Selection/fusion can overlap prefill and must not be added again. Total and TTFT come from direct same-request timestamps. Memory uses the maximum over all raw repeats, in GiB.', '',
+       '| Config | Task | CPU processor | Transfer | Full vision | Selection | Fusion | Prefill | TTFT | Decode | Peak allocated / reserved (GiB) |',
+       '|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|']
+for tag, benches in result['configs'].items():
+    for bench, cell in benches.items():
+        segments = cell['segments_s']
+        def seg(field):
+            value = segments.get(field)
+            return f'{value["p50"]:.4f}' if value else '—'
+        fields = ['processor_cpu_s', 'transfer_s', 'vision_s', 'selection_s', 'fusion_s', 'prefill_s']
+        md.append(f'| {tag} | {bench} | ' + ' | '.join(seg(field) for field in fields)
+                  + f' | {cell["ttft_s"]["p50"]:.4f} | {seg("decode_s")} | {cell["peak_alloc_GB"]:.2f} / {cell["peak_reserved_GB"]:.2f} |')
+
 summary_path = ROOT/'reports/cvm2027_corrected_quality_cost.json'
 summary_path.write_text(json.dumps(result,indent=2)+'\n')
 (ROOT/'reports/cvm2027_corrected_quality_cost.md').write_text('\n'.join(md)+'\n')
@@ -124,9 +144,9 @@ for ax,bench in zip(axes,('textvqa','ocrbench')):
         pts=sorted([(tag,c[bench]) for tag,c in result['configs'].items() if tag.startswith(method+'_')],key=lambda p:p[1]['keep'])
         if not pts: continue
         ax.plot([c['total_s']['p50'] for _,c in pts],[c['official_score'] for _,c in pts],'o-',c=colors[method],label=label)
-        for _,c in pts: ax.annotate(f'{c["keep"]*100:.0f}%',(c['total_s']['p50'],c['official_score']),xytext=(3,3),textcoords='offset points',fontsize=7)
+        for _,c in pts: ax.annotate(f'{c["keep"]*100:.0f}%',(c['total_s']['p50'],c['official_score']),xytext=(3,3),textcoords='offset points',fontsize=10.5)
     ax.set(xlabel='p50 total request latency (s)',ylabel='Official score (%)' if bench=='textvqa' else 'Official score normalized ×1,000',title=f'{bench}: fixed 100-question subset')
-    ax.legend(fontsize=7)
+    ax.legend(fontsize=10.5)
 fig.tight_layout();FIG.mkdir(parents=True,exist_ok=True)
 for suffix in ('svg','pdf'):
     path = FIG / f'score_vs_latency.{suffix}'

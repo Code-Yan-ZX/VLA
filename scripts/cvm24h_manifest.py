@@ -50,6 +50,14 @@ def main():
     ap.add_argument("--out", type=Path, default=ROOT / "reports/cvm2027_artifact_manifest.json")
     args = ap.parse_args()
     paths = set((DATA / "predictions").glob("*.json"))
+    paths.update((DATA / "matched_main").rglob("*.json"))
+    paths.update((ROOT / "eval/full_splits").glob("*.jsonl"))
+    score_cache = ROOT / "tmp/cvm_cpu_rescore_20261025"
+    if score_cache.exists():
+        paths.update(score_cache.glob("*reference.py"))
+        annotation = score_cache / "TextVQA_0.5.1_val.json"
+        if annotation.exists():
+            paths.add(annotation)
     paths.update(p for p in (DATA / "plan").rglob("*")
                  if p.is_file() and p.suffix in (".json", ".jsonl", ".txt"))
     paths.update((ROOT / "scripts").glob("cvm24h*.py"))

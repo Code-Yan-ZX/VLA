@@ -2,7 +2,7 @@
 - Active worktree: `.claude/worktrees/cvm-oneday-20261025`, branch `codex/cvm-24h-supplement`.
 - User now requests completion of experiments AND manuscript supplementation before today 20:00; no submission.
 - Codex is actively coordinating this worktree; old Claude hourly checks must not launch duplicate jobs or commit mid-edit.
-- Original T0: Oct25 19:07:06; GPU cutoff Oct26 15:07:06; original total cutoff 19:07:06.
+- USER APPROVED ~3h GPU extension to complete uniform-backend full main table; target compute ~18:00, final delivery 20:00.
 - P1 quality complete: TextVQA full5000 None/RBM/FastV/Hi-Lo = 83.24/75.50/76.83/66.77.
 - OCRBench full1000 attempted = 707/559/413/613; 79 harness failures confound Hi-Lo comparison.
 - OCRBench common921: Hi-Lo and RBM tie statistically; do not infer selection superiority from attempted totals.
@@ -12,10 +12,12 @@
 - P3 OLD TIMING INVALID: missing inference mode, accumulating MergerTap hooks, FastV missing deepstack.
 - P3 OLD Hi-Lo config updates external copied config; budget labels unverified. Do not cite legacy timings.
 - Corrected P3 in preparation: shared visionSDPA/text eager, fixed200 requests x3, actual K/trace/answers.
-- Q10 optional full curves: RBM/FastV .50/.75 complete; Hi-Lo .50 currently running.
-- Q10 parent PID1927473 intentionally SIGSTOPPED so corrected P3 precedes optional Hi-Lo .75.
-- Do not resume that parent or launch competing GPU work; root owns scheduling and deadline.
+- Q10 optional full curves: RBM/FastV .50/.75 and Hi-Lo .50 complete (5/6); Hi-Lo .75 deferred.
+- Original Q10 parent and old watcher terminated after Hi-Lo50 exit; corrected P3 active; optional Hi-Lo75 remains deferred.
+- Corrected queue is running mixed-attention smoke, then harness/hilo formal P3; no competing GPU jobs.
 - Manuscript agent owns main.tex/references.bib; scoring agent owns table builder/quality summaries.
 - Cost agent owns timing_v2 script; root owns reports, provenance, state, release packaging and final Git.
 - Preserve original main-worktree changes and all old raw files. No force push, no weights/data/logs in Git.
-- Next: finish active .50, corrected P3, official timing-set scores, report/HANDOFF, PDF/source QA.
+- Next: corrected P3 + eager32 no-op, then uniform8-cell full main (TV5000/OCR1000), scoring, manuscript/PDF/source QA.
+- New main: all four arms visionSDPA/text eager, same native positions/bf16/greedy32/4M; all compressed keep.25.
+- Raw new main: results/cvm2027_supplement_20261026/matched_main/{mode}_{benchmark}.json; score all6 pairs/task.

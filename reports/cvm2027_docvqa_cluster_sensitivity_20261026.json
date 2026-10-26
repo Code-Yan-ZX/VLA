@@ -1,0 +1,179 @@
+{
+  "scope": "DocVQA pre-fixed 500-question subset, 25% retention, unified 2M pixel cap",
+  "purpose": "Optional image/page-cluster bootstrap sensitivity; existing question-level primary results and saved GT are unchanged",
+  "mapping_source": {
+    "dataset": "lmms-lab/DocVQA, DocVQA validation",
+    "files": [
+      {
+        "path": "/media/disk2/YZX/research/vla/runs/data/staging/docvqa/validation-00000-of-00006.parquet",
+        "size_bytes": 114817746,
+        "rows": 892,
+        "columns_read": [
+          "questionId",
+          "docId",
+          "ucsf_document_id",
+          "ucsf_document_page_no",
+          "question",
+          "answers"
+        ],
+        "metadata_projection_sha256": "5a746ac80fba808dc0a176dfa528664032110b21e91133b3dfb6cfdfaaccb99a"
+      },
+      {
+        "path": "/media/disk2/YZX/research/vla/runs/data/staging/docvqa/validation-00001-of-00006.parquet",
+        "size_bytes": 160435747,
+        "rows": 892,
+        "columns_read": [
+          "questionId",
+          "docId",
+          "ucsf_document_id",
+          "ucsf_document_page_no",
+          "question",
+          "answers"
+        ],
+        "metadata_projection_sha256": "903b4aa7eae00b49574e91e8eef8ac8789aeabc4a5ccef4362cae9f12439a525"
+      },
+      {
+        "path": "/media/disk2/YZX/research/vla/runs/data/staging/docvqa/validation-00002-of-00006.parquet",
+        "size_bytes": 184452290,
+        "rows": 892,
+        "columns_read": [
+          "questionId",
+          "docId",
+          "ucsf_document_id",
+          "ucsf_document_page_no",
+          "question",
+          "answers"
+        ],
+        "metadata_projection_sha256": "ee92de82b65c1f9545bf84a02346597e39b7b083c8023f2439e05f6f61d20d66"
+      },
+      {
+        "path": "/media/disk2/YZX/research/vla/runs/data/staging/docvqa/validation-00003-of-00006.parquet",
+        "size_bytes": 177861893,
+        "rows": 891,
+        "columns_read": [
+          "questionId",
+          "docId",
+          "ucsf_document_id",
+          "ucsf_document_page_no",
+          "question",
+          "answers"
+        ],
+        "metadata_projection_sha256": "ff5267c6cf8f826f9677b8a864fddb887715e6aaff06dc41f1b87361d8cc2b7a"
+      },
+      {
+        "path": "/media/disk2/YZX/research/vla/runs/data/staging/docvqa/validation-00004-of-00006.parquet",
+        "size_bytes": 206232388,
+        "rows": 891,
+        "columns_read": [
+          "questionId",
+          "docId",
+          "ucsf_document_id",
+          "ucsf_document_page_no",
+          "question",
+          "answers"
+        ],
+        "metadata_projection_sha256": "e4c9df1abd8ccdcfd05db715524c1c8546a20bade85f4c062d58f131114d91b9"
+      },
+      {
+        "path": "/media/disk2/YZX/research/vla/runs/data/staging/docvqa/validation-00005-of-00006.parquet",
+        "size_bytes": 212034964,
+        "rows": 891,
+        "columns_read": [
+          "questionId",
+          "docId",
+          "ucsf_document_id",
+          "ucsf_document_page_no",
+          "question",
+          "answers"
+        ],
+        "metadata_projection_sha256": "99147148d12f34f705ec69e4611f859ae7444571e30a86137147d41ae4841cf8"
+      }
+    ],
+    "all_questions": 5349,
+    "all_doc_ids": 1286,
+    "all_ucsf_pages": 1286,
+    "docid_page_bijection_verified": true,
+    "selected_mapping_sha256": "0b32bff9473aebb0fdc00750bcebe71d8d3c8e24f60fde7ebaa43576560434ec",
+    "metadata_only_no_image_bytes_read": true,
+    "metadata_projection_sha256": "32d44390dbf3bef851e09497a93ad74ab428f6e3f3bbc5ec21cc93f866be1930",
+    "dataset_revision_note": "Original staging files do not preserve a verified Hub revision; canonical metadata-projection digests identify the exact local annotation content.",
+    "ids_sha256": "41869608835bf38ae609ac598f5eec063b66d67d990e1d4383d1d0b480a5e5d3"
+  },
+  "cluster_definition": [
+    "ucsf_document_id",
+    "ucsf_document_page_no"
+  ],
+  "selected_questions": 500,
+  "selected_image_clusters": 417,
+  "cluster_size_histogram": {
+    "1": 348,
+    "2": 57,
+    "3": 10,
+    "4": 2
+  },
+  "bootstrap": {
+    "resamples": 20000,
+    "sampling": "Draw C image/page clusters uniformly with replacement; include every sampled cluster question, preserving multiplicities; each replicate uses its own question-count denominator",
+    "estimand": "question-weighted mean ANLS difference on the selected questions",
+    "interval": "paired percentile 95%; no new p-value or equivalence claim",
+    "seed_rule": "20261400 for RBM-HiLo, 20261401 for RBM-FastV"
+  },
+  "prediction_sources": {
+    "rbm": {
+      "path": "/media/disk2/YZX/research/vla/.claude/worktrees/cvm-oneday-20261025/results/cvm2027_supplement_20261026/predictions/doc500_pre25.json",
+      "sha256": "891f067729aff40a13816f6e927e0fbbb62e665cb59c3307dcfd2ae695f2e24e"
+    },
+    "hilo": {
+      "path": "/media/disk2/YZX/research/vla/.claude/worktrees/cvm-oneday-20261025/results/cvm2027_supplement_20261026/predictions/doc500_hilo25.json",
+      "sha256": "5843374bdfffd46f8b70400afc3c172c4f9e9863168d81414fb4f1469f2b78f6"
+    },
+    "fastv": {
+      "path": "/media/disk2/YZX/research/vla/.claude/worktrees/cvm-oneday-20261025/results/cvm2027_supplement_20261026/predictions/doc500_fastv25.json",
+      "sha256": "a1618067907b86f9fc776e268d7f4875de191b2661936989a739edcb213d7506"
+    }
+  },
+  "pairs": {
+    "rb_hl": {
+      "n_questions": 500,
+      "n_clusters": 417,
+      "delta_pp": 6.387944681610248,
+      "cluster_ci95_pp": [
+        2.9127513165402994,
+        9.871098246548605
+      ],
+      "cluster_bootstrap_seed": 20261400,
+      "question_ci95_pp_unchanged": [
+        3.0444247036260426,
+        9.777937709096024
+      ],
+      "question_bootstrap_seed": 20261270,
+      "question_resamples": 20000,
+      "rbm_score": 0.8276402859001225,
+      "comparison_score": 0.76376083908402
+    },
+    "rb_fv": {
+      "n_questions": 500,
+      "n_clusters": 417,
+      "delta_pp": 12.315910762950631,
+      "cluster_ci95_pp": [
+        8.053113041873074,
+        16.61294503560733
+      ],
+      "cluster_bootstrap_seed": 20261401,
+      "question_ci95_pp_unchanged": [
+        8.15349082565408,
+        16.469414171096506
+      ],
+      "question_bootstrap_seed": 20261271,
+      "question_resamples": 20000,
+      "rbm_score": 0.8276402859001225,
+      "comparison_score": 0.7044811782706162
+    }
+  },
+  "scoring_reference": {
+    "commit": "8f40097532a7bf4db6123713f1a905e02c8f5971",
+    "url": "https://raw.githubusercontent.com/EvolvingLMMs-Lab/lmms-eval/8f40097532a7bf4db6123713f1a905e02c8f5971/lmms_eval/api/metrics.py",
+    "sha256": "eaf48195af80a46d22e545a03a1bd7e4cad4fcbadeb3d2d817ac7d148390d8f4"
+  },
+  "reproduce_command": "/home/dell/miniconda3/envs/qwen3vl_clean/bin/python scripts/cvm24h_doc_cluster.py"
+}

@@ -22,6 +22,13 @@ while test -n "$(nvidia-smi --query-compute-apps=pid --format=csv,noheader)"; do
   fi
   sleep 5
 done
+"$P" scripts/cvm24h_timing_v2.py --engine harness --limit 2 --repeats 1 \
+  --out "$Q/timing_smoke_harness.json" --noop-reference "$Q/timing_v2_smoke_reference.pt" \
+  --deadline-epoch "$SOFT_DEADLINE" > "$L/timing_smoke_harness.log" 2>&1
+"$P" scripts/cvm24h_timing_v2.py --engine hilo --limit 2 --repeats 1 \
+  --out "$Q/timing_smoke_hilo.json" --noop-reference "$Q/timing_v2_smoke_reference.pt" \
+  --deadline-epoch "$SOFT_DEADLINE" > "$L/timing_smoke_hilo.log" 2>&1
+echo "[corrected queue] mixed-attention runtime smoke passed at $(date -Iseconds)"
 test "$(date +%s)" -lt "$SOFT_DEADLINE"
 timeout --signal=TERM "$((DEADLINE-$(date +%s)))" "$P" scripts/cvm24h_timing_v2.py \
   --engine harness --out "$Q/timing_harness_corrected.json" --deadline-epoch "$SOFT_DEADLINE" \
