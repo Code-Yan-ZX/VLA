@@ -11,13 +11,14 @@
 - P1 engines differ: harness eager vs vendored Hi-Lo SDPA; disclose adaptation/implementation boundary.
 - P3 OLD TIMING INVALID: missing inference mode, accumulating MergerTap hooks, FastV missing deepstack.
 - P3 OLD Hi-Lo config updates external copied config; budget labels unverified. Do not cite legacy timings.
-- Corrected P3 running: shared visionSDPA/text eager, fixed200 requests x3, actual K/trace/answers.
+- Corrected P3 all10 complete14:48: shared visionSDPA/text eager, fixed200 x3, zero failures/repeat drift.
 - Q10 optional full curves: RBM/FastV .50/.75 and Hi-Lo .50 complete (5/6); Hi-Lo .75 deferred.
 - Original Q10 parent and old watcher terminated after Hi-Lo50 exit; corrected P3 active; optional Hi-Lo75 remains deferred.
-- Corrected P3 harness7/7 and Hi-Lo25 complete; Hi-Lo50/75 running, no competing GPU jobs.
+- P3+hilo32 no-op and original eager32 actual-generation gate pass; eager logit maxabs.125, not exact.
 - Manuscript agent owns main.tex/references.bib; scoring agent owns table builder/quality summaries.
 - Cost agent owns timing_v2 script; root owns reports, provenance, state, release packaging and final Git.
 - Preserve original main-worktree changes and all old raw files. No force push, no weights/data/logs in Git.
-- Next: corrected P3 + eager32 no-op, then uniform8-cell full main (TV5000/OCR1000), scoring, manuscript/PDF/source QA.
+- Uniform8-cell full main passed all8 runtime smokes and began14:51; Hi-Lo TextVQA first, no competing GPU jobs.
 - New main: all four arms visionSDPA/text eager, same native positions/bf16/greedy32/4M; all compressed keep.25.
 - Raw new main: results/cvm2027_supplement_20261026/matched_main/{mode}_{benchmark}.json; score all6 pairs/task.
+- Costs: TV95% cheapest RBM50/FV25/HiLo75; OCR RBM50/FV75/HiLo75. Only same100/task quality-cost pairs.

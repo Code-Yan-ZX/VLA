@@ -201,7 +201,7 @@ else:
 (REPORT / 'cvm2027_supplement_summary.json').write_text(json.dumps(summary_json, indent=2) + '\n')
 
 # Curves: show the attempted OCRBench view alongside its fixed-ID sensitivity.
-fig, axes = plt.subplots(1, 3, figsize=(10.8, 3.5))
+fig, axes = plt.subplots(1, 3, figsize=(10.8, 3.9))
 for ax, (bench, full, common, title) in zip(axes, [
     ('textvqa', full_ready, False, f'TextVQA {"full 5,000" if full_ready else "subset 1,000"}'),
     ('ocrbench', False, False, 'OCRBench: all 1,000 attempts'),
@@ -213,8 +213,13 @@ for ax, (bench, full, common, title) in zip(axes, [
         ax.plot([25, 50, 75], [vals(curve(bench,m,k,full), common)[0]*SCALE[bench] for k in KEEP], 'o-', c=COLORS[m], label=label)
     ax.set(xlabel='Retained visual tokens (%)', ylabel='Official score (%)' if bench == 'textvqa' else 'Score normalized to 1,000', title=title)
     ax.set_xticks([25, 50, 75])
-    ax.legend(fontsize=10.5)
-fig.tight_layout()
+    ax.margins(x=.07, y=.10)
+handles, labels = axes[0].get_legend_handles_labels()
+lookup = dict(zip(labels, handles))
+order = ['None', 'RBM', 'FastV-k3', 'Hi-Lo', '95% target']
+fig.legend([lookup[label] for label in order], order, loc='lower center',
+           bbox_to_anchor=(.5, .015), ncol=5, fontsize=10.5, frameon=False)
+fig.tight_layout(rect=(0, .16, 1, 1))
 save_figure(fig, 'budget_curves')
 plt.close(fig)
 
@@ -230,6 +235,13 @@ save_figure(fig, 'score_vs_actual_k')
 plt.close(fig)
 # Remove the invalid legacy latency plot so it cannot be consumed by the paper.
 legacy = FIG / 'score_vs_latency.svg'
-if legacy.exists() and not (REPORT / 'cvm2027_corrected_quality_cost.json').exists():
+cost_summary_path = REPORT / 'cvm2027_corrected_quality_cost.json'
+if cost_summary_path.exists():
+    from cvm24h_plot_quality_cost import plot_quality_cost
+    cost_summary = json.loads(cost_summary_path.read_text())
+    for source in cost_summary['provenance'].values():
+        assert hashlib.sha256(Path(source['path']).read_bytes()).hexdigest() == source['sha256'], 'Corrected cost summary is stale'
+    plot_quality_cost(cost_summary, FIG)
+elif legacy.exists():
     legacy.unlink()
 print(f'Audited tables and curves written; optional full TextVQA ready={full_ready}')

@@ -92,4 +92,6 @@ Statistics use the same answered IDs across the three methods at each budget. Hi
 
 The original timing artifacts are excluded from comparison: the harness enabled gradient recording, FastV omitted deepstack features, and the Hi-Lo model reused its initial retention configuration at later budgets. Corrected timing requires a new artifact with explicit inference, parity, budget, and boundary validation.
 
-Corrected timing summary withheld until all ten planned cells pass validation.
+Validated corrected timing available: `timing_harness_corrected.json`; quality-cost statistics use its own saved answers.
+
+Validated corrected timing available: `timing_hilo_corrected.json`; quality-cost statistics use its own saved answers.

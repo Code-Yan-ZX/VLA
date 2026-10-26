@@ -134,24 +134,6 @@ for tag, benches in result['configs'].items():
 summary_path = ROOT/'reports/cvm2027_corrected_quality_cost.json'
 summary_path.write_text(json.dumps(result,indent=2)+'\n')
 (ROOT/'reports/cvm2027_corrected_quality_cost.md').write_text('\n'.join(md)+'\n')
-fig,axes = plt.subplots(1,2,figsize=(10,4))
-colors={'pre':'#1f77b4','fastv':'#d62728','hilo':'#2ca02c'}
-for ax,bench in zip(axes,('textvqa','ocrbench')):
-    ref=result['configs']['none'][bench]
-    ax.scatter(ref['total_s']['p50'],ref['official_score'],c='black',marker='*',s=90,label='None')
-    ax.axhline(.95*ref['official_score'],ls=':',c='gray',lw=1,label='95% quality target')
-    for method,label in [('pre','RBM'),('fastv','FastV-k3'),('hilo','Hi-Lo')]:
-        pts=sorted([(tag,c[bench]) for tag,c in result['configs'].items() if tag.startswith(method+'_')],key=lambda p:p[1]['keep'])
-        if not pts: continue
-        ax.plot([c['total_s']['p50'] for _,c in pts],[c['official_score'] for _,c in pts],'o-',c=colors[method],label=label)
-        for _,c in pts: ax.annotate(f'{c["keep"]*100:.0f}%',(c['total_s']['p50'],c['official_score']),xytext=(3,3),textcoords='offset points',fontsize=10.5)
-    ax.set(xlabel='p50 total request latency (s)',ylabel='Official score (%)' if bench=='textvqa' else 'Official score normalized ×1,000',title=f'{bench}: fixed 100-question subset')
-    ax.legend(fontsize=10.5)
-fig.tight_layout();FIG.mkdir(parents=True,exist_ok=True)
-for suffix in ('svg','pdf'):
-    path = FIG / f'score_vs_latency.{suffix}'
-    fig.savefig(path)
-    if suffix == 'svg':
-        path.write_text('\n'.join(line.rstrip() for line in path.read_text().splitlines()) + '\n')
-plt.close(fig)
+from cvm24h_plot_quality_cost import plot_quality_cost
+plot_quality_cost(result, FIG)
 print('Corrected quality-cost summaries written:',len(configs),'configs')

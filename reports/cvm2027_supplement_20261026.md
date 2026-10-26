@@ -2,7 +2,7 @@
 
 时间：2026-10-25 19:07:06 开始；2026-10-26 接管审计和收束（Asia/Shanghai）。隔离分支 `codex/cvm-24h-supplement` 基于含 `1600bfe` 的 main。原始执行代码至 `90a5b73`，随后修正与论文版本见 Git 历史。
 
-**当前状态：初轮质量矩阵与预定预算曲线齐全；用户已批准延长原GPU时限，新增统一attention的完整主表正在排队；旧成本实现无效，修正版P3正在重测。新主表将作为最终权威比较，下面旧表保留为历史操作性结果。** 原工作区修改、历史预测与日志保留。用户10/26已追加授权补论文，覆盖原提示词“本轮不改论文”；不包含外部投稿。
+**当前状态：初轮质量矩阵与预定预算曲线齐全；修正版P3全10组已完成且通过核验；用户已批准延长原GPU时限，新增统一attention完整主表已通过最后运行门检、开始新推理。新主表将作为最终权威比较，下面旧表保留为历史操作性结果。** 原工作区修改、历史预测与日志保留。用户10/26已追加授权补论文，覆盖原提示词“本轮不改论文”；不包含外部投稿。
 
 ## 0. 新增统一attention完整主表（待8格完整评分）
 
@@ -56,6 +56,17 @@ Q10可选全5000扩展已完成RBM/FastV50/75及Hi-Lo50，共5/6格，独立表�
 
 新统一attention不同于旧full-quality路径，**质量—成本图只用本次200题产生的答案重新官方评分，按任务各100题与相同请求的成本配对**，不把旧全量分数冒充新协议质量。新文件为 `plan/timing_harness_corrected.json` 和 `plan/timing_hilo_corrected.json`；完成后 `reports/cvm2027_corrected_quality_cost.{md,json}` 给出完整表、同协议质量与95%目标下最低测得p50成本。
 
+修正版于14:48完成：每配置200个共同ID、各3次，共6000次完整请求，零失败，重复答案全部一致，actual K/36层轨迹/原始中位数与峰值检查通过。10组完整workload wall合计4009.6秒，不含模型加载/预热。全部表、分段、p50/p95、原始峰值与配对CI已写入上述质量成本报告。下表仅列达到预定95%点估计目标的最低实测p50，并非质量等价证明。
+
+| 方法 | TextVQA100最低达标点：keep / score% / p50秒 | OCRBench100最低达标点：keep / score归一化×1000 / p50秒 |
+|---|---|---|
+| 同协议None参考 | 100% / 81.70 / 0.396 | 100% / 780 / 0.713 |
+| RBM | 50% / 80.50 / 0.295 | 50% / 760 / 0.642 |
+| FastV-k3 | 25% / 79.20 / 0.269 | 75% / 790 / 0.729 |
+| Hi-Lo | 75% / 79.30 / 0.494 | 75% / 750 / 0.978 |
+
+目标分别为77.615%与归一化741分。Hi-Lo在这两个固定子集的达标点均慢于None，FastV的OCR达标点也未缩短p50；不能把减少token当作必然加速。RBM OCR75的p50=0.730秒，高于OCR50的0.642秒，最低成本的选择确实来自实测而非keep单调性假设。25%保留时跨全部200题/3次重复的峰值allocated为None22.071、RBM17.268、FastV21.586、Hi-Lo21.610 GiB。输出长度与decode成本也随方法变化，应和TTFT分别解读；不能将生成更短直接称为prefill加速。全部点的score-vs-latency图为 `reports/figures_cvm2027_supplement/score_vs_latency.{pdf,svg}`。
+
 ## 4. 正确性、实现与复用
 
 - 模型snapshot `0c351dd01ed87e9c1b53cbc748cba10e6187ff3b`；transformers4.57.6、torch2.10.0+cu128；无环境改装、无重复权重下载。
@@ -64,6 +75,7 @@ Q10可选全5000扩展已完成RBM/FastV50/75及Hi-Lo50，共5/6格，独立表�
 - 冻结Hi-Lo参数：prune_layer=2、fusion=.3、top_k_ratio=.1、attention_threshold=.05、candidate=max(.30,keep)、fusion_layers=[0,1]。50/75%时candidate与keep相同，融合候选集合退化为空；不是根据验证成绩调参。
 - 实际K已逐共同样本核验为round(N×keep)，Hi-Lo融合不额外保留token。RBM同kept IDs对齐主流及三条deepstack；不能照旧CLI描述再乘4补偿。
 - 旧P0检查涵盖32题no-op答案/K和8题部分张量检查；其logits probe没有完整传入deepstack，Post/FastV/Hi-Lo未形成全面的logits/位置/cache证明，不能统称“全部P0逐位等价”。新P3补真实生成parity、live配置与逐层actualK门检；BF16误差按实值记录。
+- 新native/vendored共享attention无剪枝门检32/32通过：显式关闭选择与融合，input/mRoPE/main+三DS完整hash及greedy相同，首步logits误差0。另一个原eager协议真实生成门检中，pre1/post1/FastV-drop0各32/32完整greedy和保留集合/位置/三DS一致，但首步logits最大绝对误差各0.125（BF16），不得写成logits逐位相同。二者是不同检查，原始证据分别在修正版timing和 `plan/p0_noop32_verified.json`。
 - native/mimic位置规则在32题中有7题答案不同；这说明位置语义会影响结果，仍不能据此完全解释历史HF/vLLM全量差距。
 - RBM/FastV25% TextVQA来自`results/dcc_presubmit/expB/`，OCR来自`results/acmmm_final_controls/p1/`；记录配置与ID核验。预测和所有代码/评分文件的完整SHA见 `reports/cvm2027_artifact_manifest.json`，复用来源本地保留。
 - DocVQA统一2M是显存触发协议变更：高cap smoke失败后四方法一起改。四预测同序等于预固定500行JSONL，集合等于预固定IDs，无样本替换或失败分母不对称。
@@ -88,13 +100,30 @@ $P scripts/cvm24h_timing_v2.py --engine harness --out results/cvm2027_supplement
 $P scripts/cvm24h_timing_v2.py --engine hilo --out results/cvm2027_supplement_20261026/plan/timing_hilo_corrected.json
 $P scripts/cvm24h_score_timing.py
 $P scripts/cvm24h_build_tables.py
+# 统一attention完整主表：先核验P3，再做eager32/no-op、8格smoke和全部8格full。
+# 新复现时显式给未来4小时截止；已有同指纹完整cell会幂等复用，不覆盖历史raw。
+CVM_MATCHED_DEADLINE_EPOCH="$(( $(date +%s) + 14400 ))" bash scripts/cvm24h_run_matched_main.sh
+$P scripts/cvm24h_score_matched.py
+# 文档页相关性敏感性与最终所有产物哈希
+$P scripts/cvm24h_doc_cluster.py
 $P scripts/cvm24h_manifest.py
 ```
 
 单格示例和冻结配置见原`plan/task_queue.json`与对应运行脚本；最终manifest只导出轻量哈希、协议及失败ID，原始预测、timing repeats、标注、数据及权重均留本地且不进入Git/匿名源包。
 
+需要在新目录从零重新推理统一attention单格时，直接运行以下命令（其他mode取`none/pre/fastv`；None的keep须为1，OCRBench用对应full JSONL与n1000）；不要删除本轮原始预测：
+
+```bash
+$P scripts/cvm24h_matched_quality.py --mode hilo --benchmark textvqa \
+  --subset eval/full_splits/textvqa_val.jsonl --n 5000 --keep-frac .25 \
+  --out results/cvm2027_reproduction_matched/hilo_textvqa.json \
+  --deadline-epoch "$(( $(date +%s) + 14400 ))"
+# 8格均在独立目录完成后做同样的完整性/官方评分核验；会刷新标准报告，建议在复现checkout执行。
+$P scripts/cvm24h_score_matched.py --prediction-dir results/cvm2027_reproduction_matched
+```
+
 ## 6. 写作与未覆盖范围
 
 论文权威路径 `drafts/cvm2027_submission_20261025/main.tex`。补入四方法主表、预算表/图、Doc500表与质量—实际成本；保留原三模型矩阵和用户选定的图，明确历史vLLM与新HF协议边界。摘要/引言/结论不再推“先选普遍更好”，同时报告FastV的TextVQA优势和RBM的Doc子集优势。
 
-本轮不做训练、新模型、Doc50/75、空间均匀/随机控制或连续批处理；后两类是原指令可选任务。完整同实现现代baseline全split比较仍有模型代码/attention混杂，报告明确留边界，不把小样本no-op或common-answered包装为全量等价。未代作者投稿。
+本轮不做训练、新模型、Doc50/75、空间均匀/随机控制或连续批处理；其中额外控制按原指令为可选任务。新增现代baseline全split比较已统一attention，Hi-Lo的vendored模型代码仍是实现边界；旧曲线/Doc500的attention差异另行披露，不把小样本no-op或common-answered包装为全量等价。未代作者投稿。

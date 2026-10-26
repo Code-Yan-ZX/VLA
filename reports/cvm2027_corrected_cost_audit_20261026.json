@@ -1,0 +1,275 @@
+{
+  "scope": "Independent CPU audit of corrected P3 same-request quality and cost",
+  "source_sha256": {
+    "harness": {
+      "path": "/media/disk2/YZX/research/vla/.claude/worktrees/cvm-oneday-20261025/results/cvm2027_supplement_20261026/plan/timing_harness_corrected.json",
+      "sha256": "e9b730e18fe21621798911645cb9ab89c3ca77755b5fc2bf5e08ccc517a35197"
+    },
+    "hilo": {
+      "path": "/media/disk2/YZX/research/vla/.claude/worktrees/cvm-oneday-20261025/results/cvm2027_supplement_20261026/plan/timing_hilo_corrected.json",
+      "sha256": "5fe379ea3f1b36953677f6cc2e50fa65fab7ff3351e4d8fc90e70eb929f39e40"
+    }
+  },
+  "checks": {
+    "cells": 10,
+    "request_medians": 2000,
+    "raw_repeats": 6000,
+    "failed": 0,
+    "inconsistent_tokens": 0,
+    "actual_k_mismatches": 0,
+    "missing_layers": 0
+  },
+  "distinct_fixed_request_ids": 200,
+  "token_and_answer_repeats_identical": true,
+  "all_36_decoder_layers_verified": true,
+  "upstream_task_score_matches_all20_cells": true,
+  "raw_p50_p95_and_peaks_match": true,
+  "hilo_noop32_all_prepared_hashes_and_greedy_tokens_equal": true,
+  "cells": {
+    "none": {
+      "textvqa": {
+        "official_score": 81.7,
+        "p50_total_s": 0.39555141888558865,
+        "p95_total_s": 0.5267326220870018,
+        "p50_ttft_s": 0.3085773382335901,
+        "median_output_tokens": 3.0,
+        "peak_alloc_GiB": 16.943693161010742
+      },
+      "ocrbench": {
+        "official_score": 780.0,
+        "p50_total_s": 0.713028084486723,
+        "p95_total_s": 3.65383996265009,
+        "p50_ttft_s": 0.08428571559488773,
+        "median_output_tokens": 11.5,
+        "peak_alloc_GiB": 22.071350574493408
+      }
+    },
+    "pre_0.25": {
+      "textvqa": {
+        "official_score": 73.0,
+        "p50_total_s": 0.2535501131787896,
+        "p95_total_s": 0.41442501759156586,
+        "p50_ttft_s": 0.17243856936693192,
+        "median_output_tokens": 3.0,
+        "peak_alloc_GiB": 16.59109926223755
+      },
+      "ocrbench": {
+        "official_score": 670.0,
+        "p50_total_s": 0.5716682719066739,
+        "p95_total_s": 2.0331707017496226,
+        "p50_ttft_s": 0.07684172317385674,
+        "median_output_tokens": 9.5,
+        "peak_alloc_GiB": 17.26750373840332
+      }
+    },
+    "pre_0.5": {
+      "textvqa": {
+        "official_score": 80.5,
+        "p50_total_s": 0.2950507504865527,
+        "p95_total_s": 0.45665595326572644,
+        "p50_ttft_s": 0.21002970077097416,
+        "median_output_tokens": 3.0,
+        "peak_alloc_GiB": 16.60426378250122
+      },
+      "ocrbench": {
+        "official_score": 760.0,
+        "p50_total_s": 0.6417270740494132,
+        "p95_total_s": 2.4034656777046615,
+        "p50_ttft_s": 0.07751646637916565,
+        "median_output_tokens": 10.0,
+        "peak_alloc_GiB": 18.121790409088135
+      }
+    },
+    "pre_0.75": {
+      "textvqa": {
+        "official_score": 80.1,
+        "p50_total_s": 0.33097676280885935,
+        "p95_total_s": 0.4774404227733612,
+        "p50_ttft_s": 0.248055137693882,
+        "median_output_tokens": 3.0,
+        "peak_alloc_GiB": 16.777132034301758
+      },
+      "ocrbench": {
+        "official_score": 770.0,
+        "p50_total_s": 0.7301817843690515,
+        "p95_total_s": 2.9505581540055568,
+        "p50_ttft_s": 0.08579561579972506,
+        "median_output_tokens": 11.5,
+        "peak_alloc_GiB": 19.80690860748291
+      }
+    },
+    "fastv_0.25": {
+      "textvqa": {
+        "official_score": 79.2,
+        "p50_total_s": 0.26918697636574507,
+        "p95_total_s": 0.426904771104455,
+        "p50_ttft_s": 0.18544279504567385,
+        "median_output_tokens": 3.0,
+        "peak_alloc_GiB": 16.81663417816162
+      },
+      "ocrbench": {
+        "official_score": 500.0,
+        "p50_total_s": 0.5845909081399441,
+        "p95_total_s": 2.351614191383123,
+        "p50_ttft_s": 0.08018589299172163,
+        "median_output_tokens": 10.5,
+        "peak_alloc_GiB": 21.585526943206787
+      }
+    },
+    "fastv_0.5": {
+      "textvqa": {
+        "official_score": 80.4,
+        "p50_total_s": 0.3064343361184001,
+        "p95_total_s": 0.4627883026376366,
+        "p50_ttft_s": 0.2205677656456828,
+        "median_output_tokens": 3.0,
+        "peak_alloc_GiB": 16.81663417816162
+      },
+      "ocrbench": {
+        "official_score": 690.0,
+        "p50_total_s": 0.6559520279988647,
+        "p95_total_s": 2.5358528188429768,
+        "p50_ttft_s": 0.08155205845832825,
+        "median_output_tokens": 10.5,
+        "peak_alloc_GiB": 21.58524465560913
+      }
+    },
+    "fastv_0.75": {
+      "textvqa": {
+        "official_score": 81.0,
+        "p50_total_s": 0.34032121021300554,
+        "p95_total_s": 0.49815928805619475,
+        "p50_ttft_s": 0.25628795474767685,
+        "median_output_tokens": 3.0,
+        "peak_alloc_GiB": 16.816375732421875
+      },
+      "ocrbench": {
+        "official_score": 790.0,
+        "p50_total_s": 0.7292414614930749,
+        "p95_total_s": 3.043391606304794,
+        "p50_ttft_s": 0.08795124385505915,
+        "median_output_tokens": 12.0,
+        "peak_alloc_GiB": 21.584949016571045
+      }
+    },
+    "hilo_0.25": {
+      "textvqa": {
+        "official_score": 65.69999999999999,
+        "p50_total_s": 0.3565265713259578,
+        "p95_total_s": 0.4909037705510854,
+        "p50_ttft_s": 0.24652978498488665,
+        "median_output_tokens": 3.0,
+        "peak_alloc_GiB": 16.823601722717285
+      },
+      "ocrbench": {
+        "official_score": 590.0,
+        "p50_total_s": 0.8300561644136906,
+        "p95_total_s": 2.8666830228641627,
+        "p50_ttft_s": 0.10301379859447479,
+        "median_output_tokens": 14.5,
+        "peak_alloc_GiB": 21.610203742980957
+      }
+    },
+    "hilo_0.5": {
+      "textvqa": {
+        "official_score": 72.5,
+        "p50_total_s": 0.41808782517910004,
+        "p95_total_s": 0.5692833999171851,
+        "p50_ttft_s": 0.319925625808537,
+        "median_output_tokens": 3.0,
+        "peak_alloc_GiB": 16.82360601425171
+      },
+      "ocrbench": {
+        "official_score": 710.0,
+        "p50_total_s": 0.922672675922513,
+        "p95_total_s": 3.1897337058559057,
+        "p50_ttft_s": 0.10989340580999851,
+        "median_output_tokens": 14.5,
+        "peak_alloc_GiB": 21.610219955444336
+      }
+    },
+    "hilo_0.75": {
+      "textvqa": {
+        "official_score": 79.3,
+        "p50_total_s": 0.4942591479048133,
+        "p95_total_s": 0.660288431867957,
+        "p50_ttft_s": 0.3979283655062318,
+        "median_output_tokens": 3.0,
+        "peak_alloc_GiB": 16.823611736297607
+      },
+      "ocrbench": {
+        "official_score": 750.0,
+        "p50_total_s": 0.9776995480060577,
+        "p95_total_s": 3.939464367832988,
+        "p50_ttft_s": 0.1257033720612526,
+        "median_output_tokens": 14.0,
+        "peak_alloc_GiB": 21.61024284362793
+      }
+    }
+  },
+  "quality95": {
+    "textvqa": {
+      "pre": {
+        "target": 77.615,
+        "eligible": [
+          "pre_0.5",
+          "pre_0.75"
+        ],
+        "minimum_measured_p50_tag": "pre_0.5",
+        "p50_total_s": 0.2950507504865527
+      },
+      "fastv": {
+        "target": 77.615,
+        "eligible": [
+          "fastv_0.25",
+          "fastv_0.5",
+          "fastv_0.75"
+        ],
+        "minimum_measured_p50_tag": "fastv_0.25",
+        "p50_total_s": 0.26918697636574507
+      },
+      "hilo": {
+        "target": 77.615,
+        "eligible": [
+          "hilo_0.75"
+        ],
+        "minimum_measured_p50_tag": "hilo_0.75",
+        "p50_total_s": 0.4942591479048133
+      }
+    },
+    "ocrbench": {
+      "pre": {
+        "target": 741.0,
+        "eligible": [
+          "pre_0.5",
+          "pre_0.75"
+        ],
+        "minimum_measured_p50_tag": "pre_0.5",
+        "p50_total_s": 0.6417270740494132
+      },
+      "fastv": {
+        "target": 741.0,
+        "eligible": [
+          "fastv_0.75"
+        ],
+        "minimum_measured_p50_tag": "fastv_0.75",
+        "p50_total_s": 0.7292414614930749
+      },
+      "hilo": {
+        "target": 741.0,
+        "eligible": [
+          "hilo_0.75"
+        ],
+        "minimum_measured_p50_tag": "hilo_0.75",
+        "p50_total_s": 0.9776995480060577
+      }
+    }
+  },
+  "limitations": [
+    "Each benchmark has 100 fixed questions, not the full split.",
+    "Three timing repeats are not independent quality observations.",
+    "Output lengths differ by method, so total latency changes cannot all be attributed to prefill.",
+    "95% target is a point-estimate decision rule, not a statistical equivalence test.",
+    "Original mixed-attention budget curves must retain their protocol labels."
+  ]
+}
