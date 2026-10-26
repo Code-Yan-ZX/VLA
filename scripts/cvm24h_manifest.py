@@ -28,7 +28,15 @@ def describe(path):
     item = {"path": label, "bytes": path.stat().st_size,
             "sha256": digest(path)}
     if path.suffix == ".json":
-        d = json.loads(path.read_text())
+        try:
+            d = json.loads(path.read_text())
+        except (json.JSONDecodeError, UnicodeDecodeError) as exc:
+            # A hard-stopped end-of-run writer may leave an incomplete JSON.
+            # Preserve its exact bytes and mark it unusable, never count it as
+            # a completed prediction or omit it from the provenance record.
+            item.update({"json_parse_valid": False,
+                         "incomplete_or_invalid_json": str(exc)})
+            return item
         if isinstance(d, dict) and "per_sample" in d:
             rows = d["per_sample"]
             ids = [str(r["id"]) for r in rows]

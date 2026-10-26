@@ -10,6 +10,7 @@ import hashlib
 import json
 import math
 from pathlib import Path
+import shlex
 import statistics
 import subprocess
 import sys
@@ -21,6 +22,7 @@ LABELS = {'rb': 'RBM', 'fv': 'FastV-k3', 'hl': 'Hi-Lo'}
 PREFIX = {'rb': 'pre', 'fv': 'fastv', 'hl': 'hilo'}
 KEEP = ('0.50', '0.75')
 TZ = ZoneInfo('Asia/Shanghai')
+DEFAULT_COMPUTE_DEADLINE = datetime(2026, 10, 26, 18, 30, tzinfo=TZ)
 
 
 def sha(raw):
@@ -33,7 +35,18 @@ def atomic_text(path, value):
     tmp.replace(path)
 
 
-def runtime_budget():
+def china_timestamp(value):
+    """Interpret an ISO timestamp without an offset as China local time."""
+    try:
+        parsed = datetime.fromisoformat(value.replace('Z', '+00:00'))
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(f'Invalid ISO timestamp: {value}') from exc
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=TZ)
+    return parsed.astimezone(TZ)
+
+
+def runtime_budget(deadline=DEFAULT_COMPUTE_DEADLINE):
     source = D / 'plan/timing_hilo_corrected.json'
     raw = source.read_bytes()
     timing = json.loads(raw)
@@ -52,7 +65,9 @@ def runtime_budget():
     load_buffer = max(120., previous['load_s'])
     stop_buffer = 60
     required = math.ceil(max(old_scaled, direct) * 1.25 + load_buffer + stop_buffer)
-    deadline = datetime(2026, 10, 26, 18, 30, tzinfo=TZ)
+    if deadline.tzinfo is None:
+        deadline = deadline.replace(tzinfo=TZ)
+    deadline = deadline.astimezone(TZ)
     return {
         'quality_scores_not_used': True,
         'P3_textvqa_raw_request_mean_total_s': means,
@@ -67,13 +82,19 @@ def runtime_budget():
         'required_conservative_seconds': required, 'hard_gpu_stop': deadline.isoformat(),
         'latest_start': (deadline - timedelta(seconds=required)).isoformat(),
         'limitation': 'Timing estimate, not a guaranteed bound: the fixed P3 sample excludes five earlier TextVQA failures and uses decoder eager, while old Q10 Hi-Lo uses SDPA. The 25% margin and fixed buffers cover some scheduling uncertainty.',
-        'launch_rule': 'Only root may decide after all eight matched-main cells complete. Start only when remaining time to 18:30 is at least this budget; otherwise record the optional cell as skipped for time. No score-dependent decision.'}
+        'launch_rule': f'Only root may decide after all eight matched-main cells complete. Start only when remaining time to {deadline.isoformat()} is at least this budget; otherwise record the optional cell as skipped for time. No score-dependent decision.'}
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--decision-at', help='Optional ISO China-time timestamp for a CPU time-availability check; never starts a task')
+    parser.add_argument('--compute-deadline', type=china_timestamp, default=DEFAULT_COMPUTE_DEADLINE,
+                        help='Hard stop as an ISO timestamp; an omitted offset means China time (default: 2026-10-26T18:30:00+08:00). CPU planning only; never starts a task')
+    parser.add_argument('--decision-at', type=china_timestamp, help='Optional ISO China-time timestamp for a CPU time-availability check; never starts a task')
     args = parser.parse_args()
+    reproduce_command = ['/home/dell/miniconda3/envs/qwen3vl_clean/bin/python', 'scripts/cvm24h_q10_report.py',
+                         '--compute-deadline', args.compute_deadline.isoformat()]
+    if args.decision_at:
+        reproduce_command += ['--decision-at', args.decision_at.isoformat()]
     wanted_rows = [json.loads(line) for line in (ROOT / 'eval/full_splits/textvqa_val.jsonl').read_text().splitlines()]
     wanted = [str(r['id']) for r in wanted_rows]
     gt_by_id = {str(r['id']): r['gt'] for r in wanted_rows}
@@ -86,8 +107,8 @@ def main():
         'planned_extension_cells': 6, 'completed_extension_cells': 0, 'full_curve_complete': False,
         'protocol_note': 'Original None/RBM/FastV eager and official Hi-Lo SDPA. These runs do not form the new vision-SDPA/text-eager matched main. Fixed TV1000 curves remain the complete pre-fixed comparison even if this optional full grid finishes.',
         'none_reference': {'path': str(none_path), 'sha256': sha(none_raw)},
-        'cells': {}, 'missing_cells': [], 'runtime_budget': runtime_budget(),
-        'reproduce_command': '/home/dell/miniconda3/envs/qwen3vl_clean/bin/python scripts/cvm24h_q10_report.py'}
+        'cells': {}, 'missing_cells': [], 'runtime_budget': runtime_budget(args.compute_deadline),
+        'reproduce_command': shlex.join(reproduce_command)}
     for mi, method in enumerate(LABELS):
         for ki, keep in enumerate(KEEP):
             key = f'{method}_{keep}'
@@ -96,8 +117,19 @@ def main():
                 result['missing_cells'].append({'method': LABELS[method], 'keep': float(keep), 'path': str(prediction_path), 'reason': 'No complete prediction file; no score inferred'})
                 continue
             raw = prediction_path.read_bytes()
-            prediction = json.loads(raw)
+            try:
+                prediction = json.loads(raw)
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                result['missing_cells'].append({'method': LABELS[method], 'keep': float(keep),
+                    'path': str(prediction_path), 'sha256': sha(raw),
+                    'reason': 'Prediction JSON is incomplete or unreadable; preserved without scoring'})
+                continue
             rr = prediction['per_sample']
+            if prediction['n'] < 5000 or len(rr) < 5000:
+                result['missing_cells'].append({'method': LABELS[method], 'keep': float(keep),
+                    'path': str(prediction_path), 'sha256': sha(raw),
+                    'reason': f'Only {len(rr)} prediction rows; incomplete file preserved without scoring'})
+                continue
             assert prediction['n'] == len(rr) == len({str(r['id']) for r in rr}) == 5000
             assert [str(r['id']) for r in rr] == wanted
             assert all(r['gt'] == gt_by_id[str(r['id'])] for r in rr)
@@ -131,9 +163,7 @@ def main():
     result['completed_extension_cells'] = len(result['cells'])
     result['full_curve_complete'] = len(result['cells']) == 6
     if args.decision_at:
-        decision = datetime.fromisoformat(args.decision_at)
-        if decision.tzinfo is None:
-            decision = decision.replace(tzinfo=TZ)
+        decision = args.decision_at
         latest = datetime.fromisoformat(result['runtime_budget']['latest_start'])
         result['runtime_budget']['decision_at'] = decision.isoformat()
         result['runtime_budget']['time_budget_available'] = decision <= latest
@@ -154,7 +184,7 @@ def main():
     budget = result['runtime_budget']
     md += ['', '## Time-only contingency plan for the final optional Hi-Lo75 cell', '',
            f'P3 TextVQA mean total request time over all raw repeats is {budget["P3_textvqa_raw_request_mean_total_s"]["0.5"]:.6f}s at 50% and {budget["P3_textvqa_raw_request_mean_total_s"]["0.75"]:.6f}s at 75%. The completed old full-5000 Hi-Lo50 run took {budget["old_hilo50_full5000_wall_s"]:.1f}s, plus {budget["old_hilo50_load_s"]:.1f}s loading.', '',
-           f'Using `{budget["policy"]}` gives a conservative reservation of **{budget["required_conservative_seconds"]} seconds**. To respect the hard GPU stop at **18:30 China**, the latest start is **{datetime.fromisoformat(budget["latest_start"]).strftime("%H:%M:%S")} China on 2026-10-26**.', '',
+           f'Using `{budget["policy"]}` gives a conservative reservation of **{budget["required_conservative_seconds"]} seconds**. To respect the hard GPU stop at **{args.compute_deadline.strftime("%Y-%m-%d %H:%M:%S")} China**, the latest start is **{datetime.fromisoformat(budget["latest_start"]).strftime("%Y-%m-%d %H:%M:%S")} China**.', '',
            budget['launch_rule'], '', budget['limitation'], '',
            'Reproduce or refresh this report without GPU work:', '', '```bash', result['reproduce_command'], '```', '',
            'This script never starts an evaluation or watcher. It computes or refreshes official scores only for existing complete prediction files and preserves unchanged score inputs/results.']
