@@ -3,8 +3,8 @@
  "ids_subset": null,
  "label_a": "results/cvm2027_supplement_20261026/predictions/doc500_pre25.json",
  "label_b": "results/cvm2027_supplement_20261026/predictions/doc500_hilo25.json",
- "sha_a": "891f067729aff40a",
- "sha_b": "5843374bdfffd46f",
+ "sha_a": "891f067729aff40a13816f6e927e0fbbb62e665cb59c3307dcfd2ae695f2e24e",
+ "sha_b": "5843374bdfffd46f8b70400afc3c172c4f9e9863168d81414fb4f1469f2b78f6",
  "resamples": 20000,
  "A": {
   "source": "results/cvm2027_supplement_20261026/predictions/doc500_pre25.json",
@@ -97,12 +97,15 @@
   "skipped_a": 0,
   "skipped_b": 0,
   "skip_ids_equal": true,
-  "prompt_token_count_mismatches": 500,
+  "prompt_token_count_mismatches": 0,
   "actual_visual_count_field_present": true,
   "actual_visual_count_check_n": 500,
   "actual_visual_count_mismatches": 0,
   "resamples": 20000,
-  "seed": 20261270
+  "seed": 20261270,
+  "prompt_token_count_check_n": 0,
+  "prompt_token_count_missing_n": 500,
+  "count_comparison_note": "prompt_token_ids is the post-selection prompt length, not an input-ID sequence; different retention naturally changes both prompt length and actual_visual_count"
  },
  "paired_common_answered_sensitivity": {
   "n_paired": 500,
@@ -119,16 +122,21 @@
   "skipped_a": 0,
   "skipped_b": 0,
   "skip_ids_equal": true,
-  "prompt_token_count_mismatches": 500,
+  "prompt_token_count_mismatches": 0,
   "actual_visual_count_field_present": true,
   "actual_visual_count_check_n": 500,
   "actual_visual_count_mismatches": 0,
   "resamples": 20000,
-  "seed": 20261271
+  "seed": 20261271,
+  "prompt_token_count_check_n": 0,
+  "prompt_token_count_missing_n": 500,
+  "count_comparison_note": "prompt_token_ids is the post-selection prompt length, not an input-ID sequence; different retention naturally changes both prompt length and actual_visual_count"
  },
  "failures": {
   "a_only_skip": [],
   "b_only_skip": [],
-  "both_skip": 0
+  "both_skip": 0,
+  "a_all_skip_ids": [],
+  "b_all_skip_ids": []
  }
 }

@@ -1,0 +1,19 @@
+# CVM supplement quality audit (2026-10-26)
+- P1 full predictions: TextVQA 5,000 unique IDs, OCRBench 1,000; official scorers with pinned reference hashes and 20,000 paired bootstrap replicates.
+- TextVQA attempted: None .83240, RBM .75504, FastV .76826, Hi-Lo .66774. Missing RBM–FastV and FastV–None comparison files were regenerated.
+- OCRBench attempted totals: None 707, RBM 559, FastV 413, Hi-Lo 613; 79 harness failures versus zero Hi-Lo failures.
+- Both reused RBM/FastV original OCRBench logs contain exactly 79 OutOfMemoryError IDs, equal to their saved skipped-ID sets.
+- On the same 921 answered OCRBench IDs, Hi-Lo minus RBM is −3.26 points per 1,000, CI [−33.66,+26.09], p=.8893; this does not establish equivalence.
+- Hi-Lo uses vendored model code/SDPA while the harness uses eager; common-answered sensitivity removes failed IDs but does not remove implementation confounding.
+- All budget cells have the prescribed K=round(N×keep) on every common answered ID; the pre-mode n_image_full field stores K, so N was read from the matching None row.
+- Hi-Lo fusion candidates affect attention before pruning; only selection.keep remains after decoder layer 2. FastV-k3 prunes after layer 3 (both zero based).
+- The four DocVQA predictions contain the identical 500-ID set from the pre-fixed plan, in original split order; the head500 file repeats the same existing 500 IDs.
+- DocVQA None/RBM/FastV/Hi-Lo ANLS is .957265/.827640/.704481/.763761 under the unified 2M protocol; all 500 answer without failures.
+- OCRBench 95%-of-None target is 671.65 attempted points: RBM and FastV first meet it at 75%, Hi-Lo at 50%; on common 921 IDs all three first meet it at 75%.
+- Minimum tested retention is not automatically cheapest measured latency; the corrected cost analysis selects by actual p50.
+- P0 scope is narrower than the original report claims: 32-answer/K smoke, 8-sample pre identity checks, and 8-answer Hi-Lo no-op; no full native-logit or cache-alignment proof for every method.
+- The pre no-op logit helper omits deepstack and compares identical embeddings; Post/FastV logit identity was not separately measured. Native/mimic answers differ in 7/32 but that is not an isolated-position ablation.
+- Legacy timing is invalid because of gradient recording, omitted FastV deepstack, reused Hi-Lo retention, and inconsistent boundaries; corrected timings must be paired with their own fixed-200 answers.
+- Scoring metadata repaired: full SHA256 and failure-ID lists, missing prompt-length metadata separated from mismatches, and OCR score_out_of_1000 scaling corrected; existing scores/CIs unchanged.
+- Optional Q10 full TextVQA curves are promoted only when all six 50/75% score cells contain 5,000 IDs; otherwise the complete pre-fixed 1,000-ID curves remain the comparison.
+- Review outputs: reports/cvm2027_supplement_tables.md, reports/cvm2027_supplement_summary.json, reports/figures_cvm2027_supplement/{budget_curves,score_vs_actual_k}.{pdf,svg}.

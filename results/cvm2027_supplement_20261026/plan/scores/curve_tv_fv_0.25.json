@@ -3,8 +3,8 @@
  "ids_subset": null,
  "label_a": "results/cvm2027_supplement_20261026/predictions/c25_fv_textvqa1k_keep0.25.json",
  "label_b": "results/cvm2027_supplement_20261026/predictions/c25_none_textvqa1k.json",
- "sha_a": "ef75eb703e41a7df",
- "sha_b": "bac32dd9a79009c7",
+ "sha_a": "ef75eb703e41a7df5a28109a752589d9696e44e491e81b42f1e5355c195ca527",
+ "sha_b": "bac32dd9a79009c7ee05927145917a9eb83ccd32ffd5aa427163d7862e4f6a1c",
  "resamples": 20000,
  "A": {
   "source": "results/cvm2027_supplement_20261026/predictions/c25_fv_textvqa1k_keep0.25.json",
@@ -102,7 +102,10 @@
   "actual_visual_count_check_n": 999,
   "actual_visual_count_mismatches": 999,
   "resamples": 20000,
-  "seed": 20261233
+  "seed": 20261233,
+  "prompt_token_count_check_n": 999,
+  "prompt_token_count_missing_n": 1,
+  "count_comparison_note": "prompt_token_ids is the post-selection prompt length, not an input-ID sequence; different retention naturally changes both prompt length and actual_visual_count"
  },
  "paired_common_answered_sensitivity": {
   "n_paired": 999,
@@ -124,11 +127,20 @@
   "actual_visual_count_check_n": 999,
   "actual_visual_count_mismatches": 999,
   "resamples": 20000,
-  "seed": 20261234
+  "seed": 20261234,
+  "prompt_token_count_check_n": 999,
+  "prompt_token_count_missing_n": 0,
+  "count_comparison_note": "prompt_token_ids is the post-selection prompt length, not an input-ID sequence; different retention naturally changes both prompt length and actual_visual_count"
  },
  "failures": {
   "a_only_skip": [],
   "b_only_skip": [],
-  "both_skip": 1
+  "both_skip": 1,
+  "a_all_skip_ids": [
+   "35389"
+  ],
+  "b_all_skip_ids": [
+   "35389"
+  ]
  }
 }

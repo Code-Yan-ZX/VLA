@@ -462,3 +462,13 @@
 - D-S11: hilo TTFT first measurement was streamer prompt-put artifact (0.04s);
   re-measured with 2nd-callback rule -> p50 0.234s plausible; superseded file
   deleted before rerun (no silent overwrite of a wrong metric).
+
+## 2026-10-26 | 接管CVM补实验、修正成本实现并补写论文
+
+- 用户新指令明确要求今天20:00前完成实验与写作，覆盖旧实验提示词“不改论文”；仍不授权投稿。保护原工作区，在既有隔离分支继续。
+- P1/P2质量矩阵与Doc500已完成；保留FastV在完整TextVQA领先RBM、RBM在Doc500领先Hi-Lo/FastV、OCR79个OOM造成attempted覆盖差异等全部结果，不调参数追胜。
+- 审计确认旧P3缺推理模式、tap泄漏、FastV漏deepstack和Hi-Lo外部config失效；撤回旧延迟/显存排名，保留raw审计，另测corrected文件。
+- 新P3统一visionSDPA/text eager和decoded-RGB请求边界，固定200请求×3，保留真实K/层轨迹/答案；与正式生成做token parity，并补32例native/vendored no-op。last-token LMhead与native generate相同，避免多投影整段序列的实现成本。
+- 新P3 attention协议与旧全量质量不同，质量成本仅配对本次TV100/OCR100新答案，不拼接旧full分数。旧P0证据范围如实缩窄，不能宣称22条完全通过或所有tensor/logits逐位相同。
+- 原GPU截止15:07:06和总截止19:07:06保持；可选Q10父进程暂挂，当前Hi-Lo50完成后优先修正P3，最后Hi-Lo75按资源余量决定，不按分数决定。
+- 论文保留原51实引和用户指定图件，新增预算图/主表/Doc500；摘要、贡献、结论同步到task-dependent实证定位，明确HF完整执行ViT/merger后gather，没有虚构视觉加速。

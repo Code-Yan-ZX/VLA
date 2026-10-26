@@ -1,70 +1,95 @@
-# CVM2027 supplement — auto tables (2026-10-26)
+# CVM2027 supplement — audited tables (2026-10-26)
 
-## P1 main table — keep=25%, full splits, official attempted denominator
+Scores use all attempted IDs, with failures scored zero. Hi-Lo uses the official vendored adaptation with SDPA; RBM/FastV use the eager harness. Common-answered analyses control the failure set, but do not remove implementation differences.
 
-| Benchmark | None@100% | RBM@25 | FastV-k3@25 | HiLo@25 |
+## Main comparison at 25% retention
+
+| Benchmark | None@100% | RBM | FastV-k3 | Hi-Lo | Attempted / answered |
+|---|---:|---:|---:|---:|---|
+| textvqa | 83.24 | 75.50 | 76.83 | 66.77 | 5000; 4995 / 4995 / 5000 |
+| ocrbench | 707.00 | 559.00 | 413.00 | 613.00 | 1000; 921 / 921 / 1000 |
+
+Answered counts are shown in RBM/FastV/Hi-Lo order; None answers 4,995 TextVQA and 921 OCRBench requests.
+
+| Pair A − B | Task | Attempted Δ [95% CI] | Common-answered Δ [95% CI] | Common n |
+|---|---|---:|---:|---:|
+| rb_fv | textvqa | -1.32 [-2.33, -0.34] | -1.32 [-2.33, -0.32] | 4995 |
+| rb_none | textvqa | -7.74 [-8.65, -6.84] | -7.74 [-8.66, -6.83] | 4995 |
+| fv_none | textvqa | -6.41 [-7.23, -5.60] | -6.42 [-7.24, -5.61] | 4995 |
+| hl_none | textvqa | -16.47 [-17.59, -15.36] | -16.56 [-17.67, -15.45] | 4995 |
+| hl_rb | textvqa | -8.73 [-9.94, -7.51] | -8.82 [-10.01, -7.59] | 4995 |
+| hl_fv | textvqa | -10.05 [-11.25, -8.87] | -10.14 [-11.36, -8.94] | 4995 |
+| rb_fv | ocrbench | +146.00 [+118.00, +175.00] | +158.52 [+128.12, +187.84] | 921 |
+| rb_none | ocrbench | -148.00 [-175.00, -122.00] | -160.69 [-188.93, -132.46] | 921 |
+| fv_none | ocrbench | -294.00 [-324.00, -264.00] | -319.22 [-350.73, -287.73] | 921 |
+| hl_none | ocrbench | -94.00 [-126.00, -63.00] | -163.95 [-193.27, -134.64] | 921 |
+| hl_rb | ocrbench | +54.00 [+23.00, +85.00] | -3.26 [-33.66, +26.09] | 921 |
+| hl_fv | ocrbench | +200.00 [+168.00, +233.00] | +155.27 [+122.69, +187.84] | 921 |
+
+Optional full TextVQA grid: partial; subset curves remain the complete comparison. Completed extension cells are retained in scores/full_q10_*.json.
+
+## TextVQA fixed 1,000-question subset
+
+| Keep | RBM | FastV-k3 | Hi-Lo | None |
 |---|---:|---:|---:|---:|
-| textvqa (acc) | 83.24 | 75.50 | — | 66.77 |
-| ocrbench (pts/1000) | 707.00 | 559.00 | 413.00 | 613.00 |
+| 0.25 | 75.29 | 76.95 | 66.20 | 82.93 |
+| 0.50 | 79.65 | 82.24 | 75.64 | 82.93 |
+| 0.75 | 81.73 | 82.57 | 81.24 | 82.93 |
 
-Pairs (A−B, paired bootstrap 20k, attempted denom; * = common-answered sensitivity where skip sets differ):
-- textvqa rb_none: Δ=-7.74 CI[-8.65,-6.84] p=0.0000 (common-answered Δ=-7.74, n=4995)
-- textvqa hl_none: Δ=-16.47 CI[-17.59,-15.36] p=0.0000 (common-answered Δ=-16.56, n=4995)
-- textvqa hl_rb: Δ=-8.73 CI[-9.94,-7.51] p=0.0000 (common-answered Δ=-8.82, n=4995)
-- textvqa hl_fv: Δ=-10.05 CI[-11.25,-8.87] p=0.0000 (common-answered Δ=-10.14, n=4995)
-- ocrbench rb_fv: Δ=+146.00* CI[+118.00,+175.00] p=0.0000 (common-answered Δ=+158.52, n=921)
-- ocrbench rb_none: Δ=-148.00* CI[-175.00,-122.00] p=0.0000 (common-answered Δ=-160.69, n=921)
-- ocrbench fv_none: Δ=-294.00* CI[-324.00,-264.00] p=0.0000 (common-answered Δ=-319.22, n=921)
-- ocrbench hl_none: Δ=-94.00* CI[-126.00,-63.00] p=0.0000 (common-answered Δ=-163.95, n=921)
-- ocrbench hl_rb: Δ=+54.00* CI[+23.00,+85.00] p=0.0008 (common-answered Δ=-3.26, n=921)
-- ocrbench hl_fv: Δ=+200.00* CI[+168.00,+233.00] p=0.0000 (common-answered Δ=+155.27, n=921)
+## OCRBench full 1,000 attempts
 
-## Budget curve — textvqa (acc; TextVQA 1000 stratified subset)
-| keep | RBM | FastV | HiLo | Δvs None (RBM/FastV/HiLo, attempted*) |
-|---|---:|---:|---:|---|
-| 0.25 | 75.29 | 76.95 | 66.20 | -7.64 / -5.98 / -16.73 |
-| 0.50 | 79.65 | 82.24 | 75.64 | -3.28 / -0.69 / -7.29 |
-| 0.75 | 81.73 | 82.57 | 81.24 | -1.20 / -0.36 / -1.69 |
+| Keep | RBM | FastV-k3 | Hi-Lo | None |
+|---|---:|---:|---:|---:|
+| 0.25 | 559.00 | 413.00 | 613.00 | 707.00 |
+| 0.50 | 659.00 | 569.00 | 709.00 | 707.00 |
+| 0.75 | 684.00 | 676.00 | 740.00 | 707.00 |
 
-## Budget curve — ocrbench (pts/1000; OCRBench full 1000)
-| keep | RBM | FastV | HiLo | Δvs None (RBM/FastV/HiLo, attempted*) |
-|---|---:|---:|---:|---|
-| 0.25 | 559.00 | 413.00 | 613.00 | -148.00 / -294.00 / -94.00 |
-| 0.50 | 659.00 | 569.00 | 709.00 | -48.00 / -138.00 / +2.00 |
-| 0.75 | 684.00 | 676.00 | 740.00 | -23.00 / -31.00 / +33.00 |
+## OCRBench common 921 answered IDs, normalized ×1,000
 
-## DocVQA-500 stress (subset, unified 2M px cap, 0 skips all arms)
-| arm | ANLS attempted | Δ vs None | p |
+| Keep | RBM | FastV-k3 | Hi-Lo | None |
+|---|---:|---:|---:|---:|
+| 0.25 | 606.95 | 448.43 | 603.69 | 767.64 |
+| 0.50 | 715.53 | 617.81 | 711.18 | 767.64 |
+| 0.75 | 742.67 | 733.98 | 741.59 | 767.64 |
+
+## DocVQA fixed 500-question subset, unified 2M pixel cap
+
+| Method | ANLS (%) | Δ vs None [95% CI] | p |
 |---|---:|---:|---:|
-| RBM@25 | 82.76 | -12.96pp CI[-16.0,-10.0] | 0.0000 |
+| RBM@25% | 82.76 | -12.96 [-15.96, -10.05] | <0.0001 |
+| FastV-k3@25% | 70.45 | -25.28 [-28.97, -21.67] | <0.0001 |
+| Hi-Lo@25% | 76.38 | -19.35 [-22.76, -16.03] | <0.0001 |
 | None@100% | 95.73 | — | — |
-| FastV@25 | 70.45 | -25.28pp CI[-29.0,-21.7] | 0.0000 |
-| HiLo@25 | 76.38 | -19.35pp CI[-22.8,-16.0] | 0.0000 |
-- direct pair rb_hl: Δ=+6.39pp CI[+3.04,+9.78] p=0.0005
-- direct pair rb_fv: Δ=+12.32pp CI[+8.15,+16.47] p=0.0000
 
-## Quality target: >=95% of same-protocol None (attempted). Cheapest MEASURED point meeting it
-- textvqa rb: MEETS at keep=0.50
-- textvqa fv: MEETS at keep=0.50
-- textvqa hl: MEETS at keep=0.75
-- ocrbench rb: MEETS at keep=0.75
-- ocrbench fv: MEETS at keep=0.75
-- ocrbench hl: MEETS at keep=0.50
+rb_hl: Δ=+6.39pp, CI[+3.04, +9.78], p=0.0005.
 
-## timing_harness — per-request cost (200 requests x 3 repeats, bs=1)
-| config | p50 total_s | p95 total_s | p50 TTFT_s | out_len med | peak_alloc GB | work_wall_s |
-|---|---:|---:|---:|---:|---:|---:|
-| none | 0.604 | 1.915 | 0.422 | 4.0 | 42.7 | 489.9 |
-| pre_0.25 | 0.466 | 1.914 | 0.298 | 4.0 | 41.5 | 469.5 |
-| pre_0.5 | 0.504 | 1.872 | 0.330 | 4.0 | 41.03 | 462.9 |
-| pre_0.75 | 0.543 | 1.851 | 0.372 | 4.0 | 42.67 | 460.5 |
-| fastv_0.25 | 0.530 | 1.903 | 0.310 | 4.0 | 41.45 | 491.3 |
-| fastv_0.5 | 0.550 | 1.838 | 0.338 | 4.0 | 42.44 | 488.2 |
-| fastv_0.75 | 0.587 | 1.845 | 0.376 | 4.0 | 42.67 | 484.9 |
+rb_fv: Δ=+12.32pp, CI[+8.15, +16.47], p=<0.0001.
 
-## timing_hilo — per-request cost (200 requests x 3 repeats, bs=1)
-| config | p50 total_s | p95 total_s | p50 TTFT_s | out_len med | peak_alloc GB | work_wall_s |
-|---|---:|---:|---:|---:|---:|---:|
-| hilo_0.25 | 0.371 | 1.435 | 0.043 | 4.5 | 17.28 | 364.6 |
-| hilo_0.5 | 0.363 | 1.453 | 0.033 | 4.5 | 17.28 | 361.8 |
-| hilo_0.75 | 0.361 | 1.468 | 0.032 | 4.5 | 17.28 | 364.7 |
+## 95% of None quality target
+
+This table gives the minimum **tested retention** meeting the target. It does not assume retention orders measured latency. The Hi-Lo OCRBench attempted result includes its higher completion rate.
+
+| Scope | None | 95% target | RBM keep | FastV keep | Hi-Lo keep |
+|---|---:|---:|---:|---:|---:|
+| TextVQA fixed 1,000-question subset | 82.93 | 78.78 | 0.50 | 0.50 | 0.75 |
+| OCRBench full 1,000 attempts | 707.00 | 671.65 | 0.75 | 0.75 | 0.50 |
+| OCRBench common 921 answered IDs, normalized ×1,000 | 767.64 | 729.26 | 0.75 | 0.75 | 0.75 |
+
+## Actual visual token budgets
+
+Statistics use the same answered IDs across the three methods at each budget. Hi-Lo fusion boosts attention before removal; its fusion candidates are not additional retained tokens. RBM retains K before decoder layer 0; FastV-k3 processes N through layers 0–3, then K; Hi-Lo processes N through layers 0–2, then K. All methods execute the full vision encoder and merger.
+
+| Scope | Keep | Common n | Mean input N | Mean K (RBM / FastV / Hi-Lo) | K equal on every common ID |
+|---|---:|---:|---:|---:|---|
+| textvqa 1k subset | 0.25 | 999 | 739.67 | 184.92 / 184.92 / 184.92 | yes |
+| textvqa 1k subset | 0.50 | 999 | 739.67 | 369.83 / 369.83 / 369.83 | yes |
+| textvqa 1k subset | 0.75 | 999 | 739.67 | 554.75 / 554.75 / 554.75 | yes |
+| ocrbench full | 0.25 | 921 | 352.93 | 88.26 / 88.26 / 88.26 | yes |
+| ocrbench full | 0.50 | 921 | 352.93 | 176.43 / 176.43 / 176.43 | yes |
+| ocrbench full | 0.75 | 921 | 352.93 | 264.66 / 264.66 / 264.66 | yes |
+
+## Timing validation
+
+The original timing artifacts are excluded from comparison: the harness enabled gradient recording, FastV omitted deepstack features, and the Hi-Lo model reused its initial retention configuration at later budgets. Corrected timing requires a new artifact with explicit inference, parity, budget, and boundary validation.
+
+Corrected timing summary withheld until all ten planned cells pass validation.

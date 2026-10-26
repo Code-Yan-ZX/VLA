@@ -1,194 +1,213 @@
 #!/usr/bin/env python
-"""Generate supplement tables (markdown) + figures (svg) from score/timing JSONs.
-Deterministic, reads only plan/scores/*.json + plan/timing_*.json.
-Quality target rule: >=95% of same-protocol None ATTEMPTED score; cheapest
-MEASURED budget point meeting it, else NOT-MET; OCRBench comparisons flag
-skip-asymmetry with the common-answered number.
+"""Build reviewable tables and plots from pinned official scores.
+Keep subset curves even after the optional full TextVQA grid completes.
+Legacy timing is excluded: its gradient/deepstack/config bugs were found in audit.
 """
-import json, os, glob, statistics
+import hashlib
+import json
+import statistics
+from pathlib import Path
 import matplotlib
-matplotlib.use("Agg")
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+matplotlib.rcParams.update({'pdf.fonttype': 42, 'ps.fonttype': 42})
+from cvm24h_validate_timing_v2 import validate as validate_timing
 
-Q = "results/cvm2027_supplement_20261026/plan"
-S = f"{Q}/scores"
-FIG = "reports/figures_cvm2027_supplement"
-os.makedirs(FIG, exist_ok=True)
+ROOT = Path(__file__).resolve().parents[1]
+Q = ROOT / 'results/cvm2027_supplement_20261026/plan'
+S = Q / 'scores'
+REPORT = ROOT / 'reports'
+FIG = REPORT / 'figures_cvm2027_supplement'
+FIG.mkdir(parents=True, exist_ok=True)
+KEEP = ('0.25', '0.50', '0.75')
+METHODS = {'rb': 'RBM', 'fv': 'FastV-k3', 'hl': 'Hi-Lo'}
+COLORS = {'rb': '#1f77b4', 'fv': '#d62728', 'hl': '#2ca02c'}
+SCALE = {'textvqa': 100, 'ocrbench': 1000, 'docvqa': 100}
 
 def load(name):
-    p = f"{S}/{name}.json"
-    return json.load(open(p)) if os.path.exists(p) else None
+    p = S / f'{name}.json'
+    return json.loads(p.read_text()) if p.exists() else None
 
-M = {"textvqa": 100.0, "ocrbench": 1000.0, "docvqa": 100.0}
-def fmt(bench, v):  # score scale
-    return v * M[bench]
+def curve(bench, method, keep, full=False):
+    if full:
+        return load(f'p1_tv_{method}_none' if keep == '0.25' else f'full_q10_{method}_{keep}')
+    return load(f'curve_{"tv" if bench == "textvqa" else "oc"}_{method}_{keep}')
 
-md = ["# CVM2027 supplement — auto tables (2026-10-26)", ""]
+def vals(d, common=False):
+    if common:
+        p = d['paired_common_answered_sensitivity']
+        return p['mean_a'], p['mean_b'], p['n_paired']
+    return d['A']['attempted_score'], d['B']['attempted_score'], d['A']['n']
 
-# ---------- P1 main table ----------
-md.append("## P1 main table — keep=25%, full splits, official attempted denominator")
-md.append("")
-md.append("| Benchmark | None@100% | RBM@25 | FastV-k3@25 | HiLo@25 |")
-md.append("|---|---:|---:|---:|---:|")
-row = {}
-for bench, pref in (("textvqa", "p1_tv"), ("ocrbench", "p1_oc")):
-    rb_none = load(f"{pref}_rb_none"); hl = load(f"{pref}_hl_none")
-    none_v = rb_none["B"]["attempted_score"] if rb_none else None
-    cells = {
-        "None": none_v,
-        "RBM": rb_none["A"]["attempted_score"] if rb_none else None,
-        "FastV": load(f"{pref}_fv_none")["A"]["attempted_score"] if load(f"{pref}_fv_none") else None,
-        "HiLo": hl["A"]["attempted_score"] if hl else None,
-    }
-    unit = "acc" if bench == "textvqa" else "pts/1000"
-    md.append(f"| {bench} ({unit}) | " + " | ".join(
-        (f"{fmt(bench, cells[k]):.2f}" if cells[k] is not None else "—")
-        for k in ["None", "RBM", "FastV", "HiLo"]) + " |")
-md.append("")
-md.append("Pairs (A−B, paired bootstrap 20k, attempted denom; * = common-answered sensitivity where skip sets differ):")
-for bench, pref in (("textvqa", "p1_tv"), ("ocrbench", "p1_oc")):
-    for pair in ["rb_fv", "rb_none", "fv_none", "hl_none", "hl_rb", "hl_fv"]:
-        d = load(f"{pref}_{pair}")
-        if not d: continue
-        pa, pb = d["paired_attempted_all"], d["paired_common_answered_sensitivity"]
-        scale = 1.0 if bench == "textvqa" else 10.0
-        flag = "*" if abs(pa["delta_pp"] * scale - pb["delta_pp"] * scale) > 5 else ""
-        md.append(f"- {bench} {pair}: Δ={pa['delta_pp'] * scale:+.2f}{flag} "
-                  f"CI[{pa['ci95_pp'][0] * scale:+.2f},{pa['ci95_pp'][1] * scale:+.2f}] "
-                  f"p={pa['sign_flip_p_two_sided']:.4f} (common-answered Δ={pb['delta_pp'] * scale:+.2f}, n={pb['n_paired']})")
-md.append("")
+def pformat(v):
+    return '<0.0001' if v < 0.0001 else f'{v:.4f}'
 
-# ---------- budget curves ----------
-for bench, pref, unit in (("textvqa", "curve_tv", "acc"), ("ocrbench", "curve_oc", "pts/1000")):
-    md.append(f"## Budget curve — {bench} ({unit}; {'TextVQA 1000 stratified subset' if bench=='textvqa' else 'OCRBench full 1000'})")
-    md.append("| keep | RBM | FastV | HiLo | Δvs None (RBM/FastV/HiLo, attempted*) |")
-    md.append("|---|---:|---:|---:|---|")
-    for K in ["0.25", "0.50", "0.75"]:
-        vals, ds = [], []
-        for Mm in ["rb", "fv", "hl"]:
-            d = load(f"{pref}_{Mm}_{K}")
-            if not d: vals.append("—"); ds.append("—"); continue
-            vals.append(f"{fmt(bench, d['A']['attempted_score']):.2f}")
-            ds.append(f"{d['paired_attempted_all']['delta_pp'] * (1 if bench=='textvqa' else 10):+.2f}")
-        md.append(f"| {K} | {vals[0]} | {vals[1]} | {vals[2]} | {ds[0]} / {ds[1]} / {ds[2]} |")
-    md.append("")
+def save_figure(fig, stem):
+    for suffix in ('svg', 'pdf'):
+        path = FIG / f'{stem}.{suffix}'
+        fig.savefig(path)
+        if suffix == 'svg':
+            path.write_text('\n'.join(line.rstrip() for line in path.read_text().splitlines()) + '\n')
 
-# ---------- DocVQA ----------
-md.append("## DocVQA-500 stress (subset, unified 2M px cap, 0 skips all arms)")
-md.append("| arm | ANLS attempted | Δ vs None | p |")
-md.append("|---|---:|---:|---:|")
-for m, lbl in (("pre", "RBM@25"), ("fastv", "FastV@25"), ("hilo", "HiLo@25")):
-    d = load(f"doc_{m}")
-    if d:
-        pa = d["paired_attempted_all"]
-        md.append(f"| {lbl} | {d['A']['attempted_score']*100:.2f} | {pa['delta_pp']:+.2f}pp CI[{pa['ci95_pp'][0]:+.1f},{pa['ci95_pp'][1]:+.1f}] | {pa['sign_flip_p_two_sided']:.4f} |")
-        b = d["B"]["attempted_score"] * 100
-    if m == "pre":
-        md.append(f"| None@100% | {b:.2f} | — | — |")
-for pair in ["rb_hl", "rb_fv"]:
-    d = load(f"doc_{pair}")
-    if d:
-        pa = d["paired_attempted_all"]
-        md.append(f"- direct pair {pair}: Δ={pa['delta_pp']:+.2f}pp CI[{pa['ci95_pp'][0]:+.2f},{pa['ci95_pp'][1]:+.2f}] p={pa['sign_flip_p_two_sided']:.4f}")
-md.append("")
+def summary(d, common=False):
+    key = 'paired_common_answered_sensitivity' if common else 'paired_attempted_all'
+    p = d[key]; scale = SCALE[d['bench']] / 100
+    return {'a': vals(d, common)[0] * SCALE[d['bench']],
+            'b': vals(d, common)[1] * SCALE[d['bench']], 'n': vals(d, common)[2],
+            'delta': p['delta_pp'] * scale,
+            'ci95': [x * scale for x in p['ci95_pp']],
+            'p': p['sign_flip_p_two_sided']}
 
-# ---------- 95% quality target table ----------
-md.append("## Quality target: >=95% of same-protocol None (attempted). Cheapest MEASURED point meeting it")
-for bench, pref in (("textvqa", "curve_tv"), ("ocrbench", "curve_oc")):
-    dref = load(f"{pref}_rb_0.25")
-    if not dref: continue
-    none_ref = dref["B"]["attempted_score"]
-    for lbl, key in (("RBM", "rb"), ("FastV", "fv"), ("HiLo", "hl")):
-        got = None
-        for K in ["0.25", "0.50", "0.75"]:
-            d = load(f"{pref}_{key}_{K}")
-            if d and d["A"]["attempted_score"] >= 0.95 * none_ref:
-                got = K; break
-        md.append(f"- {bench} {key}: " + (f"MEETS at keep={got}" if got else "NOT-MET at measured points"))
-md.append("")
+md = ['# CVM2027 supplement — audited tables (2026-10-26)', '',
+      'Scores use all attempted IDs, with failures scored zero. Hi-Lo uses the official vendored adaptation with SDPA; RBM/FastV use the eager harness. Common-answered analyses control the failure set, but do not remove implementation differences.', '',
+      '## Main comparison at 25% retention', '',
+      '| Benchmark | None@100% | RBM | FastV-k3 | Hi-Lo | Attempted / answered |',
+      '|---|---:|---:|---:|---:|---|']
+summary_json = {'protocol_caveat': md[2], 'p1': {}, 'curves': {}, 'quality95': [], 'timing': {}}
+for bench, prefix in (('textvqa', 'p1_tv'), ('ocrbench', 'p1_oc')):
+    pairs = {m: load(f'{prefix}_{m}_none') for m in METHODS}
+    assert all(pairs.values()), f'Missing P1 pair: {prefix}'
+    ref = pairs['rb']['B']; scale = SCALE[bench]
+    cell = [f'{ref["attempted_score"] * scale:.2f}']
+    cell += [f'{pairs[m]["A"]["attempted_score"] * scale:.2f}' for m in METHODS]
+    counts = ' / '.join(f'{pairs[m]["A"]["n"] - pairs[m]["A"]["skipped"]}' for m in METHODS)
+    md.append(f'| {bench} | ' + ' | '.join(cell) + f' | {ref["n"]}; {counts} |')
+    summary_json['p1'][bench] = {m: summary(d) for m, d in pairs.items()}
+md += ['', 'Answered counts are shown in RBM/FastV/Hi-Lo order; None answers 4,995 TextVQA and 921 OCRBench requests.', '',
+       '| Pair A − B | Task | Attempted Δ [95% CI] | Common-answered Δ [95% CI] | Common n |',
+       '|---|---|---:|---:|---:|']
+for bench, prefix in (('textvqa', 'p1_tv'), ('ocrbench', 'p1_oc')):
+    for pair in ('rb_fv', 'rb_none', 'fv_none', 'hl_none', 'hl_rb', 'hl_fv'):
+        d = load(f'{prefix}_{pair}')
+        if d:
+            a, b = summary(d), summary(d, True)
+            md.append(f'| {pair} | {bench} | {a["delta"]:+.2f} [{a["ci95"][0]:+.2f}, {a["ci95"][1]:+.2f}] | {b["delta"]:+.2f} [{b["ci95"][0]:+.2f}, {b["ci95"][1]:+.2f}] | {b["n"]} |')
 
-# ---------- timing ----------
-for eng in ("timing_harness", "timing_hilo"):
-    p = f"{Q}/{eng}.json"
-    if not os.path.exists(p):
-        md.append(f"## {eng}: MISSING (partial)"); continue
-    d = json.load(open(p))
-    md.append(f"## {eng} — per-request cost (200 requests x 3 repeats, bs=1)")
-    md.append("| config | p50 total_s | p95 total_s | p50 TTFT_s | out_len med | peak_alloc GB | work_wall_s |")
-    md.append("|---|---:|---:|---:|---:|---:|---:|")
-    for tag, blk in d["results"].items():
-        reqs = [r for r in blk["requests"] if not r.get("oom") and "total_s" in r]
-        if not reqs:
-            md.append(f"| {tag} | ALL OOM | — | — | — | — | — |"); continue
-        tot = sorted(r["total_s"] for r in reqs)
-        if eng == "timing_hilo":
-            tts = sorted(r["ttft_s"] for r in reqs if r.get("ttft_s") is not None)
-        else:
-            tts = sorted((r.get("vision_merger_s", 0) or 0) + (r.get("selection_s") or 0)
-                         + (r.get("prefill_s") or 0) for r in reqs)
-        ttft = f"{tts[len(tts)//2]:.3f}" if tts else "—"
-        ol = statistics.median(r["out_len"] for r in reqs)
-        md.append(f"| {tag} | {tot[len(tot)//2]:.3f} | {tot[int(len(tot)*.95)]:.3f} | "
-                  f"{ttft} | {ol:.1f} | {blk.get('peak_alloc_GB','—')} | {blk.get('workload_wall_s','—')} |")
-    md.append("")
+full_ready = all(curve('textvqa', m, k, True) and curve('textvqa', m, k, True)['A']['n'] == 5000
+                 for m in METHODS for k in KEEP)
+summary_json['textvqa_full_grid_complete'] = full_ready
+curve_specs = [('textvqa', False, False, 'TextVQA fixed 1,000-question subset'),
+               ('ocrbench', False, False, 'OCRBench full 1,000 attempts'),
+               ('ocrbench', False, True, 'OCRBench common 921 answered IDs, normalized ×1,000')]
+if full_ready:
+    curve_specs.insert(0, ('textvqa', True, False, 'TextVQA full 5,000-question grid'))
+else:
+    md += ['', 'Optional full TextVQA grid: partial; subset curves remain the complete comparison. Completed extension cells are retained in scores/full_q10_*.json.']
+for bench, full, common, label in curve_specs:
+    key = f'{bench}_{"full" if full or bench == "ocrbench" else "subset"}_{"common" if common else "attempted"}'
+    summary_json['curves'][key] = {}
+    md += ['', f'## {label}', '', '| Keep | RBM | FastV-k3 | Hi-Lo | None |', '|---|---:|---:|---:|---:|']
+    for k in KEEP:
+        ds = {m: curve(bench, m, k, full) for m in METHODS}
+        assert all(ds.values()), (bench, k)
+        row = {m: summary(d, common) for m, d in ds.items()}
+        assert len({v['n'] for v in row.values()}) == 1
+        assert max(v['b'] for v in row.values()) - min(v['b'] for v in row.values()) < 1e-10
+        summary_json['curves'][key][k] = row
+        md.append(f'| {k} | ' + ' | '.join(f'{row[m]["a"]:.2f}' for m in METHODS) + f' | {row["rb"]["b"]:.2f} |')
 
-open("reports/cvm2027_supplement_tables.md", "w").write("\n".join(md))
+md += ['', '## DocVQA fixed 500-question subset, unified 2M pixel cap', '',
+       '| Method | ANLS (%) | Δ vs None [95% CI] | p |', '|---|---:|---:|---:|']
+for m, source in (('rb', 'pre'), ('fv', 'fastv'), ('hl', 'hilo')):
+    d = load(f'doc_{source}'); v = summary(d)
+    md.append(f'| {METHODS[m]}@25% | {v["a"]:.2f} | {v["delta"]:+.2f} [{v["ci95"][0]:+.2f}, {v["ci95"][1]:+.2f}] | {pformat(v["p"])} |')
+md.append(f'| None@100% | {v["b"]:.2f} | — | — |')
+for name in ('rb_hl', 'rb_fv'):
+    v = summary(load(f'doc_{name}'))
+    md.append(f'\n{name}: Δ={v["delta"]:+.2f}pp, CI[{v["ci95"][0]:+.2f}, {v["ci95"][1]:+.2f}], p={pformat(v["p"])}.')
 
-# ---------- figures ----------
-fig, axes = plt.subplots(1, 2, figsize=(11, 4.2))
-COL = {"rb": "#1f77b4", "fv": "#d62728", "hl": "#2ca02c"}
-for ax, (bench, pref) in zip(axes, [("textvqa", "curve_tv"), ("ocrbench", "curve_oc")]):
-    dref = load(f"{pref}_rb_0.25")
-    none_ref = fmt(bench, dref["B"]["attempted_score"])
-    ax.axhline(none_ref, ls="--", c="k", lw=1, label="None@100%")
-    ax.axhline(0.95 * none_ref, ls=":", c="gray", lw=1, label="95% target")
-    for key, lbl in (("rb", "RBM"), ("fv", "FastV-k3"), ("hl", "Hi-Lo")):
-        xs, ys = [], []
-        for K in [0.25, 0.5, 0.75]:
-            d = load(f"{pref}_{key}_{str(K)}" if K != 0.25 else f"{pref}_{key}_0.25")
-            d = load(f"{pref}_{key}_{'0.25' if K==0.25 else ('0.50' if K==0.5 else '0.75')}")
-            if d:
-                xs.append(K * 100); ys.append(fmt(bench, d["A"]["attempted_score"]))
-        ax.plot(xs, ys, "o-", color=COL[key], label=lbl)
-    ax.set_xlabel("keep (%)"); ax.set_ylabel("official score" if bench == "textvqa" else "points /1000")
-    ax.set_title(f"{bench} budget curve ({'TV-1000 subset' if bench=='textvqa' else 'OCRBench full'})")
+md += ['', '## 95% of None quality target', '',
+       'This table gives the minimum **tested retention** meeting the target. It does not assume retention orders measured latency. The Hi-Lo OCRBench attempted result includes its higher completion rate.', '',
+       '| Scope | None | 95% target | RBM keep | FastV keep | Hi-Lo keep |', '|---|---:|---:|---:|---:|---:|']
+for bench, full, common, label in curve_specs:
+    ds = {m: {k: curve(bench, m, k, full) for k in KEEP} for m in METHODS}
+    ref = vals(ds['rb']['0.25'], common)[1]
+    targets = {m: next((k for k in KEEP if vals(ds[m][k], common)[0] >= .95 * ref), 'not met') for m in METHODS}
+    summary_json['quality95'].append({'scope': label, 'none': ref * SCALE[bench], 'target': .95 * ref * SCALE[bench], 'minimum_tested_keep': targets})
+    md.append(f'| {label} | {ref*SCALE[bench]:.2f} | {.95*ref*SCALE[bench]:.2f} | ' + ' | '.join(targets.values()) + ' |')
+
+# Inspect source prediction rows rather than misusing the pre-mode n_image_full field.
+row_cache = {}
+def rows(source):
+    p = Path(source)
+    if not p.is_absolute(): p = ROOT / p
+    if p not in row_cache:
+        data = json.loads(p.read_text()); row_cache[p] = {str(r['id']): r for r in data['per_sample']}
+    return row_cache[p]
+md += ['', '## Actual visual token budgets', '',
+       'Statistics use the same answered IDs across the three methods at each budget. Hi-Lo fusion boosts attention before removal; its fusion candidates are not additional retained tokens. RBM retains K before decoder layer 0; FastV-k3 processes N through layers 0–3, then K; Hi-Lo processes N through layers 0–2, then K. All methods execute the full vision encoder and merger.', '',
+       '| Scope | Keep | Common n | Mean input N | Mean K (RBM / FastV / Hi-Lo) | K equal on every common ID |', '|---|---:|---:|---:|---:|---|']
+actual = {}
+for bench in ('textvqa', 'ocrbench'):
+    full = full_ready and bench == 'textvqa'
+    actual[bench] = {}
+    for k in KEEP:
+        ds = {m: curve(bench, m, k, full) for m in METHODS}
+        rr = {m: rows(ds[m]['A']['source']) for m in METHODS}
+        reference = rows(ds['rb']['B']['source'])
+        common = set(reference)
+        for r in rr.values(): common &= set(r)
+        common = sorted(i for i in common if all(not r[i].get('skipped') and not r[i].get('error') for r in [reference] + list(rr.values())))
+        mismatch = [i for i in common if len({r[i]['n_image_kept'] for r in rr.values()}) != 1]
+        formula_bad = [i for i in common if any(r[i]['n_image_kept'] != max(1, round(reference[i]['n_image_full']*float(k))) for r in rr.values())]
+        assert not mismatch and not formula_bad, (bench, k, mismatch[:3], formula_bad[:3])
+        mean_n = statistics.mean(reference[i]['n_image_full'] for i in common)
+        mean_k = {m: statistics.mean(rr[m][i]['n_image_kept'] for i in common) for m in METHODS}
+        actual[bench][k] = {'common_n': len(common), 'mean_input_n': mean_n, 'mean_k': mean_k, 'mismatch_count': len(mismatch)}
+        md.append(f'| {bench} {"full" if full or bench == "ocrbench" else "1k subset"} | {k} | {len(common)} | {mean_n:.2f} | ' + ' / '.join(f'{mean_k[m]:.2f}' for m in METHODS) + ' | yes |')
+summary_json['actual_k'] = actual
+
+md += ['', '## Timing validation', '',
+       'The original timing artifacts are excluded from comparison: the harness enabled gradient recording, FastV omitted deepstack features, and the Hi-Lo model reused its initial retention configuration at later budgets. Corrected timing requires a new artifact with explicit inference, parity, budget, and boundary validation.']
+# Only a complete, validated ten-cell workload can enter the summary.
+timing_paths = [Q / f'timing_{engine}_corrected.json' for engine in ('harness', 'hilo')]
+timing_validation = None
+if all(p.exists() for p in timing_paths):
+    try:
+        timing_validation = validate_timing(timing_paths)
+    except (AssertionError, KeyError) as error:
+        md.append(f'\nCorrected timing validation pending: `{error}`.')
+expected_timing = {'none'} | {f'{m}_{k}' for m in ('pre', 'fastv', 'hilo') for k in (.25, .5, .75)}
+if timing_validation and timing_validation['complete'] and set(timing_validation['cells']) == expected_timing:
+    summary_json['timing_validation'] = timing_validation
+    for p in timing_paths:
+        data = json.loads(p.read_text())
+        summary_json['timing'][p.name] = {'available': True, 'validated': True, 'results': {k: {x: v for x, v in block.items() if x != 'requests'} for k, block in data['results'].items()}}
+        md.append(f'\nValidated corrected timing available: `{p.name}`; quality-cost statistics use its own saved answers.')
+else:
+    md.append('\nCorrected timing summary withheld until all ten planned cells pass validation.')
+(REPORT / 'cvm2027_supplement_tables.md').write_text('\n'.join(md) + '\n')
+(REPORT / 'cvm2027_supplement_summary.json').write_text(json.dumps(summary_json, indent=2) + '\n')
+
+# Curves: show the attempted OCRBench view alongside its fixed-ID sensitivity.
+fig, axes = plt.subplots(1, 3, figsize=(14, 4.0))
+for ax, (bench, full, common, title) in zip(axes, [
+    ('textvqa', full_ready, False, f'TextVQA {"full 5,000" if full_ready else "subset 1,000"}'),
+    ('ocrbench', False, False, 'OCRBench: all 1,000 attempts'),
+    ('ocrbench', False, True, 'OCRBench: same 921 answered')]):
+    ref = vals(curve(bench, 'rb', '0.25', full), common)[1] * SCALE[bench]
+    ax.axhline(ref, ls='--', c='black', lw=1, label='None')
+    ax.axhline(.95*ref, ls=':', c='gray', lw=1, label='95% target')
+    for m, label in METHODS.items():
+        ax.plot([25, 50, 75], [vals(curve(bench,m,k,full), common)[0]*SCALE[bench] for k in KEEP], 'o-', c=COLORS[m], label=label)
+    ax.set(xlabel='Retained visual tokens (%)', ylabel='Official score (%)' if bench == 'textvqa' else 'Score normalized to 1,000', title=title)
+    ax.legend(fontsize=7)
+fig.tight_layout()
+save_figure(fig, 'budget_curves')
+plt.close(fig)
+
+fig, axes = plt.subplots(1, 2, figsize=(10, 4))
+for ax, bench in zip(axes, ('textvqa', 'ocrbench')):
+    full = full_ready and bench == 'textvqa'
+    for m, label in METHODS.items():
+        ax.plot([actual[bench][k]['mean_k'][m] for k in KEEP], [vals(curve(bench,m,k,full), bench=='ocrbench')[0]*SCALE[bench] for k in KEEP], 'o-', c=COLORS[m], label=label)
+    ax.set(xlabel='Mean actual retained K', ylabel='Official score (%)' if bench=='textvqa' else 'Common-answered score ×1,000', title=bench)
     ax.legend(fontsize=8)
-fig.tight_layout(); fig.savefig(f"{FIG}/budget_curves.svg")
-
-if os.path.exists(f"{Q}/timing_harness.json") and os.path.exists(f"{Q}/timing_hilo.json"):
-    th = json.load(open(f"{Q}/timing_harness.json")); tl = json.load(open(f"{Q}/timing_hilo.json"))
-    fig2, ax2 = plt.subplots(figsize=(6.5, 4.2))
-    name_map = {"pre_0.25": "RBM25", "pre_0.5": "RBM50", "pre_0.75": "RBM75",
-                "fastv_0.25": "FastV25", "fastv_0.5": "FastV50", "fastv_0.75": "FastV75",
-                "none": "None"}
-    for tag, blk in th["results"].items():
-        ok = [r for r in blk["requests"] if "total_s" in r and not r.get("oom")]
-        if not ok: continue
-        tot = sorted(r["total_s"] for r in ok)
-        lat = tot[len(tot)//2]
-        sc = {"none": None}
-        key = tag.replace("pre", "rb").replace("fastv", "fv")
-        d = load(f"curve_tv_{key.split('_')[0]}_{key.split('_')[1] if '_' in key else '0.25'}")
-        # map tags: none / pre_0.25 ... fastv_0.75
-        parts = tag.split("_")
-        if parts[0] == "none":
-            score = fmt("textvqa", load("curve_tv_rb_0.25")["B"]["attempted_score"])
-        else:
-            ab = {"pre": "rb", "fastv": "fv"}[parts[0]]
-            kk = {"0.25": "0.25", "0.5": "0.50", "0.75": "0.75"}[parts[1]]
-            score = fmt("textvqa", load(f"curve_tv_{ab}_{kk}")["A"]["attempted_score"])
-        ax2.scatter(lat, score, label=name_map.get(tag, tag))
-    for tag, blk in tl["results"].items():
-        okl = [r for r in blk["requests"] if "total_s" in r and not r.get("oom")]
-        if not okl: continue
-        tot = sorted(r["total_s"] for r in okl)
-        kk = {"0.25": "0.25", "0.5": "0.50", "0.75": "0.75"}[tag.split("_")[1]]
-        score = fmt("textvqa", load(f"curve_tv_hl_{kk}")["A"]["attempted_score"])
-        ax2.scatter(tot[len(tot)//2], score, marker="^", label=f"HiLo{kk}")
-    ax2.set_xlabel("p50 total request latency (s, TextVQA set)")
-    ax2.set_ylabel("TextVQA official score (subset-1k)")
-    ax2.set_title("quality vs measured cost (full workload mix incl. OCRBench)")
-    ax2.legend(fontsize=7)
-    fig2.tight_layout(); fig2.savefig(f"{FIG}/score_vs_latency.svg")
-
-print("tables+figures written")
+fig.tight_layout()
+save_figure(fig, 'score_vs_actual_k')
+plt.close(fig)
+# Remove the invalid legacy latency plot so it cannot be consumed by the paper.
+legacy = FIG / 'score_vs_latency.svg'
+if legacy.exists() and not (REPORT / 'cvm2027_corrected_quality_cost.json').exists():
+    legacy.unlink()
+print(f'Audited tables and curves written; optional full TextVQA ready={full_ready}')

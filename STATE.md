@@ -1,28 +1,21 @@
-# STATE.md — 当前项目状态（主窗口维护，≤30 行）
-> 项目：VLM 视觉 token 压缩；最近更新：2026-10-25。
-
-## 当前任务
-- CVM审阅稿已完成；用户现要由服务器Claude Code用一天补实验，本会话仅提供可执行提示词。
-- 已核验：该目录与仓库/远端最后论文文本一致；9/19 新实验报告尚未纳入原稿，故不是最终证据版本。
-- 新匿名审阅稿：`drafts/cvm2027_submission_20261025/`；旧 DCC 稿保持原样，尚未对外投稿。
-- 官方审稿模板；≤14页含参考文献；摘要/全文截止北京时间 2026-10-27 07:59。
-
-## 已核验的关键问题
-- ExpA Post-main 使 DocVQA 方向反转；精确ANLS重评后 .3737 > Pre-final .2837，Δ+9.00pp CI[7.82,10.17]。
-- TextVQA 旧评分公式/归一化及分号拼接GT需纠正；已用保存预测、官方10答案和固定版本 EvalAI CPU重评。
-- 同HF TextVQA全5000失败记零：RBM .75504，FastV .76826；不可转抄ExpB二值correct作为官方分。
-- 逐段改写、图内因果词、模型适配方程、强基线/预算曲线不足均已审查；不以“AI多数审稿”为事实。
-
-## 交接材料
-- 总体判断：`notes/cvm2027_revision_plan_20261025.md`。
-- 写作审计：`notes/cvm2027_writing_audit_20261025.md`；科学审计：`notes/cvm2027_evidence_review_20261025.md`。
-- 官方重评：`notes/cvm2027_textvqa_rescore_20261025.md`；脚本 `scripts/analyze_cvm_expB_official.py`。
-- DocVQA 11格精确ANLS重评：`notes/cvm2027_docvqa_rescore_20261025.md`；脚本 `scripts/analyze_cvm_docvqa_official.py`。
-- GQA 11格精确重评、OCRBench 15格零差核验完成；同名报告在notes，脚本为 `scripts/analyze_cvm_{gqa,ocrbench}_official.py`。
-
-## 下一步 / 人工决策
-- 四任务更正合入最终8页审阅稿，51实引；PDF/源包独立编译、全部8页目视QA、字体嵌入及匿名检查通过。
-- 一天补实验提示词：`notes/cvm2027_server_experiment_prompt_20261025.txt`；P0正确性→现代强基线→预算/质量成本。
-- 单A40串行，GPU≤20h、总≤24h；优先Qwen3同HF Hi-Lo，接入失败限时转DivPrune；结果返回后再定核心claim。
-- 未启动GPU补实验；未提交会议。实际投稿前必须人工确认最终稿/版权（P5）。
-- 独立科研主线仍保留9/20的P1方向：同模型同预算细粒度保真与服务性能诊断；未擅自恢复RBM为长期主线。
+# STATE.md — CVM supplement and manuscript (2026-10-26, Asia/Shanghai)
+- Active worktree: `.claude/worktrees/cvm-oneday-20261025`, branch `codex/cvm-24h-supplement`.
+- User now requests completion of experiments AND manuscript supplementation before today 20:00; no submission.
+- Codex is actively coordinating this worktree; old Claude hourly checks must not launch duplicate jobs or commit mid-edit.
+- Original T0: Oct25 19:07:06; GPU cutoff Oct26 15:07:06; original total cutoff 19:07:06.
+- P1 quality complete: TextVQA full5000 None/RBM/FastV/Hi-Lo = 83.24/75.50/76.83/66.77.
+- OCRBench full1000 attempted = 707/559/413/613; 79 harness failures confound Hi-Lo comparison.
+- OCRBench common921: Hi-Lo and RBM tie statistically; do not infer selection superiority from attempted totals.
+- P2 complete: fixed TextVQA1000 and OCRBench1000 curves at 25/50/75%; DocVQA500 unified2M.
+- DocVQA500 ANLS: None95.73, RBM82.76, FastV70.45, Hi-Lo76.38; subset, not full split.
+- P1 engines differ: harness eager vs vendored Hi-Lo SDPA; disclose adaptation/implementation boundary.
+- P3 OLD TIMING INVALID: missing inference mode, accumulating MergerTap hooks, FastV missing deepstack.
+- P3 OLD Hi-Lo config updates external copied config; budget labels unverified. Do not cite legacy timings.
+- Corrected P3 in preparation: shared visionSDPA/text eager, fixed200 requests x3, actual K/trace/answers.
+- Q10 optional full curves: RBM/FastV .50/.75 complete; Hi-Lo .50 currently running.
+- Q10 parent PID1927473 intentionally SIGSTOPPED so corrected P3 precedes optional Hi-Lo .75.
+- Do not resume that parent or launch competing GPU work; root owns scheduling and deadline.
+- Manuscript agent owns main.tex/references.bib; scoring agent owns table builder/quality summaries.
+- Cost agent owns timing_v2 script; root owns reports, provenance, state, release packaging and final Git.
+- Preserve original main-worktree changes and all old raw files. No force push, no weights/data/logs in Git.
+- Next: finish active .50, corrected P3, official timing-set scores, report/HANDOFF, PDF/source QA.

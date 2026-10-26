@@ -27,10 +27,17 @@ def fetch(url, path, sha):
 
 def rows_of(path, ids=None):
     data, digest = EX.load_json(Path(path))
+    assert len({str(r["id"]) for r in data["per_sample"]}) == len(data["per_sample"]), "Duplicate prediction IDs"
     rows = {str(r["id"]): r for r in data["per_sample"]}
+    # Both harness skips and the vendored runner's error rows are failures.
+    for row in rows.values():
+        if row.get("error"):
+            row["skipped"] = True
     keep = [str(x.strip()) for x in open(ids)] if ids else None
     if keep:
-        rows = {k: v for k, v in rows.items() if k in set(keep)}
+        assert len(set(keep)) == len(keep), "Duplicate requested IDs"
+        assert set(keep) <= rows.keys(), "Requested subset IDs missing"
+        rows = {k: rows[k] for k in keep}
     return rows, digest, data
 
 # ---------------- per-benchmark per-row official score ----------------------
@@ -112,6 +119,18 @@ def main():
     seed = 20261200 + a.seed_int
     pa = EX.paired(sA, rowsA, sB, rowsB, a.resamples, seed, include_skips=True)
     pb = EX.paired(sA, rowsA, sB, rowsB, a.resamples, seed + 1, include_skips=False)
+    for pair, include_failures in ((pa, True), (pb, False)):
+        ids = [i for i in rowsA if include_failures or
+               (not rowsA[i].get("skipped") and not rowsB[i].get("skipped"))]
+        comparable = [i for i in ids if rowsA[i].get("prompt_token_ids") is not None
+                      and rowsB[i].get("prompt_token_ids") is not None]
+        pair["prompt_token_count_check_n"] = len(comparable)
+        pair["prompt_token_count_missing_n"] = len(ids) - len(comparable)
+        pair["prompt_token_count_mismatches"] = sum(
+            rowsA[i]["prompt_token_ids"] != rowsB[i]["prompt_token_ids"] for i in comparable)
+        pair["count_comparison_note"] = (
+            "prompt_token_ids is the post-selection prompt length, not an input-ID sequence; "
+            "different retention naturally changes both prompt length and actual_visual_count")
     def cell(rows, scores, src):
         answered = [i for i in rows if not rows[i].get("skipped")]
         return {"source": str(src), "n": len(rows),
@@ -124,17 +143,18 @@ def main():
     A_cell=cell(rowsA,sA,a.a); B_cell=cell(rowsB,sB,a.b)
     res = {"bench": a.bench, "ids_subset": a.ids,
            "label_a": a.label_a or a.a, "label_b": a.label_b or a.b,
-           "sha_a": shaA[:16], "sha_b": shaB[:16], "resamples": a.resamples,
+           "sha_a": shaA, "sha_b": shaB, "resamples": a.resamples,
            "A": A_cell, "B": B_cell,
            "paired_attempted_all": pa, "paired_common_answered_sensitivity": pb,
            "failures": {"a_only_skip": sorted(skipA - skipB)[:50],
                         "b_only_skip": sorted(skipB - skipA)[:50],
-                        "both_skip": len(skipA & skipB)}}
+                        "both_skip": len(skipA & skipB),
+                        "a_all_skip_ids": sorted(skipA), "b_all_skip_ids": sorted(skipB)}}
     if a.bench == "ocrbench":
         for k, mult in (("attempted_score", 1.0),):
             pass
-        res["A"]["score_out_of_1000"] = res["A"]["attempted_score"]
-        res["B"]["score_out_of_1000"] = res["B"]["attempted_score"]
+        res["A"]["score_out_of_1000"] = 1000 * res["A"]["attempted_score"]
+        res["B"]["score_out_of_1000"] = 1000 * res["B"]["attempted_score"]
         res["paired_attempted_all"]["delta_points_out_of_1000"] = pa["delta_pp"] * 10
         res["paired_attempted_all"]["ci95_points_out_of_1000"] = [v * 10 for v in pa["ci95_pp"]]
     json.dump(res, open(a.out, "w"), indent=1)
@@ -142,4 +162,5 @@ def main():
     print("A:", {k:res["A"][k] for k in ["n","attempted_score","answered_score","skipped"]}); print("B:", {k:res["B"][k] for k in ["n","attempted_score","answered_score","skipped"]})
     print("paired(attempted):", pa["delta_pp"], pa["ci95_pp"], "p=", pa["sign_flip_p_two_sided"])
 
-main()
+if __name__ == "__main__":
+    main()

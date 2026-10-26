@@ -3,8 +3,8 @@
  "ids_subset": null,
  "label_a": "results/cvm2027_supplement_20261026/predictions/c25_hilo_textvqa1k_keep0.50.json",
  "label_b": "results/cvm2027_supplement_20261026/predictions/c25_none_textvqa1k.json",
- "sha_a": "ec7802e20df22967",
- "sha_b": "bac32dd9a79009c7",
+ "sha_a": "ec7802e20df229675c31a0ec406057fb3e22df4cd9932f51305d5c6db9975b60",
+ "sha_b": "bac32dd9a79009c7ee05927145917a9eb83ccd32ffd5aa427163d7862e4f6a1c",
  "resamples": 20000,
  "A": {
   "source": "results/cvm2027_supplement_20261026/predictions/c25_hilo_textvqa1k_keep0.50.json",
@@ -97,12 +97,15 @@
   "skipped_a": 0,
   "skipped_b": 1,
   "skip_ids_equal": false,
-  "prompt_token_count_mismatches": 999,
+  "prompt_token_count_mismatches": 0,
   "actual_visual_count_field_present": true,
   "actual_visual_count_check_n": 999,
   "actual_visual_count_mismatches": 999,
   "resamples": 20000,
-  "seed": 20261237
+  "seed": 20261237,
+  "prompt_token_count_check_n": 0,
+  "prompt_token_count_missing_n": 1000,
+  "count_comparison_note": "prompt_token_ids is the post-selection prompt length, not an input-ID sequence; different retention naturally changes both prompt length and actual_visual_count"
  },
  "paired_common_answered_sensitivity": {
   "n_paired": 999,
@@ -119,18 +122,25 @@
   "skipped_a": 0,
   "skipped_b": 1,
   "skip_ids_equal": false,
-  "prompt_token_count_mismatches": 999,
+  "prompt_token_count_mismatches": 0,
   "actual_visual_count_field_present": true,
   "actual_visual_count_check_n": 999,
   "actual_visual_count_mismatches": 999,
   "resamples": 20000,
-  "seed": 20261238
+  "seed": 20261238,
+  "prompt_token_count_check_n": 0,
+  "prompt_token_count_missing_n": 999,
+  "count_comparison_note": "prompt_token_ids is the post-selection prompt length, not an input-ID sequence; different retention naturally changes both prompt length and actual_visual_count"
  },
  "failures": {
   "a_only_skip": [],
   "b_only_skip": [
    "35389"
   ],
-  "both_skip": 0
+  "both_skip": 0,
+  "a_all_skip_ids": [],
+  "b_all_skip_ids": [
+   "35389"
+  ]
  }
 }

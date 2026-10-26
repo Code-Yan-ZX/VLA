@@ -3,8 +3,8 @@
  "ids_subset": null,
  "label_a": "results/cvm2027_supplement_20261026/predictions/c25_hl_ocrbench_keep0.25.json",
  "label_b": "results/cvm2027_supplement_20261026/predictions/p1_none_ocrbench_full.json",
- "sha_a": "531c85730ca75c85",
- "sha_b": "445ad12b909c49e0",
+ "sha_a": "531c85730ca75c85e2481bc1330f57f663dffecb56457f5b2bf1695e41cfdfe5",
+ "sha_b": "445ad12b909c49e0012f4cc21702adc21eabfa2ad90a6caa5033cea6efc1a3eb",
  "resamples": 20000,
  "A": {
   "source": "results/cvm2027_supplement_20261026/predictions/c25_hl_ocrbench_keep0.25.json",
@@ -43,7 +43,7 @@
     ]
    ]
   },
-  "score_out_of_1000": 0.613
+  "score_out_of_1000": 613.0
  },
  "B": {
   "source": "results/cvm2027_supplement_20261026/predictions/p1_none_ocrbench_full.json",
@@ -82,7 +82,7 @@
     ]
    ]
   },
-  "score_out_of_1000": 0.707
+  "score_out_of_1000": 707.0
  },
  "paired_attempted_all": {
   "n_paired": 1000,
@@ -99,7 +99,7 @@
   "skipped_a": 0,
   "skipped_b": 79,
   "skip_ids_equal": false,
-  "prompt_token_count_mismatches": 921,
+  "prompt_token_count_mismatches": 0,
   "actual_visual_count_field_present": true,
   "actual_visual_count_check_n": 921,
   "actual_visual_count_mismatches": 921,
@@ -109,7 +109,10 @@
   "ci95_points_out_of_1000": [
    -126.0,
    -63.0
-  ]
+  ],
+  "prompt_token_count_check_n": 0,
+  "prompt_token_count_missing_n": 1000,
+  "count_comparison_note": "prompt_token_ids is the post-selection prompt length, not an input-ID sequence; different retention naturally changes both prompt length and actual_visual_count"
  },
  "paired_common_answered_sensitivity": {
   "n_paired": 921,
@@ -126,12 +129,15 @@
   "skipped_a": 0,
   "skipped_b": 79,
   "skip_ids_equal": false,
-  "prompt_token_count_mismatches": 921,
+  "prompt_token_count_mismatches": 0,
   "actual_visual_count_field_present": true,
   "actual_visual_count_check_n": 921,
   "actual_visual_count_mismatches": 921,
   "resamples": 20000,
-  "seed": 20261243
+  "seed": 20261243,
+  "prompt_token_count_check_n": 0,
+  "prompt_token_count_missing_n": 921,
+  "count_comparison_note": "prompt_token_ids is the post-selection prompt length, not an input-ID sequence; different retention naturally changes both prompt length and actual_visual_count"
  },
  "failures": {
   "a_only_skip": [],
@@ -187,6 +193,88 @@
    "ocr0651",
    "ocr0653"
   ],
-  "both_skip": 0
+  "both_skip": 0,
+  "a_all_skip_ids": [],
+  "b_all_skip_ids": [
+   "ocr0442",
+   "ocr0500",
+   "ocr0501",
+   "ocr0502",
+   "ocr0503",
+   "ocr0504",
+   "ocr0505",
+   "ocr0506",
+   "ocr0508",
+   "ocr0509",
+   "ocr0510",
+   "ocr0511",
+   "ocr0512",
+   "ocr0513",
+   "ocr0514",
+   "ocr0515",
+   "ocr0516",
+   "ocr0517",
+   "ocr0518",
+   "ocr0519",
+   "ocr0520",
+   "ocr0521",
+   "ocr0522",
+   "ocr0523",
+   "ocr0524",
+   "ocr0525",
+   "ocr0526",
+   "ocr0528",
+   "ocr0529",
+   "ocr0530",
+   "ocr0531",
+   "ocr0532",
+   "ocr0533",
+   "ocr0535",
+   "ocr0536",
+   "ocr0537",
+   "ocr0538",
+   "ocr0539",
+   "ocr0540",
+   "ocr0541",
+   "ocr0542",
+   "ocr0543",
+   "ocr0544",
+   "ocr0545",
+   "ocr0546",
+   "ocr0547",
+   "ocr0548",
+   "ocr0549",
+   "ocr0651",
+   "ocr0653",
+   "ocr0654",
+   "ocr0655",
+   "ocr0658",
+   "ocr0659",
+   "ocr0663",
+   "ocr0667",
+   "ocr0669",
+   "ocr0671",
+   "ocr0674",
+   "ocr0675",
+   "ocr0676",
+   "ocr0678",
+   "ocr0679",
+   "ocr0680",
+   "ocr0681",
+   "ocr0683",
+   "ocr0690",
+   "ocr0696",
+   "ocr0700",
+   "ocr0702",
+   "ocr0704",
+   "ocr0708",
+   "ocr0715",
+   "ocr0721",
+   "ocr0722",
+   "ocr0724",
+   "ocr0725",
+   "ocr0738",
+   "ocr0743"
+  ]
  }
 }
